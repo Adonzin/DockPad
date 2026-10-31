@@ -39,9 +39,10 @@ final class Bridge {
 
     private volatile boolean running;
     private volatile boolean includeBuiltIn = true;
+    private volatile boolean touchpadAsButton = true;
     private Thread scanner;
     private final Map<String, Source> sources = new LinkedHashMap<>();
-    private String lastDevList = "";
+    private volatile String lastDevList = "";
     private volatile String lastError = "";
 
     private volatile EvdevDevice target;
@@ -54,6 +55,11 @@ final class Bridge {
     private final Object captureLock = new Object();
     private volatile boolean capturing;
     private String captured;
+
+    void setTouchpadAsButton(boolean on) {
+        touchpadAsButton = on;
+        lastDevList = ""; // rescan
+    }
 
     void setRemaps(String spec) {
         Map<String, Integer> m = new java.util.HashMap<>();
@@ -141,7 +147,8 @@ final class Bridge {
         for (Source s : sources.values()) {
             b.append("• ").append(s.dev.name).append(" [").append(s.dev.id()).append("]")
                     .append(s.alive ? "" : " (disconnected)").append('\n')
-                    .append("    ").append(s.mapper == null ? "" : s.mapper.layoutDescription).append('\n')
+                    .append("    ").append(s.touchpad ? "touchpad (click = mappable button)"
+                            : s.mapper == null ? "" : s.mapper.layoutDescription).append('\n')
                     .append("    exclusive: ").append(s.hideMethod)
                     .append(", events: ").append(s.eventsRead.get()).append('\n');
             if (s.lastKey >= 0) b.append("    last button: ").append(com.adonzin.dockpad.core.Codes.keyName(s.lastKey))
@@ -216,14 +223,16 @@ final class Bridge {
             Set<String> present = new HashSet<>();
             for (EvdevDevice d : devs) present.add(d.path);
             for (Source s : new ArrayList<>(sources.values())) {
-                boolean unwanted = s.dev.path.equals(target.path) && !includeBuiltIn;
+                boolean unwanted = (s.dev.path.equals(target.path) && !includeBuiltIn)
+                        || (s.touchpad && !touchpadAsButton);
                 if (!s.alive || !present.contains(s.dev.path) || unwanted) {
                     s.close();
                     sources.remove(s.dev.path);
                 }
             }
             for (EvdevDevice d : devs) {
-                if (!d.isGamepad() || VirtualPad.NAME.equals(d.name) || sources.containsKey(d.path)) continue;
+                boolean touchpad = touchpadAsButton && d.isControllerTouchpad();
+                if (!(d.isGamepad() || touchpad) || VirtualPad.NAME.equals(d.name) || sources.containsKey(d.path)) continue;
                 if (d.path.equals(target.path) && !includeBuiltIn) continue;
                 Source s = new Source(d, encoder);
                 sources.put(d.path, s);
@@ -280,6 +289,7 @@ final class Bridge {
         final EvdevDevice dev;
         final TargetEncoder sink;
         volatile Mapper mapper;
+        final boolean touchpad;
         volatile boolean alive = true;
         volatile String hideMethod = "pending";
         final AtomicLong eventsRead = new AtomicLong();
@@ -292,6 +302,7 @@ final class Bridge {
         Source(EvdevDevice dev, TargetEncoder sink) {
             this.dev = dev;
             this.sink = sink;
+            this.touchpad = dev.isControllerTouchpad();
         }
 
         void start() {
@@ -343,6 +354,8 @@ final class Bridge {
 
         /** Shortcut capture and remapping. Returns true if the key was fully handled here. */
         private boolean handleKey(int code, int value) {
+            // A touchpad only offers its click as a button; touches and finger counts are ignored.
+            if (touchpad && code != com.adonzin.dockpad.core.Codes.BTN_LEFT) return true;
             if (value == 1) lastKey = code;
             if (value == 1 && offerCapture(dev.name, code)) {
                 swallowed.add(code);
@@ -353,7 +366,7 @@ final class Bridge {
                 return true;
             }
             Integer out = remaps.get(dev.name + "\t" + code);
-            if (out == null) return false;
+            if (out == null) return touchpad; // an unmapped touchpad click does nothing
             if (value == 2) return true;
             boolean down = value != 0;
             if (down) {

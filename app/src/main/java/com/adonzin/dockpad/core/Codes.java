@@ -35,6 +35,8 @@ public final class Codes {
     public static final int AXIS_X = 0, AXIS_Y = 1, AXIS_Z = 11, AXIS_RX = 12, AXIS_RY = 13, AXIS_RZ = 14,
             AXIS_HAT_X = 15, AXIS_HAT_Y = 16, AXIS_LTRIGGER = 17, AXIS_RTRIGGER = 18, AXIS_GAS = 22, AXIS_BRAKE = 23;
 
+    public static final int BTN_LEFT = 0x110;
+    public static final int ABS_MT_POSITION_X = 0x35;
     public static final int KEY_VOLUMEDOWN = 0x72, KEY_VOLUMEUP = 0x73, KEY_APPSELECT = 0x244;
 
     /** Things a button can be remapped to: label + evdev key code on the virtual controller (-1 = nothing). */
@@ -53,6 +55,7 @@ public final class Codes {
     /** Human name of a raw evdev key code, as a controller reports it. */
     public static String keyName(int code) {
         switch (code) {
+            case BTN_LEFT: return "Touchpad click";
             case BTN_SOUTH: return "A / Cross (bottom)";
             case BTN_EAST: return "B / Circle (right)";
             case BTN_NORTH: return "X / Triangle (top)";

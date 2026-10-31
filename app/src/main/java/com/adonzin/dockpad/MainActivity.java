@@ -39,7 +39,7 @@ public class MainActivity extends Activity {
     private final ExecutorService bg = Executors.newSingleThreadExecutor();
 
     private TextView shizukuText, statusText, testerText, testerAxesText;
-    private Button testerButton, builtInButton;
+    private Button testerButton, builtInButton, touchpadButton;
     private LinearLayout shortcutList;
     private AlertDialog captureDialog;
     private volatile IBridge bridge;
@@ -343,6 +343,18 @@ public class MainActivity extends Activity {
         shortcutsHint.setTextSize(12);
         root.addView(shortcutsHint);
 
+        touchpadButton = new Button(this);
+        touchpadButton.setAllCaps(false);
+        touchpadButton.setOnClickListener(v -> toggleTouchpad());
+        updateTouchpadButton();
+        root.addView(touchpadButton);
+
+        TextView touchpadHint = new TextView(this);
+        touchpadHint.setText("For controllers with a touchpad (like DualShock 4 / DualSense): as a button, pressing the "
+                + "pad down can be mapped with \"Add shortcut\" (e.g. to Back), and it no longer moves a mouse pointer.");
+        touchpadHint.setTextSize(12);
+        root.addView(touchpadHint);
+
         Button addShortcut = new Button(this);
         addShortcut.setText("Add shortcut");
         addShortcut.setOnClickListener(v -> onAddShortcut());
@@ -403,11 +415,29 @@ public class MainActivity extends Activity {
         refreshShortcutList();
     }
 
+    private boolean touchpadAsButton() {
+        return getSharedPreferences("dockpad", MODE_PRIVATE).getBoolean("touchpadAsButton", true);
+    }
+
+    private void toggleTouchpad() {
+        getSharedPreferences("dockpad", MODE_PRIVATE).edit().putBoolean("touchpadAsButton", !touchpadAsButton()).apply();
+        updateTouchpadButton();
+        pushRemaps();
+    }
+
+    private void updateTouchpadButton() {
+        touchpadButton.setText(touchpadAsButton()
+                ? "Controller touchpads: act as a button"
+                : "Controller touchpads: act as a mouse");
+    }
+
     private void pushRemaps() {
         IBridge b = bridge;
         String spec = remapSpec();
+        boolean tp = touchpadAsButton();
         if (b != null) bg.execute(() -> {
             try {
+                b.setTouchpadAsButton(tp);
                 b.setRemaps(spec);
             } catch (RemoteException ignored) {
             }

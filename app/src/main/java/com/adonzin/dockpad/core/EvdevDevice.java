@@ -47,6 +47,11 @@ public final class EvdevDevice {
         return stick && buttons;
     }
 
+    /** A controller's built-in touchpad (e.g. DualShock 4 / DualSense), which Android treats as a mouse. */
+    public boolean isControllerTouchpad() {
+        return !isGamepad() && name.toLowerCase().contains("touchpad") && hasKey(Codes.BTN_LEFT);
+    }
+
     public String id() {
         return String.format("%04x:%04x", vendor, product);
     }

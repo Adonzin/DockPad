@@ -60,4 +60,9 @@ public class BridgeService extends IBridge.Stub {
             return "";
         }
     }
+
+    @Override
+    public void setTouchpadAsButton(boolean on) {
+        bridge.setTouchpadAsButton(on);
+    }
 }
