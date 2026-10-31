@@ -1,15 +1,12 @@
 package com.adonzin.dockpad.service;
 
 import android.os.Process;
-import android.os.SystemClock;
 import android.util.Log;
 import android.view.InputDevice;
-import android.view.KeyEvent;
-import android.view.MotionEvent;
 
 import com.adonzin.dockpad.core.EvdevDevice;
 import com.adonzin.dockpad.core.Mapper;
-import com.adonzin.dockpad.core.TargetLayout;
+import com.adonzin.dockpad.core.TargetEncoder;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -29,9 +26,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * The actual bridge: finds the built-in controls ("target") and any external gamepads
- * ("sources"), takes exclusive control of the sources and re-sends their input as if it
- * came from the built-in controls.
+ * The bridge: creates one virtual "DockPad Controller" shaped exactly like the built-in
+ * controls, takes exclusive control of the built-in controls and every external gamepad,
+ * and feeds all of them into the virtual controller. Apps then only need to know about
+ * one controller, whichever physical controller you are holding.
  */
 final class Bridge {
     private static final String TAG = "DockPad";
@@ -40,20 +38,23 @@ final class Bridge {
     private static final int[][] KNOWN_BUILT_IN = {{0x2022, 0x3002}};
 
     private volatile boolean running;
+    private volatile boolean includeBuiltIn = true;
     private Thread scanner;
     private final Map<String, Source> sources = new LinkedHashMap<>();
     private String lastDevList = "";
-    private final AtomicLong injected = new AtomicLong();
-    private final AtomicLong rejected = new AtomicLong();
     private volatile String lastError = "";
 
-    // target state
     private volatile EvdevDevice target;
-    private volatile int targetId = -1;
-    private volatile TargetLayout layout;
+    private VirtualPad pad;
+    private TargetEncoder encoder;
+    private final AtomicLong written = new AtomicLong();
 
-    synchronized String start() {
-        if (running) return "already running";
+    synchronized String start(boolean includeBuiltIn) {
+        this.includeBuiltIn = includeBuiltIn;
+        if (running) {
+            lastDevList = ""; // force a rescan with the new setting
+            return "already running";
+        }
         running = true;
         lastDevList = "";
         scanner = new Thread(this::scanLoop, "DockPad-scan");
@@ -65,33 +66,40 @@ final class Bridge {
     synchronized void stop() {
         running = false;
         if (scanner != null) scanner.interrupt();
+        teardown();
+    }
+
+    private synchronized void teardown() {
         for (Source s : sources.values()) s.close();
         sources.clear();
+        if (pad != null) pad.close();
+        pad = null;
+        encoder = null;
     }
 
     boolean isRunning() {
         return running;
     }
 
-    String status() {
+    synchronized String status() {
         StringBuilder b = new StringBuilder();
         b.append("Bridge: ").append(running ? "RUNNING" : "stopped").append('\n');
         EvdevDevice t = target;
-        b.append("Built-in controls: ");
-        if (t == null) b.append("not found");
-        else b.append(t.name).append(" [").append(t.id()).append("], Android id ").append(targetId);
-        b.append('\n');
-        synchronized (this) {
-            if (sources.isEmpty()) b.append("External controllers: none connected\n");
-            for (Source s : sources.values()) {
-                b.append("• ").append(s.dev.name).append(" [").append(s.dev.id()).append("] ").append(s.dev.path).append('\n')
-                        .append("    layout: ").append(s.mapper == null ? "?" : s.mapper.layoutDescription).append('\n')
-                        .append("    hidden from apps: ").append(s.hideMethod).append('\n')
-                        .append("    events read: ").append(s.eventsRead.get())
-                        .append(s.alive ? "" : "  (disconnected)").append('\n');
-            }
+        b.append("Built-in controls: ").append(t == null ? "not found" : t.name + " [" + t.id() + "]").append('\n');
+        b.append("Virtual controller \"").append(VirtualPad.NAME).append("\": ")
+                .append(pad == null ? "not created" : pad.describe()).append('\n');
+        InputDevice vd = findAndroidDeviceByName(VirtualPad.NAME);
+        if (vd != null) b.append("   seen by Android as id ").append(vd.getId()).append('\n');
+        b.append("Controllers feeding it:\n");
+        if (sources.isEmpty()) b.append("   none\n");
+        for (Source s : sources.values()) {
+            b.append("• ").append(s.dev.name).append(" [").append(s.dev.id()).append("]")
+                    .append(s.alive ? "" : " (disconnected)").append('\n')
+                    .append("    ").append(s.mapper == null ? "" : s.mapper.layoutDescription).append('\n')
+                    .append("    exclusive: ").append(s.hideMethod)
+                    .append(", events: ").append(s.eventsRead.get()).append('\n');
         }
-        b.append("Injected: ").append(injected.get()).append(", rejected: ").append(rejected.get()).append('\n');
+        b.append("Events sent to virtual controller: ").append(written.get()).append('\n');
         if (!lastError.isEmpty()) b.append("Last error: ").append(lastError).append('\n');
         return b.toString();
     }
@@ -107,12 +115,12 @@ final class Bridge {
                 boolean changed = !list.equals(lastDevList);
                 synchronized (this) {
                     for (Source s : sources.values()) if (!s.alive) changed = true;
+                    if (pad != null && !pad.isAlive()) changed = true;
                 }
                 if (changed) {
                     lastDevList = list;
                     rescan();
                 }
-                resolveTargetId();
             } catch (Throwable t) {
                 error("scan", t);
             }
@@ -127,61 +135,71 @@ final class Bridge {
     private void rescan() throws IOException, InterruptedException {
         List<EvdevDevice> devs = EvdevDevice.parse(run("getevent", "-i"));
         EvdevDevice newTarget = null;
+        outer:
         for (int[] k : KNOWN_BUILT_IN) {
             for (EvdevDevice d : devs) {
-                if (d.vendor == k[0] && d.product == k[1] && d.isGamepad()) newTarget = d;
+                if (d.vendor == k[0] && d.product == k[1] && d.isGamepad() && !VirtualPad.NAME.equals(d.name)) {
+                    newTarget = d;
+                    break outer;
+                }
             }
-            if (newTarget != null) break;
         }
-        target = newTarget;
-        resolveTargetId();
 
         synchronized (this) {
-            // drop sources that went away
+            if (!running) return;
+            boolean targetChanged = newTarget == null || target == null || !newTarget.path.equals(target.path);
+            if (targetChanged || pad == null || !pad.isAlive()) {
+                teardown();
+                target = newTarget;
+                if (newTarget == null) return;
+                pad = new VirtualPad();
+                if (!pad.create(newTarget)) {
+                    lastError = pad.describe();
+                    return;
+                }
+                VirtualPad p = pad;
+                encoder = new TargetEncoder(newTarget, events -> {
+                    p.write(events);
+                    written.addAndGet(events.length / 3);
+                });
+                Log.i(TAG, "Virtual controller created, cloning " + newTarget);
+            }
+
             Set<String> present = new HashSet<>();
             for (EvdevDevice d : devs) present.add(d.path);
             for (Source s : new ArrayList<>(sources.values())) {
-                if (!s.alive || !present.contains(s.dev.path)) {
+                boolean unwanted = s.dev.path.equals(target.path) && !includeBuiltIn;
+                if (!s.alive || !present.contains(s.dev.path) || unwanted) {
                     s.close();
                     sources.remove(s.dev.path);
                 }
             }
-            if (newTarget == null) return; // nothing to send input to
             for (EvdevDevice d : devs) {
-                if (!d.isGamepad() || d.path.equals(newTarget.path) || sources.containsKey(d.path)) continue;
-                Source s = new Source(d);
+                if (!d.isGamepad() || VirtualPad.NAME.equals(d.name) || sources.containsKey(d.path)) continue;
+                if (d.path.equals(target.path) && !includeBuiltIn) continue;
+                Source s = new Source(d, encoder);
                 sources.put(d.path, s);
                 s.start();
             }
         }
     }
 
-    private void resolveTargetId() {
-        EvdevDevice t = target;
-        if (t == null) {
-            targetId = -1;
-            return;
-        }
-        InputDevice dev = findAndroidDevice(t);
-        if (dev == null) {
-            targetId = -1;
-            return;
-        }
-        if (dev.getId() != targetId || layout == null) {
-            Set<Integer> axes = new HashSet<>();
-            for (InputDevice.MotionRange r : dev.getMotionRanges()) axes.add(r.getAxis());
-            layout = new TargetLayout(axes);
-            targetId = dev.getId();
-        }
-    }
-
     static InputDevice findAndroidDevice(EvdevDevice d) {
         for (int id : InputDevice.getDeviceIds()) {
             InputDevice dev = InputDevice.getDevice(id);
-            if (dev == null) continue;
-            if (dev.getVendorId() == d.vendor && dev.getProductId() == d.product && d.name.equals(dev.getName())) {
-                return dev;
+            if (dev != null && dev.getVendorId() == d.vendor && dev.getProductId() == d.product
+                    && d.name.equals(dev.getName())) return dev;
+        }
+        return null;
+    }
+
+    static InputDevice findAndroidDeviceByName(String name) {
+        try {
+            for (int id : InputDevice.getDeviceIds()) {
+                InputDevice dev = InputDevice.getDevice(id);
+                if (dev != null && name.equals(dev.getName())) return dev;
             }
+        } catch (Throwable ignored) {
         }
         return null;
     }
@@ -208,90 +226,27 @@ final class Bridge {
         Log.e(TAG, where, t);
     }
 
-    // ---------------------------------------------------------------- output
-
-    private final Object injectLock = new Object();
-    private final Map<Integer, Long> keyDownTimes = new LinkedHashMap<>();
-
-    private void sendKey(int keyCode, boolean down) {
-        int id = targetId;
-        if (id < 0) return;
-        long now = SystemClock.uptimeMillis();
-        long downTime;
-        synchronized (injectLock) {
-            if (down) {
-                keyDownTimes.put(keyCode, now);
-                downTime = now;
-            } else {
-                Long d = keyDownTimes.remove(keyCode);
-                downTime = d == null ? now : d;
-            }
-        }
-        KeyEvent ev = new KeyEvent(downTime, now, down ? KeyEvent.ACTION_DOWN : KeyEvent.ACTION_UP, keyCode,
-                0, 0, id, 0, 0, InputDevice.SOURCE_GAMEPAD | InputDevice.SOURCE_KEYBOARD);
-        inject(ev);
-    }
-
-    private void sendAxes(float[] state) {
-        int id = targetId;
-        TargetLayout l = layout;
-        if (id < 0 || l == null) return;
-        MotionEvent.PointerProperties pp = new MotionEvent.PointerProperties();
-        pp.id = 0;
-        pp.toolType = MotionEvent.TOOL_TYPE_UNKNOWN;
-        MotionEvent.PointerCoords pc = new MotionEvent.PointerCoords();
-        pc.clear();
-        for (int i = 0; i < Mapper.AXES; i++) {
-            for (int axis : l.outputs[i]) pc.setAxisValue(axis, state[i]);
-        }
-        long now = SystemClock.uptimeMillis();
-        MotionEvent ev = MotionEvent.obtain(now, now, MotionEvent.ACTION_MOVE, 1,
-                new MotionEvent.PointerProperties[]{pp}, new MotionEvent.PointerCoords[]{pc},
-                0, 0, 1f, 1f, id, 0, InputDevice.SOURCE_JOYSTICK, 0);
-        inject(ev);
-        ev.recycle();
-    }
-
-    private void inject(android.view.InputEvent ev) {
-        try {
-            if (Hidden.inject(ev)) injected.incrementAndGet();
-            else rejected.incrementAndGet();
-        } catch (Throwable t) {
-            rejected.incrementAndGet();
-            error("inject", t);
-        }
-    }
-
     // ---------------------------------------------------------------- sources
 
-    private final class Source implements Mapper.Sink {
+    private final class Source {
         final EvdevDevice dev;
+        final TargetEncoder sink;
         volatile Mapper mapper;
         volatile boolean alive = true;
         volatile String hideMethod = "pending";
         final AtomicLong eventsRead = new AtomicLong();
         private FileInputStream in;
         private int disabledAndroidId = -1;
-        private Thread thread;
 
-        Source(EvdevDevice dev) {
+        Source(EvdevDevice dev, TargetEncoder sink) {
             this.dev = dev;
+            this.sink = sink;
         }
 
         void start() {
-            thread = new Thread(this::readLoop, "DockPad-" + dev.path);
-            thread.setDaemon(true);
-            thread.start();
-        }
-
-        @Override
-        public void key(int androidKeyCode, boolean down) {
-            sendKey(androidKeyCode, down);
-        }
-
-        @Override
-        public void axes(float[] state) {
-            sendAxes(state);
+            Thread t = new Thread(this::readLoop, "DockPad-" + dev.path);
+            t.setDaemon(true);
+            t.start();
         }
 
         private void readLoop() {
@@ -299,18 +254,18 @@ final class Bridge {
                 in = new FileInputStream(dev.path);
                 String grabErr = Hidden.grab(in.getFD());
                 if (grabErr == null) {
-                    hideMethod = "yes (exclusive grab)";
+                    hideMethod = "yes";
                 } else {
                     InputDevice ad = findAndroidDevice(dev);
                     if (ad != null && Hidden.setDeviceEnabled(ad.getId(), false)) {
                         disabledAndroidId = ad.getId();
-                        hideMethod = "yes (device disabled)";
+                        hideMethod = "yes (disabled)";
                     } else {
-                        hideMethod = "NO — apps may see it twice (" + grabErr + ")";
+                        hideMethod = "NO (" + grabErr + ")";
                     }
                 }
-                mapper = new Mapper(dev, this);
-                Log.i(TAG, "Bridging " + dev + " — " + mapper.layoutDescription + ", hidden: " + hideMethod);
+                mapper = new Mapper(dev, sink);
+                Log.i(TAG, "Feeding " + dev + " — " + mapper.layoutDescription + ", exclusive: " + hideMethod);
 
                 int size = Process.is64Bit() ? 24 : 16;
                 int off = size == 24 ? 16 : 8;

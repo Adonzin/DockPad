@@ -28,8 +28,8 @@ public class BridgeService extends IBridge.Stub {
     }
 
     @Override
-    public String start() {
-        return bridge.start();
+    public String start(boolean includeBuiltIn) {
+        return bridge.start(includeBuiltIn);
     }
 
     @Override

@@ -37,7 +37,7 @@ public class MainActivity extends Activity {
     private final ExecutorService bg = Executors.newSingleThreadExecutor();
 
     private TextView shizukuText, statusText, testerText, testerAxesText;
-    private Button testerButton;
+    private Button testerButton, builtInButton;
     private volatile IBridge bridge;
     private boolean bound, startWhenConnected, testerOn;
 
@@ -57,7 +57,7 @@ public class MainActivity extends Activity {
                 startWhenConnected = false;
                 bg.execute(() -> {
                     try {
-                        bridge.start();
+                        bridge.start(includeBuiltIn());
                     } catch (RemoteException ignored) {
                     }
                 });
@@ -200,7 +200,7 @@ public class MainActivity extends Activity {
         if (b != null) {
             bg.execute(() -> {
                 try {
-                    b.start();
+                    b.start(includeBuiltIn());
                 } catch (RemoteException ignored) {
                 }
             });
@@ -308,6 +308,17 @@ public class MainActivity extends Activity {
         row.addView(stop, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
         root.addView(row);
 
+        builtInButton = new Button(this);
+        builtInButton.setOnClickListener(v -> toggleIncludeBuiltIn());
+        updateBuiltInButton();
+        root.addView(builtInButton);
+
+        TextView builtInHint = new TextView(this);
+        builtInHint.setText("ON: the built-in controls also go through the DockPad Controller, so emulators "
+                + "mapped to it work the same handheld or docked. OFF: only external controllers do.");
+        builtInHint.setTextSize(12);
+        root.addView(builtInHint);
+
         statusText = new TextView(this);
         statusText.setTypeface(Typeface.MONOSPACE);
         statusText.setTextSize(12);
@@ -350,6 +361,29 @@ public class MainActivity extends Activity {
         } else {
             testerText.setText("Press buttons on any controller…");
         }
+    }
+
+    private boolean includeBuiltIn() {
+        return getSharedPreferences("dockpad", MODE_PRIVATE).getBoolean("includeBuiltIn", true);
+    }
+
+    private void toggleIncludeBuiltIn() {
+        boolean v = !includeBuiltIn();
+        getSharedPreferences("dockpad", MODE_PRIVATE).edit().putBoolean("includeBuiltIn", v).apply();
+        updateBuiltInButton();
+        IBridge b = bridge;
+        if (b != null) bg.execute(() -> {
+            try {
+                if (b.isRunning()) b.start(v);
+            } catch (RemoteException ignored) {
+            }
+        });
+    }
+
+    private void updateBuiltInButton() {
+        builtInButton.setText(includeBuiltIn()
+                ? "Built-in controls → DockPad Controller: ON"
+                : "Built-in controls → DockPad Controller: OFF");
     }
 
     private int dp(int v) {

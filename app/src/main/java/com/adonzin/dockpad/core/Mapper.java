@@ -20,6 +20,8 @@ public final class Mapper {
 
     public interface Sink {
         void key(int androidKeyCode, boolean down);
+        /** A key with no standard gamepad meaning (volume, home, vendor keys): passed through as-is. */
+        void rawKey(int evdevCode, boolean down);
         /** Full logical axis state, indexed by LX..HY. */
         void axes(float[] state);
     }
@@ -65,6 +67,8 @@ public final class Mapper {
     private final EvdevDevice.AbsInfo[] info = new EvdevDevice.AbsInfo[AXES];
     private final float[] axes = new float[AXES];
     private final Set<Integer> held = new LinkedHashSet<>();
+    private final Set<Integer> heldRaw = new LinkedHashSet<>();
+    private final Set<Integer> rawKeys = new LinkedHashSet<>();
     private boolean dirty;
 
     private final boolean synthLtAxis, synthRtAxis, synthL2Key, synthR2Key, synthHat, synthDpadKeys;
@@ -77,6 +81,7 @@ public final class Mapper {
         for (int code : dev.keys) {
             Integer kc = STANDARD_KEYS.get(code);
             if (kc != null) keyMap.put(code, kc);
+            else rawKeys.add(code);
         }
 
         assign(dev, ABS_X, LX);
@@ -155,8 +160,12 @@ public final class Mapper {
         if (type == EV_KEY) {
             if (value == 2) return; // autorepeat
             Integer kc = keyMap.get(code);
-            if (kc == null) return;
             boolean pressed = value != 0;
+            if (kc == null) {
+                if (!rawKeys.contains(code)) return;
+                if (pressed ? heldRaw.add(code) : heldRaw.remove(code)) sink.rawKey(code, pressed);
+                return;
+            }
             setKey(kc, pressed);
             if (kc == KEYCODE_BUTTON_L2 && synthLtAxis) setAxis(LT, pressed ? 1f : 0f);
             if (kc == KEYCODE_BUTTON_R2 && synthRtAxis) setAxis(RT, pressed ? 1f : 0f);
@@ -219,6 +228,10 @@ public final class Mapper {
     /** Releases every held button and centers all axes (on disconnect/stop). */
     public void releaseAll() {
         for (Integer kc : held.toArray(new Integer[0])) setKey(kc, false);
+        for (Integer c : heldRaw.toArray(new Integer[0])) {
+            heldRaw.remove(c);
+            sink.rawKey(c, false);
+        }
         for (int i = 0; i < AXES; i++) setAxis(i, 0f);
         up = down = left = right = false;
         flush();
