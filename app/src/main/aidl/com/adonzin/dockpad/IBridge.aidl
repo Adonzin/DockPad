@@ -11,4 +11,5 @@ interface IBridge {
     void setRemaps(String spec) = 5;
     String captureKey(int timeoutMs) = 6;
     void setTouchpadAsButton(boolean on) = 7;
+    void setMultiplayer(boolean on) = 8;
 }

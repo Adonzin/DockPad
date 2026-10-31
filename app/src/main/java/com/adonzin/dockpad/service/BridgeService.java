@@ -65,4 +65,9 @@ public class BridgeService extends IBridge.Stub {
     public void setTouchpadAsButton(boolean on) {
         bridge.setTouchpadAsButton(on);
     }
+
+    @Override
+    public void setMultiplayer(boolean on) {
+        bridge.setMultiplayer(on);
+    }
 }

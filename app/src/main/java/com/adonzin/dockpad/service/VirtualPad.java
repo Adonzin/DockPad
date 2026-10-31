@@ -21,13 +21,28 @@ import java.util.List;
  */
 final class VirtualPad implements TargetEncoder.Out {
     static final String NAME = "DockPad Controller";
+    private String name = NAME;
+
+    /** "DockPad Controller" for player 1, "DockPad Controller 2" for player 2, ... */
+    static String nameFor(int player) {
+        return player <= 1 ? NAME : NAME + " " + player;
+    }
+
+    static boolean isOurs(String deviceName) {
+        return deviceName != null && deviceName.startsWith(NAME);
+    }
+
+    String name() {
+        return name;
+    }
 
     private Process process;
     private OutputStream stdin;
     private final List<String> toolOutput = Collections.synchronizedList(new ArrayList<>());
     private volatile String error = "";
 
-    boolean create(EvdevDevice clone) {
+    boolean create(EvdevDevice clone, String name) {
+        this.name = name;
         try {
             process = new ProcessBuilder("uinput", "-").redirectErrorStream(true).start();
             stdin = process.getOutputStream();
@@ -44,7 +59,7 @@ final class VirtualPad implements TargetEncoder.Out {
             }, "DockPad-uinput-log");
             reader.setDaemon(true);
             reader.start();
-            send(registerJson(clone));
+            send(registerJson(clone, name));
             return true;
         } catch (Throwable t) {
             error = "could not start Android's uinput tool: " + t;
@@ -64,7 +79,7 @@ final class VirtualPad implements TargetEncoder.Out {
         return "NOT running" + (error.isEmpty() ? "" : " — " + error) + (out.isEmpty() ? "" : " — " + out);
     }
 
-    static String registerJson(EvdevDevice d) {
+    static String registerJson(EvdevDevice d, String name) {
         StringBuilder keys = new StringBuilder();
         for (int k : sorted(d.keys)) keys.append(keys.length() == 0 ? "" : ",").append(k);
         StringBuilder absBits = new StringBuilder();
@@ -78,7 +93,7 @@ final class VirtualPad implements TargetEncoder.Out {
                     .append(",\"fuzz\":").append(i.fuzz).append(",\"flat\":").append(i.flat)
                     .append(",\"resolution\":0}}");
         }
-        return "{\"id\":1,\"command\":\"register\",\"name\":\"" + NAME + "\""
+        return "{\"id\":1,\"command\":\"register\",\"name\":\"" + name + "\""
                 + ",\"vid\":" + d.vendor + ",\"pid\":" + d.product + ",\"bus\":\"usb\""
                 + ",\"configuration\":["
                 + "{\"type\":100,\"data\":[1,3]}"          // UI_SET_EVBIT: EV_KEY, EV_ABS

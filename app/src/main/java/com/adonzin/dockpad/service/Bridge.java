@@ -46,9 +46,55 @@ final class Bridge {
     private volatile String lastError = "";
 
     private volatile EvdevDevice target;
-    private VirtualPad pad;
-    private TargetEncoder encoder;
     private final AtomicLong written = new AtomicLong();
+
+    // multiplayer: one virtual controller per player
+    private static final int MAX_PLAYERS = 4;
+    private volatile boolean multiplayer = true;
+    private final List<Slot> slots = new ArrayList<>();
+
+    private static final class Slot {
+        final int player; // 1-based
+        final VirtualPad pad;
+        final TargetEncoder encoder;
+
+        Slot(int player, VirtualPad pad, TargetEncoder encoder) {
+            this.player = player;
+            this.pad = pad;
+            this.encoder = encoder;
+        }
+    }
+
+    void setMultiplayer(boolean on) {
+        if (multiplayer != on) {
+            multiplayer = on;
+            synchronized (this) {
+                // re-assign everyone
+                for (Source s : sources.values()) s.close();
+                sources.clear();
+            }
+            lastDevList = "";
+        }
+    }
+
+    /** Returns the virtual controller for a player, creating it (and any lower players) if needed. */
+    private Slot slot(int index) {
+        while (slots.size() <= index) {
+            int player = slots.size() + 1;
+            VirtualPad pad = new VirtualPad();
+            if (!pad.create(target, VirtualPad.nameFor(player))) {
+                lastError = pad.describe();
+                return slots.isEmpty() ? null : slots.get(0);
+            }
+            TargetEncoder enc = new TargetEncoder(target, events -> {
+                pad.write(events);
+                written.addAndGet(events.length / 3);
+            });
+            slots.add(new Slot(player, pad, enc));
+            Log.i(TAG, "Created " + pad.name() + " cloning " + target);
+        }
+        return slots.get(index);
+    }
 
     // button shortcuts: "deviceName\tcode" -> output evdev code (-1 = nothing)
     private volatile Map<String, Integer> remaps = new java.util.HashMap<>();
@@ -124,9 +170,13 @@ final class Bridge {
     private synchronized void teardown() {
         for (Source s : sources.values()) s.close();
         sources.clear();
-        if (pad != null) pad.close();
-        pad = null;
-        encoder = null;
+        for (Slot sl : slots) sl.pad.close();
+        slots.clear();
+    }
+
+    private boolean padsAlive() {
+        for (Slot sl : slots) if (!sl.pad.isAlive()) return false;
+        return !slots.isEmpty();
     }
 
     boolean isRunning() {
@@ -138,14 +188,19 @@ final class Bridge {
         b.append("Bridge: ").append(running ? "RUNNING" : "stopped").append('\n');
         EvdevDevice t = target;
         b.append("Built-in controls: ").append(t == null ? "not found" : t.name + " [" + t.id() + "]").append('\n');
-        b.append("Virtual controller \"").append(VirtualPad.NAME).append("\": ")
-                .append(pad == null ? "not created" : pad.describe()).append('\n');
-        InputDevice vd = findAndroidDeviceByName(VirtualPad.NAME);
-        if (vd != null) b.append("   seen by Android as id ").append(vd.getId()).append('\n');
-        b.append("Controllers feeding it:\n");
+        b.append("Multiplayer: ").append(multiplayer ? "on" : "off (everything is player 1)").append('\n');
+        if (slots.isEmpty()) b.append("Virtual controller: not created\n");
+        for (Slot sl : slots) {
+            b.append("Player ").append(sl.player).append(": \"").append(sl.pad.name()).append("\" ")
+                    .append(sl.pad.describe());
+            InputDevice vd = findAndroidDeviceByName(sl.pad.name());
+            if (vd != null) b.append(" (Android id ").append(vd.getId()).append(")");
+            b.append('\n');
+        }
+        b.append("Physical controllers:\n");
         if (sources.isEmpty()) b.append("   none\n");
         for (Source s : sources.values()) {
-            b.append("• ").append(s.dev.name).append(" [").append(s.dev.id()).append("]")
+            b.append("• ").append(s.dev.name).append(" [").append(s.dev.id()).append("] → Player ").append(s.player)
                     .append(s.alive ? "" : " (disconnected)").append('\n')
                     .append("    ").append(s.touchpad ? "touchpad (click = mappable button)"
                             : s.mapper == null ? "" : s.mapper.layoutDescription).append('\n')
@@ -170,7 +225,7 @@ final class Bridge {
                 boolean changed = !list.equals(lastDevList);
                 synchronized (this) {
                     for (Source s : sources.values()) if (!s.alive) changed = true;
-                    if (pad != null && !pad.isAlive()) changed = true;
+                    if (!slots.isEmpty() && !padsAlive()) changed = true;
                 }
                 if (changed) {
                     lastDevList = list;
@@ -193,7 +248,7 @@ final class Bridge {
         outer:
         for (int[] k : KNOWN_BUILT_IN) {
             for (EvdevDevice d : devs) {
-                if (d.vendor == k[0] && d.product == k[1] && d.isGamepad() && !VirtualPad.NAME.equals(d.name)) {
+                if (d.vendor == k[0] && d.product == k[1] && d.isGamepad() && !VirtualPad.isOurs(d.name)) {
                     newTarget = d;
                     break outer;
                 }
@@ -203,21 +258,11 @@ final class Bridge {
         synchronized (this) {
             if (!running) return;
             boolean targetChanged = newTarget == null || target == null || !newTarget.path.equals(target.path);
-            if (targetChanged || pad == null || !pad.isAlive()) {
+            if (targetChanged || !padsAlive()) {
                 teardown();
                 target = newTarget;
                 if (newTarget == null) return;
-                pad = new VirtualPad();
-                if (!pad.create(newTarget)) {
-                    lastError = pad.describe();
-                    return;
-                }
-                VirtualPad p = pad;
-                encoder = new TargetEncoder(newTarget, events -> {
-                    p.write(events);
-                    written.addAndGet(events.length / 3);
-                });
-                Log.i(TAG, "Virtual controller created, cloning " + newTarget);
+                if (slot(0) == null) return; // player 1 must exist
             }
 
             Set<String> present = new HashSet<>();
@@ -230,15 +275,65 @@ final class Bridge {
                     sources.remove(s.dev.path);
                 }
             }
+
+            // new controllers in connection order (event number)
+            List<EvdevDevice> fresh = new ArrayList<>();
             for (EvdevDevice d : devs) {
                 boolean touchpad = touchpadAsButton && d.isControllerTouchpad();
-                if (!(d.isGamepad() || touchpad) || VirtualPad.NAME.equals(d.name) || sources.containsKey(d.path)) continue;
+                if (!(d.isGamepad() || touchpad) || VirtualPad.isOurs(d.name) || sources.containsKey(d.path)) continue;
                 if (d.path.equals(target.path) && !includeBuiltIn) continue;
-                Source s = new Source(d, encoder);
-                sources.put(d.path, s);
-                s.start();
+                fresh.add(d);
+            }
+            fresh.sort((a, b) -> Integer.compare(eventNumber(a.path), eventNumber(b.path)));
+
+            for (int pass = 0; pass < 2; pass++) { // gamepads first, then their touchpads
+                for (EvdevDevice d : fresh) {
+                    boolean touchpad = d.isControllerTouchpad();
+                    if ((pass == 0) == touchpad) continue;
+                    int index;
+                    if (d.path.equals(target.path)) index = 0;
+                    else if (touchpad) index = parentPlayerIndex(d);
+                    else index = nextFreePlayerIndex();
+                    Slot sl = slot(index);
+                    if (sl == null) continue;
+                    Source s = new Source(d, sl.encoder, sl.player);
+                    sources.put(d.path, s);
+                    s.start();
+                }
             }
         }
+    }
+
+    private static int eventNumber(String path) {
+        try {
+            return Integer.parseInt(path.replaceAll("\\D+", ""));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    /** Lowest player slot not used by another external controller (player 1 is shared with the built-in controls). */
+    private int nextFreePlayerIndex() {
+        if (!multiplayer) return 0;
+        Set<Integer> used = new HashSet<>();
+        for (Source s : sources.values()) {
+            if (s.touchpad || s.dev.path.equals(target.path)) continue;
+            used.add(s.player - 1);
+        }
+        for (int i = 0; i < MAX_PLAYERS; i++) if (!used.contains(i)) return i;
+        return MAX_PLAYERS - 1;
+    }
+
+    /** A controller's touchpad belongs to the same player as the controller itself. */
+    private int parentPlayerIndex(EvdevDevice touchpad) {
+        Source best = null;
+        int n = eventNumber(touchpad.path);
+        for (Source s : sources.values()) {
+            if (s.touchpad || !touchpad.name.startsWith(s.dev.name)) continue;
+            int sn = eventNumber(s.dev.path);
+            if (sn < n && (best == null || sn > eventNumber(best.dev.path))) best = s;
+        }
+        return best == null ? 0 : best.player - 1;
     }
 
     static InputDevice findAndroidDevice(EvdevDevice d) {
@@ -288,6 +383,7 @@ final class Bridge {
     private final class Source {
         final EvdevDevice dev;
         final TargetEncoder sink;
+        final int player;
         volatile Mapper mapper;
         final boolean touchpad;
         volatile boolean alive = true;
@@ -299,9 +395,10 @@ final class Bridge {
         private final Set<Integer> swallowed = new HashSet<>();
         private final Map<Integer, Integer> remapHeld = new java.util.HashMap<>();
 
-        Source(EvdevDevice dev, TargetEncoder sink) {
+        Source(EvdevDevice dev, TargetEncoder sink, int player) {
             this.dev = dev;
             this.sink = sink;
+            this.player = player;
             this.touchpad = dev.isControllerTouchpad();
         }
 

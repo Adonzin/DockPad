@@ -39,7 +39,7 @@ public class MainActivity extends Activity {
     private final ExecutorService bg = Executors.newSingleThreadExecutor();
 
     private TextView shizukuText, statusText, testerText, testerAxesText;
-    private Button testerButton, builtInButton, touchpadButton;
+    private Button testerButton, builtInButton, touchpadButton, multiplayerButton;
     private LinearLayout shortcutList;
     private AlertDialog captureDialog;
     private volatile IBridge bridge;
@@ -324,6 +324,18 @@ public class MainActivity extends Activity {
         builtInHint.setTextSize(12);
         root.addView(builtInHint);
 
+        multiplayerButton = new Button(this);
+        multiplayerButton.setAllCaps(false);
+        multiplayerButton.setOnClickListener(v -> toggleMultiplayer());
+        updateMultiplayerButton();
+        root.addView(multiplayerButton);
+
+        TextView mpHint = new TextView(this);
+        mpHint.setText("Player 1 is the built-in controls plus the first external controller. Each further controller "
+                + "gets its own \"DockPad Controller 2\", \"3\", \"4\" — map player 2, 3, 4 to those in your emulators.");
+        mpHint.setTextSize(12);
+        root.addView(mpHint);
+
         statusText = new TextView(this);
         statusText.setTypeface(Typeface.MONOSPACE);
         statusText.setTextSize(12);
@@ -431,12 +443,30 @@ public class MainActivity extends Activity {
                 : "Controller touchpads: act as a mouse");
     }
 
+    private boolean multiplayer() {
+        return getSharedPreferences("dockpad", MODE_PRIVATE).getBoolean("multiplayer", true);
+    }
+
+    private void toggleMultiplayer() {
+        getSharedPreferences("dockpad", MODE_PRIVATE).edit().putBoolean("multiplayer", !multiplayer()).apply();
+        updateMultiplayerButton();
+        pushRemaps();
+    }
+
+    private void updateMultiplayerButton() {
+        multiplayerButton.setText(multiplayer()
+                ? "Multiplayer: each extra controller is the next player"
+                : "Multiplayer: off (all controllers are player 1)");
+    }
+
     private void pushRemaps() {
         IBridge b = bridge;
         String spec = remapSpec();
         boolean tp = touchpadAsButton();
+        boolean mp = multiplayer();
         if (b != null) bg.execute(() -> {
             try {
+                b.setMultiplayer(mp);
                 b.setTouchpadAsButton(tp);
                 b.setRemaps(spec);
             } catch (RemoteException ignored) {
