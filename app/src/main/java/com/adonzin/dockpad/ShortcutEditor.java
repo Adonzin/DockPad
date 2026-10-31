@@ -249,7 +249,7 @@ final class ShortcutEditor {
         explain.setPadding(0, dp(8), 0, dp(8));
         box.addView(explain);
         LinearLayout row = new LinearLayout(activity);
-        MaterialButton add = new MaterialButton(activity, null, com.google.android.material.R.attr.materialButtonTonalStyle);
+        MaterialButton add = new MaterialButton(activity);
         add.setText("Add step");
         MaterialButton undo = new MaterialButton(activity, null, com.google.android.material.R.attr.materialButtonOutlinedStyle);
         undo.setText("Remove last");
