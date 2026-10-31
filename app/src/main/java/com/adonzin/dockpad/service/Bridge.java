@@ -4,7 +4,10 @@ import android.os.Process;
 import android.util.Log;
 import android.view.InputDevice;
 
+import com.adonzin.dockpad.core.Codes;
 import com.adonzin.dockpad.core.EvdevDevice;
+import com.adonzin.dockpad.core.Shortcut;
+import com.adonzin.dockpad.core.ShortcutEngine;
 import com.adonzin.dockpad.core.Mapper;
 import com.adonzin.dockpad.core.TargetEncoder;
 
@@ -22,7 +25,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -96,34 +106,46 @@ final class Bridge {
         return slots.get(index);
     }
 
-    // button shortcuts: "deviceName\tcode" -> output evdev code (-1 = nothing)
-    private volatile Map<String, Integer> remaps = new java.util.HashMap<>();
-    private final Object captureLock = new Object();
-    private volatile boolean capturing;
-    private String captured;
+    // ---------------------------------------------------------------- shortcuts
+
+    private volatile List<Shortcut> shortcuts = new ArrayList<>();
+    private final ScheduledExecutorService timer = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "DockPad-timer");
+        t.setDaemon(true);
+        return t;
+    });
 
     void setTouchpadAsButton(boolean on) {
         touchpadAsButton = on;
         lastDevList = ""; // rescan
     }
 
-    void setRemaps(String spec) {
-        Map<String, Integer> m = new java.util.HashMap<>();
-        for (String line : spec.split("\n")) {
-            String[] f = line.split("\t");
-            if (f.length != 3) continue;
-            try {
-                m.put(f[0] + "\t" + Integer.parseInt(f[1]), Integer.parseInt(f[2]));
-            } catch (NumberFormatException ignored) {
-            }
+    void setShortcuts(String spec) {
+        shortcuts = Shortcut.decodeAll(spec);
+        List<Source> list;
+        synchronized (this) {
+            list = new ArrayList<>(sources.values());
         }
-        remaps = m;
+        for (Source s : list) s.rebuildEngine();
     }
 
-    /** Waits for the next button press on any controller; returns "deviceName\tcode" or "". */
-    String captureKey(int timeoutMs) throws InterruptedException {
+    // combo recording
+    private final Object captureLock = new Object();
+    private volatile boolean capturing;
+    private String captureDevice, captured;
+    private final List<Integer> captureOrder = new ArrayList<>();
+    private final Set<Integer> captureHeld = new HashSet<>();
+
+    /**
+     * Records the next button or combination: everything pressed on one controller until all
+     * buttons are released again. Returns "deviceName\tcode,code" or "" on timeout.
+     */
+    String captureCombo(int timeoutMs) throws InterruptedException {
         synchronized (captureLock) {
             captured = null;
+            captureDevice = null;
+            captureOrder.clear();
+            captureHeld.clear();
             capturing = true;
             long end = System.currentTimeMillis() + timeoutMs;
             while (capturing && captured == null) {
@@ -136,13 +158,25 @@ final class Bridge {
         }
     }
 
-    private boolean offerCapture(String name, int code) {
+    private boolean captureEvent(String device, int code, boolean down) {
         if (!capturing) return false;
         synchronized (captureLock) {
             if (!capturing) return false;
-            captured = name + "\t" + code;
-            capturing = false;
-            captureLock.notifyAll();
+            if (captureDevice != null && !captureDevice.equals(device)) return false;
+            if (down) {
+                captureDevice = device;
+                if (!captureOrder.contains(code) && captureOrder.size() < 4) captureOrder.add(code);
+                captureHeld.add(code);
+                return true;
+            }
+            if (!captureHeld.remove(code)) return false;
+            if (captureHeld.isEmpty() && !captureOrder.isEmpty()) {
+                StringBuilder b = new StringBuilder();
+                for (int c : captureOrder) b.append(b.length() == 0 ? "" : ",").append(c);
+                captured = device + "\t" + b;
+                capturing = false;
+                captureLock.notifyAll();
+            }
             return true;
         }
     }
@@ -183,6 +217,41 @@ final class Bridge {
         return running;
     }
 
+    synchronized String statusJson() {
+        JSONObject o = new JSONObject();
+        try {
+            o.put("running", running);
+            o.put("builtIn", target == null ? JSONObject.NULL : target.name);
+            o.put("multiplayer", multiplayer);
+            o.put("error", lastError);
+            JSONArray players = new JSONArray();
+            for (Slot sl : slots) {
+                JSONObject p = new JSONObject();
+                p.put("player", sl.player);
+                p.put("name", sl.pad.name());
+                p.put("active", sl.pad.isAlive());
+                p.put("detail", sl.pad.describe());
+                players.put(p);
+            }
+            o.put("players", players);
+            JSONArray ctrls = new JSONArray();
+            for (Source s : sources.values()) {
+                if (!s.alive) continue;
+                JSONObject c = new JSONObject();
+                c.put("name", s.dev.name);
+                c.put("player", s.player);
+                c.put("builtIn", target != null && s.dev.path.equals(target.path));
+                c.put("touchpad", s.touchpad);
+                c.put("exclusive", s.hideMethod.startsWith("yes"));
+                c.put("lastButton", s.lastKey < 0 ? "" : Codes.keyName(s.lastKey));
+                ctrls.put(c);
+            }
+            o.put("controllers", ctrls);
+        } catch (JSONException ignored) {
+        }
+        return o.toString();
+    }
+
     synchronized String status() {
         StringBuilder b = new StringBuilder();
         b.append("Bridge: ").append(running ? "RUNNING" : "stopped").append('\n');
@@ -206,7 +275,7 @@ final class Bridge {
                             : s.mapper == null ? "" : s.mapper.layoutDescription).append('\n')
                     .append("    exclusive: ").append(s.hideMethod)
                     .append(", events: ").append(s.eventsRead.get()).append('\n');
-            if (s.lastKey >= 0) b.append("    last button: ").append(com.adonzin.dockpad.core.Codes.keyName(s.lastKey))
+            if (s.lastKey >= 0) b.append("    last button: ").append(Codes.keyName(s.lastKey))
                     .append(String.format(" (0x%x)", s.lastKey)).append('\n');
         }
         b.append("Events sent to virtual controller: ").append(written.get()).append('\n');
@@ -393,7 +462,7 @@ final class Bridge {
         private int disabledAndroidId = -1;
         volatile int lastKey = -1;
         private final Set<Integer> swallowed = new HashSet<>();
-        private final Map<Integer, Integer> remapHeld = new java.util.HashMap<>();
+        private ShortcutEngine engine;
 
         Source(EvdevDevice dev, TargetEncoder sink, int player) {
             this.dev = dev;
@@ -423,7 +492,10 @@ final class Bridge {
                         hideMethod = "NO (" + grabErr + ")";
                     }
                 }
-                mapper = new Mapper(dev, sink);
+                synchronized (this) {
+                    mapper = new Mapper(dev, sink);
+                    buildEngine();
+                }
                 Log.i(TAG, "Feeding " + dev + " — " + mapper.layoutDescription + ", exclusive: " + hideMethod);
 
                 int size = Process.is64Bit() ? 24 : 16;
@@ -438,8 +510,11 @@ final class Bridge {
                         int code = bb.getShort(p + off + 2) & 0xffff;
                         int value = bb.getInt(p + off + 4);
                         eventsRead.incrementAndGet();
-                        if (type == 1 /* EV_KEY */ && handleKey(code, value)) continue;
-                        mapper.onEvent(type, code, value);
+                        synchronized (this) {
+                            if (!alive) break;
+                            if (type == Codes.EV_KEY && handleKey(code, value)) continue;
+                            mapper.onEvent(type, code, value);
+                        }
                     }
                 }
             } catch (Throwable t) {
@@ -449,45 +524,62 @@ final class Bridge {
             }
         }
 
-        /** Shortcut capture and remapping. Returns true if the key was fully handled here. */
+        private void buildEngine() {
+            engine = new ShortcutEngine(shortcuts, dev.name, new ShortcutEngine.Out() {
+                @Override
+                public void output(int code, boolean down) {
+                    sink.rawKey(code, down);
+                }
+
+                @Override
+                public void forward(int code, boolean down) {
+                    if (mapper != null) mapper.onEvent(Codes.EV_KEY, code, down ? 1 : 0);
+                }
+            }, (r, ms) -> {
+                ScheduledFuture<?> f = timer.schedule(() -> {
+                    synchronized (Source.this) {
+                        if (alive) r.run();
+                    }
+                }, ms, TimeUnit.MILLISECONDS);
+                return () -> f.cancel(false);
+            });
+        }
+
+        synchronized void rebuildEngine() {
+            if (!alive || mapper == null) return;
+            if (engine != null) engine.releaseAll();
+            buildEngine();
+        }
+
+        /** Combo recording and shortcuts. Returns true if the key must not reach the game. */
         private boolean handleKey(int code, int value) {
             // A touchpad only offers its click as a button; touches and finger counts are ignored.
-            if (touchpad && code != com.adonzin.dockpad.core.Codes.BTN_LEFT) return true;
+            if (touchpad && code != Codes.BTN_LEFT) return true;
             if (value == 1) lastKey = code;
-            if (value == 1 && offerCapture(dev.name, code)) {
-                swallowed.add(code);
+            if (value == 2) return true; // key repeat: never needed
+            boolean down = value != 0;
+            if (captureEvent(dev.name, code, down)) {
+                if (down) swallowed.add(code);
+                else swallowed.remove(code);
                 return true;
             }
             if (swallowed.contains(code)) {
-                if (value == 0) swallowed.remove(code);
+                if (!down) swallowed.remove(code);
                 return true;
             }
-            Integer out = remaps.get(dev.name + "\t" + code);
-            if (out == null) return touchpad; // an unmapped touchpad click does nothing
-            if (value == 2) return true;
-            boolean down = value != 0;
-            if (down) {
-                if (out >= 0 && !remapHeld.containsKey(code)) {
-                    remapHeld.put(code, out);
-                    sink.rawKey(out, true);
-                }
-            } else {
-                Integer held = remapHeld.remove(code);
-                if (held != null) sink.rawKey(held, false);
-            }
-            return true;
+            if (engine != null && engine.onKey(code, down)) return true;
+            return touchpad; // an unmapped touchpad click does nothing
         }
 
         synchronized void close() {
             boolean wasAlive = alive;
             alive = false;
-            for (Integer held : remapHeld.values()) {
+            if (engine != null) {
                 try {
-                    sink.rawKey(held, false);
+                    engine.releaseAll();
                 } catch (Throwable ignored) {
                 }
             }
-            remapHeld.clear();
             if (wasAlive && mapper != null) {
                 try {
                     mapper.releaseAll();

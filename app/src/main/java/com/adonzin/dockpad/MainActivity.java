@@ -1,49 +1,62 @@
 package com.adonzin.dockpad;
 
-import android.app.Activity;
-import android.app.AlertDialog;
+import android.content.ActivityNotFoundException;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.ComponentName;
+import android.content.Intent;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.graphics.Typeface;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
-import android.os.RemoteException;
-import android.view.InputDevice;
-import android.view.KeyEvent;
-import android.view.MotionEvent;
+import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
 
-import com.adonzin.dockpad.core.Codes;
+import androidx.appcompat.app.AppCompatActivity;
+
+import com.adonzin.dockpad.core.Shortcut;
 import com.adonzin.dockpad.service.BridgeService;
+import com.google.android.material.button.MaterialButton;
+import com.google.android.material.card.MaterialCardView;
+import com.google.android.material.color.DynamicColors;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.materialswitch.MaterialSwitch;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import rikka.shizuku.Shizuku;
 
-public class MainActivity extends Activity {
+public class MainActivity extends AppCompatActivity implements ShortcutEditor.Host {
+    static final String SHIZUKU_PACKAGE = "moe.shizuku.privileged.api";
     private static final int REQ = 42;
-    private static final int[] TEST_AXES = {
-            MotionEvent.AXIS_X, MotionEvent.AXIS_Y, MotionEvent.AXIS_Z, MotionEvent.AXIS_RZ,
-            MotionEvent.AXIS_RX, MotionEvent.AXIS_RY, MotionEvent.AXIS_LTRIGGER, MotionEvent.AXIS_RTRIGGER,
-            MotionEvent.AXIS_BRAKE, MotionEvent.AXIS_GAS, MotionEvent.AXIS_HAT_X, MotionEvent.AXIS_HAT_Y};
 
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final ExecutorService bg = Executors.newSingleThreadExecutor();
+    private Prefs prefs;
+    private ShortcutEditor editor;
 
-    private TextView shizukuText, statusText, testerText, testerAxesText;
-    private Button testerButton, builtInButton, touchpadButton, multiplayerButton;
-    private LinearLayout shortcutList;
-    private AlertDialog captureDialog;
+    private MaterialCardView setupCard;
+    private LinearLayout setupSteps, controllersList, shortcutsList, settingsList;
+    private TextView bridgeTitle, bridgeSubtitle;
+    private MaterialButton bridgeButton;
+
     private volatile IBridge bridge;
-    private boolean bound, startWhenConnected, testerOn;
+    private boolean bound, startWhenConnected;
+    private boolean lastRunning;
+    private String lastControllersJson = "";
 
     private final Shizuku.UserServiceArgs serviceArgs = new Shizuku.UserServiceArgs(
             new ComponentName(BuildConfig.APPLICATION_ID, BridgeService.class.getName()))
@@ -56,17 +69,17 @@ public class MainActivity extends Activity {
         @Override
         public void onServiceConnected(ComponentName name, IBinder binder) {
             if (binder == null || !binder.pingBinder()) return;
-            bridge = IBridge.Stub.asInterface(binder);
-            pushRemaps();
-            if (startWhenConnected) {
-                startWhenConnected = false;
-                bg.execute(() -> {
-                    try {
-                        bridge.start(includeBuiltIn());
-                    } catch (RemoteException ignored) {
-                    }
-                });
-            }
+            IBridge b = IBridge.Stub.asInterface(binder);
+            bridge = b;
+            boolean start = startWhenConnected || prefs.bridgeWanted();
+            startWhenConnected = false;
+            pushSettings();
+            if (start) bg.execute(() -> {
+                try {
+                    if (!b.isRunning()) b.start(prefs.includeBuiltIn());
+                } catch (Exception ignored) {
+                }
+            });
         }
 
         @Override
@@ -76,40 +89,56 @@ public class MainActivity extends Activity {
         }
     };
 
-    private final Shizuku.OnBinderReceivedListener binderReceived = () -> ui.post(this::refreshShizuku);
+    private final Shizuku.OnBinderReceivedListener binderReceived = () -> ui.post(this::refreshSetup);
     private final Shizuku.OnBinderDeadListener binderDead = () -> ui.post(() -> {
         bridge = null;
         bound = false;
-        refreshShizuku();
+        refreshSetup();
     });
-    private final Shizuku.OnRequestPermissionResultListener permResult = (code, result) -> ui.post(this::refreshShizuku);
+    private final Shizuku.OnRequestPermissionResultListener permResult =
+            (code, result) -> ui.post(this::refreshSetup);
 
     private final Runnable poll = new Runnable() {
         @Override
         public void run() {
-            IBridge b = bridge;
-            if (b != null) {
-                bg.execute(() -> {
-                    String s;
-                    try {
-                        s = b.status();
-                    } catch (Throwable t) {
-                        s = "Lost connection to the bridge service.";
-                    }
-                    String fs = s;
-                    ui.post(() -> statusText.setText(fs));
-                });
-            } else {
-                statusText.setText("Bridge service not connected.");
-            }
+            pollStatus();
             ui.postDelayed(this, 1000);
         }
     };
 
+    // ------------------------------------------------------------------ lifecycle
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        DynamicColors.applyToActivityIfAvailable(this);
         super.onCreate(savedInstanceState);
-        buildUi();
+        setContentView(R.layout.activity_main);
+        prefs = new Prefs(this);
+        editor = new ShortcutEditor(this, this);
+
+        setupCard = findViewById(R.id.setup_card);
+        setupSteps = findViewById(R.id.setup_steps);
+        controllersList = findViewById(R.id.controllers_list);
+        shortcutsList = findViewById(R.id.shortcuts_list);
+        settingsList = findViewById(R.id.settings_list);
+        bridgeTitle = findViewById(R.id.bridge_title);
+        bridgeSubtitle = findViewById(R.id.bridge_subtitle);
+        bridgeButton = findViewById(R.id.bridge_button);
+
+        bridgeButton.setOnClickListener(v -> {
+            if (lastRunning) stopBridge();
+            else startBridge();
+        });
+        findViewById(R.id.add_shortcut).setOnClickListener(v -> editor.addNew());
+        findViewById(R.id.open_tester).setOnClickListener(v -> startActivity(new Intent(this, TesterActivity.class)));
+        findViewById(R.id.open_diagnostics).setOnClickListener(v -> showDiagnostics());
+        ((TextView) findViewById(R.id.version)).setText("DockPad " + BuildConfig.VERSION_NAME);
+
+        buildSettings();
+        renderShortcuts();
+        renderControllers(null);
+        renderBridge(false, null);
+
         Shizuku.addBinderReceivedListenerSticky(binderReceived);
         Shizuku.addBinderDeadListener(binderDead);
         Shizuku.addRequestPermissionResultListener(permResult);
@@ -118,7 +147,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        refreshShizuku();
+        refreshSetup();
         ui.post(poll);
     }
 
@@ -135,7 +164,7 @@ public class MainActivity extends Activity {
         Shizuku.removeRequestPermissionResultListener(permResult);
         if (bound) {
             try {
-                Shizuku.unbindUserService(serviceArgs, connection, false); // keep the daemon running
+                Shizuku.unbindUserService(serviceArgs, connection, false); // the bridge keeps running
             } catch (Throwable ignored) {
             }
         }
@@ -143,447 +172,385 @@ public class MainActivity extends Activity {
         super.onDestroy();
     }
 
-    // ------------------------------------------------------------------ Shizuku
+    // ------------------------------------------------------------------ ShortcutEditor.Host
 
-    private boolean shizukuReady() {
+    @Override
+    public IBridge bridge() {
+        return bridge;
+    }
+
+    @Override
+    public void runInBackground(Runnable r) {
+        bg.execute(r);
+    }
+
+    @Override
+    public Prefs prefs() {
+        return prefs;
+    }
+
+    @Override
+    public void shortcutsChanged() {
+        renderShortcuts();
+        pushSettings();
+    }
+
+    // ------------------------------------------------------------------ Shizuku setup
+
+    private boolean shizukuInstalled() {
         try {
-            return Shizuku.pingBinder() && !Shizuku.isPreV11()
-                    && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED;
+            getPackageManager().getPackageInfo(SHIZUKU_PACKAGE, 0);
+            return true;
+        } catch (PackageManager.NameNotFoundException e) {
+            return false;
+        }
+    }
+
+    private boolean shizukuRunning() {
+        try {
+            return Shizuku.pingBinder() && !Shizuku.isPreV11();
         } catch (Throwable t) {
             return false;
         }
     }
 
-    private void refreshShizuku() {
-        boolean running;
+    private boolean shizukuAllowed() {
         try {
-            running = Shizuku.pingBinder();
+            return shizukuRunning() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED;
         } catch (Throwable t) {
-            running = false;
+            return false;
         }
-        if (!running) {
-            shizukuText.setText("Shizuku is not running. Open the Shizuku app and start it (Start via Wireless debugging), then come back.");
-            return;
-        }
-        if (Shizuku.isPreV11()) {
-            shizukuText.setText("Your Shizuku version is too old. Please update Shizuku.");
-            return;
-        }
-        if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
-            shizukuText.setText("DockPad needs Shizuku permission. Tap \"Start bridge\" and allow it.");
-            return;
-        }
-        shizukuText.setText("Shizuku: ready ✓");
-        bindService(); // connect to an already-running bridge, if any
     }
 
-    private void bindService() {
+    private void refreshSetup() {
+        boolean installed = shizukuInstalled() || shizukuRunning();
+        boolean running = shizukuRunning();
+        boolean allowed = shizukuAllowed();
+
+        setupSteps.removeAllViews();
+        addSetupStep(installed, "Install Shizuku", "A free app that lets DockPad manage controllers.",
+                installed ? null : "Get it", this::openShizukuStore);
+        addSetupStep(running, "Start Shizuku",
+                "Open Shizuku and tap Start under \"Start via Wireless debugging\". Needed again after every restart.",
+                installed && !running ? "Open" : null, this::openShizuku);
+        addSetupStep(allowed, "Allow DockPad", "Give DockPad permission in Shizuku.",
+                running && !allowed ? "Allow" : null, () -> {
+                    try {
+                        Shizuku.requestPermission(REQ);
+                    } catch (Throwable ignored) {
+                    }
+                });
+        setupCard.setVisibility(allowed ? View.GONE : View.VISIBLE);
+        bridgeButton.setEnabled(allowed);
+        if (allowed) bindBridge();
+        else renderBridge(false, null);
+    }
+
+    private void addSetupStep(boolean done, String title, String subtitle, String action, Runnable onAction) {
+        View row = getLayoutInflater().inflate(R.layout.item_row, setupSteps, false);
+        ImageView icon = row.findViewById(R.id.row_icon);
+        icon.setImageResource(done ? R.drawable.ic_check : R.drawable.ic_pending);
+        ((TextView) row.findViewById(R.id.row_title)).setText(title);
+        ((TextView) row.findViewById(R.id.row_subtitle)).setText(done ? "Done" : subtitle);
+        MaterialButton btn = row.findViewById(R.id.row_action);
+        if (action != null) {
+            btn.setVisibility(View.VISIBLE);
+            btn.setText(action);
+            btn.setOnClickListener(v -> onAction.run());
+        }
+        setupSteps.addView(row);
+    }
+
+    private void openShizukuStore() {
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + SHIZUKU_PACKAGE)));
+        } catch (ActivityNotFoundException e) {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://shizuku.rikka.app/download/")));
+        }
+    }
+
+    private void openShizuku() {
+        Intent i = getPackageManager().getLaunchIntentForPackage(SHIZUKU_PACKAGE);
+        if (i != null) startActivity(i);
+        else openShizukuStore();
+    }
+
+    private void bindBridge() {
         if (bound) return;
         try {
             Shizuku.bindUserService(serviceArgs, connection);
             bound = true;
         } catch (Throwable t) {
-            shizukuText.setText("Could not start the bridge service: " + t);
+            Toast.makeText(this, "Couldn't start DockPad's service: " + t.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
 
-    private void onStartClicked() {
-        try {
-            if (!Shizuku.pingBinder()) {
-                refreshShizuku();
-                return;
-            }
-            if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
-                Shizuku.requestPermission(REQ);
-                return;
-            }
-        } catch (Throwable t) {
-            refreshShizuku();
+    // ------------------------------------------------------------------ bridge on/off
+
+    private void startBridge() {
+        if (!shizukuAllowed()) {
+            refreshSetup();
             return;
         }
+        prefs.bridgeWanted(true);
         IBridge b = bridge;
         if (b != null) {
             bg.execute(() -> {
                 try {
-                    b.start(includeBuiltIn());
-                } catch (RemoteException ignored) {
+                    b.start(prefs.includeBuiltIn());
+                } catch (Exception ignored) {
                 }
             });
         } else {
             startWhenConnected = true;
-            bindService();
+            bindBridge();
         }
+        bridgeTitle.setText("Turning on…");
     }
 
-    private void onStopClicked() {
+    private void stopBridge() {
+        prefs.bridgeWanted(false);
         IBridge b = bridge;
         bg.execute(() -> {
             try {
                 if (b != null) b.stop();
-            } catch (RemoteException ignored) {
+            } catch (Exception ignored) {
             }
+        });
+    }
+
+    private void pushSettings() {
+        IBridge b = bridge;
+        if (b == null) return;
+        boolean mp = prefs.multiplayer(), tp = prefs.touchpadAsButton(), bi = prefs.includeBuiltIn();
+        String spec = prefs.shortcutsSpec();
+        bg.execute(() -> {
+            try {
+                b.setMultiplayer(mp);
+                b.setTouchpadAsButton(tp);
+                b.setShortcuts(spec);
+                if (b.isRunning()) b.start(bi); // applies the built-in setting
+            } catch (Exception ignored) {
+            }
+        });
+    }
+
+    // ------------------------------------------------------------------ status
+
+    private void pollStatus() {
+        IBridge b = bridge;
+        if (b == null) return;
+        bg.execute(() -> {
+            String json;
+            try {
+                json = b.statusJson();
+            } catch (Exception e) {
+                json = null;
+            }
+            String j = json;
             ui.post(() -> {
-                if (shizukuReady()) {
-                    try {
-                        Shizuku.unbindUserService(serviceArgs, connection, true); // end the process
-                    } catch (Throwable ignored) {
+                try {
+                    JSONObject o = j == null ? null : new JSONObject(j);
+                    boolean running = o != null && o.optBoolean("running");
+                    renderBridge(running, o);
+                    String ctrls = o == null ? "" : o.optJSONArray("controllers") + "|" + o.optJSONArray("players");
+                    if (!ctrls.equals(lastControllersJson)) {
+                        lastControllersJson = ctrls;
+                        renderControllers(running ? o : null);
                     }
+                } catch (Exception ignored) {
                 }
-                bridge = null;
-                bound = false;
             });
         });
     }
 
-    // ------------------------------------------------------------------ input tester
-
-    private static boolean isGamepad(int source) {
-        return (source & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD
-                || (source & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK
-                || (source & InputDevice.SOURCE_DPAD) == InputDevice.SOURCE_DPAD;
-    }
-
-    private static String deviceLabel(InputDevice d, int id) {
-        return d == null ? "unknown device (id " + id + ")" : d.getName() + " (id " + id + ")";
-    }
-
-    @Override
-    public boolean dispatchKeyEvent(KeyEvent e) {
-        if (testerOn && isGamepad(e.getSource())) {
-            if (e.getRepeatCount() == 0) {
-                testerText.setText(KeyEvent.keyCodeToString(e.getKeyCode())
-                        + (e.getAction() == KeyEvent.ACTION_DOWN ? "  pressed" : "  released")
-                        + "\nfrom: " + deviceLabel(e.getDevice(), e.getDeviceId()));
-            }
-            return true;
-        }
-        return super.dispatchKeyEvent(e);
-    }
-
-    @Override
-    public boolean dispatchGenericMotionEvent(MotionEvent e) {
-        if (testerOn && (e.getSource() & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK) {
-            StringBuilder b = new StringBuilder("Sticks/triggers from: ")
-                    .append(deviceLabel(e.getDevice(), e.getDeviceId())).append('\n');
-            for (int axis : TEST_AXES) {
-                float v = e.getAxisValue(axis);
-                if (Math.abs(v) > 0.02f) {
-                    b.append(MotionEvent.axisToString(axis).replace("AXIS_", ""))
-                            .append(String.format(" %.2f  ", v));
-                }
-            }
-            testerAxesText.setText(b.toString());
-            return true;
-        }
-        return super.dispatchGenericMotionEvent(e);
-    }
-
-    // ------------------------------------------------------------------ UI
-
-    private void buildUi() {
-        int pad = dp(16);
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(pad, pad, pad, pad);
-
-        TextView title = new TextView(this);
-        title.setText("DockPad");
-        title.setTextSize(26);
-        title.setTypeface(Typeface.DEFAULT_BOLD);
-        root.addView(title);
-
-        TextView sub = new TextView(this);
-        sub.setText("Use any external controller as your built-in controls.");
-        sub.setPadding(0, 0, 0, pad);
-        root.addView(sub);
-
-        shizukuText = new TextView(this);
-        shizukuText.setPadding(0, 0, 0, pad);
-        root.addView(shizukuText);
-
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        Button start = new Button(this);
-        start.setText("Start bridge");
-        start.setOnClickListener(v -> onStartClicked());
-        Button stop = new Button(this);
-        stop.setText("Stop bridge");
-        stop.setOnClickListener(v -> onStopClicked());
-        row.addView(start, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-        row.addView(stop, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-        root.addView(row);
-
-        builtInButton = new Button(this);
-        builtInButton.setOnClickListener(v -> toggleIncludeBuiltIn());
-        updateBuiltInButton();
-        root.addView(builtInButton);
-
-        TextView builtInHint = new TextView(this);
-        builtInHint.setText("ON: the built-in controls also go through the DockPad Controller, so emulators "
-                + "mapped to it work the same handheld or docked. OFF: only external controllers do.");
-        builtInHint.setTextSize(12);
-        root.addView(builtInHint);
-
-        multiplayerButton = new Button(this);
-        multiplayerButton.setAllCaps(false);
-        multiplayerButton.setOnClickListener(v -> toggleMultiplayer());
-        updateMultiplayerButton();
-        root.addView(multiplayerButton);
-
-        TextView mpHint = new TextView(this);
-        mpHint.setText("Player 1 is the built-in controls plus the first external controller. Each further controller "
-                + "gets its own \"DockPad Controller 2\", \"3\", \"4\" — map player 2, 3, 4 to those in your emulators.");
-        mpHint.setTextSize(12);
-        root.addView(mpHint);
-
-        statusText = new TextView(this);
-        statusText.setTypeface(Typeface.MONOSPACE);
-        statusText.setTextSize(12);
-        statusText.setPadding(0, pad, 0, pad);
-        statusText.setTextIsSelectable(true);
-        root.addView(statusText);
-
-        TextView shortcutsTitle = new TextView(this);
-        shortcutsTitle.setText("Button shortcuts");
-        shortcutsTitle.setTextSize(18);
-        shortcutsTitle.setTypeface(Typeface.DEFAULT_BOLD);
-        root.addView(shortcutsTitle);
-
-        TextView shortcutsHint = new TextView(this);
-        shortcutsHint.setText("Make any controller button act as Home, Back, Recent apps or another button. "
-                + "Tap a shortcut to remove it.");
-        shortcutsHint.setTextSize(12);
-        root.addView(shortcutsHint);
-
-        touchpadButton = new Button(this);
-        touchpadButton.setAllCaps(false);
-        touchpadButton.setOnClickListener(v -> toggleTouchpad());
-        updateTouchpadButton();
-        root.addView(touchpadButton);
-
-        TextView touchpadHint = new TextView(this);
-        touchpadHint.setText("For controllers with a touchpad (like DualShock 4 / DualSense): as a button, pressing the "
-                + "pad down can be mapped with \"Add shortcut\" (e.g. to Back), and it no longer moves a mouse pointer.");
-        touchpadHint.setTextSize(12);
-        root.addView(touchpadHint);
-
-        Button addShortcut = new Button(this);
-        addShortcut.setText("Add shortcut");
-        addShortcut.setOnClickListener(v -> onAddShortcut());
-        root.addView(addShortcut);
-
-        shortcutList = new LinearLayout(this);
-        shortcutList.setOrientation(LinearLayout.VERTICAL);
-        shortcutList.setPadding(0, 0, 0, pad);
-        root.addView(shortcutList);
-        refreshShortcutList();
-
-        testerButton = new Button(this);
-        testerButton.setText("Input tester: OFF");
-        testerButton.setOnClickListener(v -> setTester(!testerOn));
-        root.addView(testerButton);
-
-        TextView hint = new TextView(this);
-        hint.setText("While the tester is on, controller presses are shown here instead of moving around the screen. "
-                + "Tap the button on the touchscreen to turn it off.");
-        hint.setTextSize(12);
-        root.addView(hint);
-
-        testerText = new TextView(this);
-        testerText.setTextSize(18);
-        testerText.setPadding(0, pad, 0, 0);
-        root.addView(testerText);
-
-        testerAxesText = new TextView(this);
-        testerAxesText.setTypeface(Typeface.MONOSPACE);
-        testerAxesText.setPadding(0, pad / 2, 0, 0);
-        root.addView(testerAxesText);
-
-        ScrollView scroll = new ScrollView(this);
-        scroll.addView(root);
-        setContentView(scroll);
-    }
-
-    private void setTester(boolean on) {
-        testerOn = on;
-        testerButton.setText(on ? "Input tester: ON" : "Input tester: OFF");
-        if (!on) {
-            testerText.setText("");
-            testerAxesText.setText("");
-        } else {
-            testerText.setText("Press buttons on any controller…");
-        }
-    }
-
-    // ------------------------------------------------------------------ button shortcuts
-
-    private String remapSpec() {
-        return getSharedPreferences("dockpad", MODE_PRIVATE).getString("remaps", "");
-    }
-
-    private void saveRemapSpec(String spec) {
-        getSharedPreferences("dockpad", MODE_PRIVATE).edit().putString("remaps", spec).apply();
-        pushRemaps();
-        refreshShortcutList();
-    }
-
-    private boolean touchpadAsButton() {
-        return getSharedPreferences("dockpad", MODE_PRIVATE).getBoolean("touchpadAsButton", true);
-    }
-
-    private void toggleTouchpad() {
-        getSharedPreferences("dockpad", MODE_PRIVATE).edit().putBoolean("touchpadAsButton", !touchpadAsButton()).apply();
-        updateTouchpadButton();
-        pushRemaps();
-    }
-
-    private void updateTouchpadButton() {
-        touchpadButton.setText(touchpadAsButton()
-                ? "Controller touchpads: act as a button"
-                : "Controller touchpads: act as a mouse");
-    }
-
-    private boolean multiplayer() {
-        return getSharedPreferences("dockpad", MODE_PRIVATE).getBoolean("multiplayer", true);
-    }
-
-    private void toggleMultiplayer() {
-        getSharedPreferences("dockpad", MODE_PRIVATE).edit().putBoolean("multiplayer", !multiplayer()).apply();
-        updateMultiplayerButton();
-        pushRemaps();
-    }
-
-    private void updateMultiplayerButton() {
-        multiplayerButton.setText(multiplayer()
-                ? "Multiplayer: each extra controller is the next player"
-                : "Multiplayer: off (all controllers are player 1)");
-    }
-
-    private void pushRemaps() {
-        IBridge b = bridge;
-        String spec = remapSpec();
-        boolean tp = touchpadAsButton();
-        boolean mp = multiplayer();
-        if (b != null) bg.execute(() -> {
-            try {
-                b.setMultiplayer(mp);
-                b.setTouchpadAsButton(tp);
-                b.setRemaps(spec);
-            } catch (RemoteException ignored) {
-            }
-        });
-    }
-
-    private void onAddShortcut() {
-        IBridge b = bridge;
-        boolean running = false;
-        try {
-            running = b != null && b.isRunning();
-        } catch (RemoteException ignored) {
+    private void renderBridge(boolean running, JSONObject o) {
+        lastRunning = running;
+        bridgeButton.setText(running ? "Turn off" : "Turn on");
+        if (!shizukuAllowed()) {
+            bridgeTitle.setText("DockPad is off");
+            bridgeSubtitle.setText("Finish the setup above first.");
+            return;
         }
         if (!running) {
-            new AlertDialog.Builder(this).setMessage("Start the bridge first, then add shortcuts.")
-                    .setPositiveButton("OK", null).show();
+            bridgeTitle.setText("DockPad is off");
+            bridgeSubtitle.setText("Controllers work as they normally do.");
             return;
         }
-        captureDialog = new AlertDialog.Builder(this)
-                .setTitle("Press a button")
-                .setMessage("Press the button you want to change, on any controller. Waiting 10 seconds…")
-                .setNegativeButton("Cancel", null)
-                .show();
-        bg.execute(() -> {
-            String r;
-            try {
-                r = b.captureKey(10000);
-            } catch (Throwable t) {
-                r = "";
+        JSONArray ctrls = o == null ? null : o.optJSONArray("controllers");
+        int n = 0;
+        if (ctrls != null) for (int i = 0; i < ctrls.length(); i++) {
+            JSONObject c = ctrls.optJSONObject(i);
+            if (c != null && !c.optBoolean("touchpad")) n++;
+        }
+        String err = o == null ? "" : o.optString("error", "");
+        if (o != null && o.isNull("builtIn")) {
+            bridgeTitle.setText("DockPad is on");
+            bridgeSubtitle.setText("Waiting for the built-in controls…");
+        } else {
+            bridgeTitle.setText("DockPad is on");
+            bridgeSubtitle.setText(n == 1 ? "1 controller connected" : n + " controllers connected");
+        }
+        JSONArray players = o == null ? null : o.optJSONArray("players");
+        if (players != null) for (int i = 0; i < players.length(); i++) {
+            JSONObject p = players.optJSONObject(i);
+            if (p != null && !p.optBoolean("active")) {
+                bridgeSubtitle.setText("Problem with \"" + p.optString("name") + "\". Open Diagnostics.");
             }
-            String res = r;
-            ui.post(() -> onCaptured(res));
-        });
+        }
+        if (!err.isEmpty() && n == 0) bridgeSubtitle.append("\nLast error: " + err);
     }
 
-    private void onCaptured(String result) {
-        if (captureDialog == null || !captureDialog.isShowing()) return; // cancelled
-        captureDialog.dismiss();
-        if (result.isEmpty()) {
-            new AlertDialog.Builder(this).setTitle("No button detected")
-                    .setMessage("No controller sent a button press. If you pressed a button and nothing was detected, "
-                            + "that button doesn't reach Android at all (some controllers handle it internally), "
-                            + "so it can't be remapped. Try another controller mode, or pick a different button.")
-                    .setPositiveButton("OK", null).show();
-            return;
+    private void renderControllers(JSONObject o) {
+        controllersList.removeAllViews();
+        JSONArray ctrls = o == null ? null : o.optJSONArray("controllers");
+        if (ctrls == null || ctrls.length() == 0) {
+            addInfoRow(controllersList, R.drawable.ic_gamepad,
+                    o == null ? "Turn DockPad on to see your controllers." : "No controllers found.",
+                    o == null ? null : "Connect a controller over Bluetooth or USB. It appears here within a few seconds.");
+        } else {
+            for (int i = 0; i < ctrls.length(); i++) {
+                JSONObject c = ctrls.optJSONObject(i);
+                if (c == null) continue;
+                boolean builtIn = c.optBoolean("builtIn");
+                boolean touchpad = c.optBoolean("touchpad");
+                String sub = builtIn ? "Built-in controls" : touchpad ? "Touchpad: click works as a button" : "External controller";
+                if (!c.optBoolean("exclusive")) sub += " · couldn't take over: apps may see it twice";
+                String last = c.optString("lastButton", "");
+                if (!last.isEmpty()) sub += " · last: " + last;
+                View row = addInfoRow(controllersList,
+                        builtIn ? R.drawable.ic_handheld : touchpad ? R.drawable.ic_touch : R.drawable.ic_gamepad,
+                        c.optString("name"), sub);
+                TextView badge = row.findViewById(R.id.row_badge);
+                badge.setVisibility(View.VISIBLE);
+                badge.setText("Player " + c.optInt("player", 1));
+            }
         }
-        String[] f = result.split("\t");
-        String device = f[0];
-        int code = Integer.parseInt(f[1]);
-        new AlertDialog.Builder(this)
-                .setTitle(device + ": " + Codes.keyName(code) + " → ?")
-                .setItems(Codes.OUTPUT_LABELS, (d, which) -> {
-                    StringBuilder spec = new StringBuilder();
-                    for (String line : remapSpec().split("\n")) {
-                        if (line.isEmpty() || line.startsWith(device + "\t" + code + "\t")) continue;
-                        spec.append(line).append('\n');
-                    }
-                    spec.append(device).append('\t').append(code).append('\t').append(Codes.OUTPUT_CODES[which]).append('\n');
-                    saveRemapSpec(spec.toString());
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
+        JSONArray players = o == null ? null : o.optJSONArray("players");
+        if (players != null && players.length() > 0) {
+            StringBuilder b = new StringBuilder("In your emulators, choose ");
+            for (int i = 0; i < players.length(); i++) {
+                JSONObject p = players.optJSONObject(i);
+                if (p == null) continue;
+                if (i > 0) b.append(i == players.length() - 1 ? " and " : ", ");
+                b.append('"').append(p.optString("name")).append("\" for player ").append(p.optInt("player"));
+            }
+            b.append('.');
+            TextView tip = new TextView(this);
+            tip.setText(b);
+            tip.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall);
+            tip.setPadding(0, dp(8), 0, 0);
+            controllersList.addView(tip);
+        }
     }
 
-    private void refreshShortcutList() {
-        shortcutList.removeAllViews();
-        String spec = remapSpec();
-        boolean any = false;
-        for (String line : spec.split("\n")) {
-            String[] f = line.split("\t");
-            if (f.length != 3) continue;
-            any = true;
-            Button item = new Button(this);
-            item.setAllCaps(false);
-            item.setText(f[0] + ": " + Codes.keyName(Integer.parseInt(f[1])) + "  →  "
-                    + Codes.outputLabel(Integer.parseInt(f[2])));
-            item.setOnClickListener(v -> new AlertDialog.Builder(this)
-                    .setMessage("Remove this shortcut?")
-                    .setPositiveButton("Remove", (d, w) -> {
-                        StringBuilder out = new StringBuilder();
-                        for (String l : remapSpec().split("\n")) {
-                            if (!l.isEmpty() && !l.equals(line)) out.append(l).append('\n');
-                        }
-                        saveRemapSpec(out.toString());
-                    })
-                    .setNegativeButton("Keep", null).show());
-            shortcutList.addView(item);
-        }
-        if (!any) {
+    private View addInfoRow(ViewGroup parent, int icon, String title, String subtitle) {
+        View row = getLayoutInflater().inflate(R.layout.item_row, parent, false);
+        ((ImageView) row.findViewById(R.id.row_icon)).setImageResource(icon);
+        ((TextView) row.findViewById(R.id.row_title)).setText(title);
+        TextView sub = row.findViewById(R.id.row_subtitle);
+        if (subtitle == null) sub.setVisibility(View.GONE);
+        else sub.setText(subtitle);
+        parent.addView(row);
+        return row;
+    }
+
+    // ------------------------------------------------------------------ shortcuts
+
+    private void renderShortcuts() {
+        shortcutsList.removeAllViews();
+        List<Shortcut> all = prefs.shortcuts();
+        if (all.isEmpty()) {
             TextView none = new TextView(this);
-            none.setText("No shortcuts yet.");
-            shortcutList.addView(none);
+            none.setText("No shortcuts yet. Example: Select + B → Back.");
+            none.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyMedium);
+            none.setPadding(0, dp(4), 0, dp(4));
+            shortcutsList.addView(none);
+            return;
+        }
+        for (int i = 0; i < all.size(); i++) {
+            Shortcut s = all.get(i);
+            String title = (s.hold ? "Hold " : "") + s.triggerLabel() + "  →  " + s.actionLabel();
+            View row = addInfoRow(shortcutsList, R.drawable.ic_bolt, title, s.deviceLabel());
+            row.setFocusable(true);
+            row.setClickable(true);
+            int index = i;
+            row.setOnClickListener(v -> editor.editExisting(index));
         }
     }
 
-    private boolean includeBuiltIn() {
-        return getSharedPreferences("dockpad", MODE_PRIVATE).getBoolean("includeBuiltIn", true);
+    // ------------------------------------------------------------------ settings
+
+    private void buildSettings() {
+        settingsList.removeAllViews();
+        addSwitch("Include the built-in controls",
+                "Send the built-in controls through the DockPad Controller too, so emulators work the same handheld or docked.",
+                prefs.includeBuiltIn(), v -> {
+                    prefs.includeBuiltIn(v);
+                    pushSettings();
+                });
+        addSwitch("Multiplayer",
+                "Each extra controller becomes the next player (DockPad Controller 2, 3, 4). When off, every controller is player 1.",
+                prefs.multiplayer(), v -> {
+                    prefs.multiplayer(v);
+                    pushSettings();
+                });
+        addSwitch("Touchpad as a button",
+                "On controllers with a touchpad (DualShock 4, DualSense), pressing the pad becomes a button you can use in shortcuts instead of a mouse.",
+                prefs.touchpadAsButton(), v -> {
+                    prefs.touchpadAsButton(v);
+                    pushSettings();
+                });
     }
 
-    private void toggleIncludeBuiltIn() {
-        boolean v = !includeBuiltIn();
-        getSharedPreferences("dockpad", MODE_PRIVATE).edit().putBoolean("includeBuiltIn", v).apply();
-        updateBuiltInButton();
+    interface BoolSetter {
+        void set(boolean v);
+    }
+
+    private void addSwitch(String title, String subtitle, boolean value, BoolSetter onChange) {
+        View row = getLayoutInflater().inflate(R.layout.item_switch, settingsList, false);
+        ((TextView) row.findViewById(R.id.switch_title)).setText(title);
+        ((TextView) row.findViewById(R.id.switch_subtitle)).setText(subtitle);
+        MaterialSwitch sw = row.findViewById(R.id.switch_toggle);
+        sw.setChecked(value);
+        sw.setOnCheckedChangeListener((b, checked) -> onChange.set(checked));
+        row.setOnClickListener(v -> sw.toggle());
+        settingsList.addView(row);
+    }
+
+    // ------------------------------------------------------------------ diagnostics
+
+    private void showDiagnostics() {
         IBridge b = bridge;
-        if (b != null) bg.execute(() -> {
+        bg.execute(() -> {
+            String s;
             try {
-                if (b.isRunning()) b.start(v);
-            } catch (RemoteException ignored) {
+                s = b == null ? "DockPad's service isn't connected (is Shizuku running?)." : b.status();
+            } catch (Exception e) {
+                s = "Couldn't reach DockPad's service: " + e;
             }
+            String text = "DockPad " + BuildConfig.VERSION_NAME + "\n" + s;
+            ui.post(() -> {
+                TextView tv = new TextView(this);
+                tv.setText(text);
+                tv.setTypeface(Typeface.MONOSPACE);
+                tv.setTextSize(12);
+                tv.setTextIsSelectable(true);
+                tv.setPadding(dp(24), dp(8), dp(24), 0);
+                android.widget.ScrollView sv = new android.widget.ScrollView(this);
+                sv.addView(tv);
+                new MaterialAlertDialogBuilder(this)
+                        .setTitle("Diagnostics")
+                        .setView(sv)
+                        .setPositiveButton("Close", null)
+                        .setNeutralButton("Copy", (d, w) -> {
+                            ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                            cm.setPrimaryClip(ClipData.newPlainText("DockPad diagnostics", text));
+                            Toast.makeText(this, "Copied", Toast.LENGTH_SHORT).show();
+                        })
+                        .show();
+            });
         });
-    }
-
-    private void updateBuiltInButton() {
-        builtInButton.setText(includeBuiltIn()
-                ? "Built-in controls → DockPad Controller: ON"
-                : "Built-in controls → DockPad Controller: OFF");
     }
 
     private int dp(int v) {

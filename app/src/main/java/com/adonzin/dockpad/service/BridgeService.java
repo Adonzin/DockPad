@@ -48,14 +48,19 @@ public class BridgeService extends IBridge.Stub {
     }
 
     @Override
-    public void setRemaps(String spec) {
-        bridge.setRemaps(spec);
+    public String statusJson() {
+        return bridge.statusJson();
     }
 
     @Override
-    public String captureKey(int timeoutMs) {
+    public void setShortcuts(String spec) {
+        bridge.setShortcuts(spec);
+    }
+
+    @Override
+    public String captureCombo(int timeoutMs) {
         try {
-            return bridge.captureKey(timeoutMs);
+            return bridge.captureCombo(timeoutMs);
         } catch (InterruptedException e) {
             return "";
         }

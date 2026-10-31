@@ -8,8 +8,9 @@ interface IBridge {
     void stop() = 2;
     String status() = 3;
     boolean isRunning() = 4;
-    void setRemaps(String spec) = 5;
-    String captureKey(int timeoutMs) = 6;
     void setTouchpadAsButton(boolean on) = 7;
     void setMultiplayer(boolean on) = 8;
+    String statusJson() = 9;
+    void setShortcuts(String spec) = 10;
+    String captureCombo(int timeoutMs) = 11;
 }

@@ -83,4 +83,36 @@ public final class Codes {
             default: return String.format("button 0x%x", code);
         }
     }
+
+    /** Short label for a physical button, used in combos like "Select + B". */
+    public static String shortKeyName(int code) {
+        switch (code) {
+            case BTN_LEFT: return "Touchpad";
+            case BTN_SOUTH: return "A";
+            case BTN_EAST: return "B";
+            case BTN_NORTH: return "X";
+            case BTN_WEST: return "Y";
+            case BTN_C: return "C";
+            case BTN_Z: return "Z";
+            case BTN_TL: return "L1";
+            case BTN_TR: return "R1";
+            case BTN_TL2: return "L2";
+            case BTN_TR2: return "R2";
+            case BTN_SELECT: return "Select";
+            case BTN_START: return "Start";
+            case BTN_MODE: return "Guide";
+            case BTN_THUMBL: return "L3";
+            case BTN_THUMBR: return "R3";
+            case BTN_DPAD_UP: return "Up";
+            case BTN_DPAD_DOWN: return "Down";
+            case BTN_DPAD_LEFT: return "Left";
+            case BTN_DPAD_RIGHT: return "Right";
+            case KEY_HOME: case KEY_HOMEPAGE: return "Home";
+            case KEY_BACK: return "Back";
+            case KEY_APPSELECT: return "Recents";
+            case KEY_VOLUMEUP: return "Vol+";
+            case KEY_VOLUMEDOWN: return "Vol-";
+            default: return String.format("0x%x", code);
+        }
+    }
 }

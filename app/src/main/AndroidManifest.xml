@@ -1,10 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <queries>
+        <package android:name="moe.shizuku.privileged.api" />
+    </queries>
+
     <application
         android:label="DockPad"
-        android:icon="@android:drawable/sym_def_app_icon"
-        android:theme="@android:style/Theme.DeviceDefault"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:theme="@style/Theme.DockPad"
         android:allowBackup="false">
 
         <activity
@@ -16,6 +21,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".TesterActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|keyboard|keyboardHidden|navigation|smallestScreenSize|density|uiMode" />
 
         <provider
             android:name="rikka.shizuku.ShizukuProvider"
