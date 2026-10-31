@@ -46,4 +46,18 @@ public class BridgeService extends IBridge.Stub {
     public boolean isRunning() {
         return bridge.isRunning();
     }
+
+    @Override
+    public void setRemaps(String spec) {
+        bridge.setRemaps(spec);
+    }
+
+    @Override
+    public String captureKey(int timeoutMs) {
+        try {
+            return bridge.captureKey(timeoutMs);
+        } catch (InterruptedException e) {
+            return "";
+        }
+    }
 }

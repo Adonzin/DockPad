@@ -1,6 +1,7 @@
 package com.adonzin.dockpad;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.ComponentName;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
@@ -19,6 +20,7 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
+import com.adonzin.dockpad.core.Codes;
 import com.adonzin.dockpad.service.BridgeService;
 
 import java.util.concurrent.ExecutorService;
@@ -38,6 +40,8 @@ public class MainActivity extends Activity {
 
     private TextView shizukuText, statusText, testerText, testerAxesText;
     private Button testerButton, builtInButton;
+    private LinearLayout shortcutList;
+    private AlertDialog captureDialog;
     private volatile IBridge bridge;
     private boolean bound, startWhenConnected, testerOn;
 
@@ -53,6 +57,7 @@ public class MainActivity extends Activity {
         public void onServiceConnected(ComponentName name, IBinder binder) {
             if (binder == null || !binder.pingBinder()) return;
             bridge = IBridge.Stub.asInterface(binder);
+            pushRemaps();
             if (startWhenConnected) {
                 startWhenConnected = false;
                 bg.execute(() -> {
@@ -326,6 +331,29 @@ public class MainActivity extends Activity {
         statusText.setTextIsSelectable(true);
         root.addView(statusText);
 
+        TextView shortcutsTitle = new TextView(this);
+        shortcutsTitle.setText("Button shortcuts");
+        shortcutsTitle.setTextSize(18);
+        shortcutsTitle.setTypeface(Typeface.DEFAULT_BOLD);
+        root.addView(shortcutsTitle);
+
+        TextView shortcutsHint = new TextView(this);
+        shortcutsHint.setText("Make any controller button act as Home, Back, Recent apps or another button. "
+                + "Tap a shortcut to remove it.");
+        shortcutsHint.setTextSize(12);
+        root.addView(shortcutsHint);
+
+        Button addShortcut = new Button(this);
+        addShortcut.setText("Add shortcut");
+        addShortcut.setOnClickListener(v -> onAddShortcut());
+        root.addView(addShortcut);
+
+        shortcutList = new LinearLayout(this);
+        shortcutList.setOrientation(LinearLayout.VERTICAL);
+        shortcutList.setPadding(0, 0, 0, pad);
+        root.addView(shortcutList);
+        refreshShortcutList();
+
         testerButton = new Button(this);
         testerButton.setText("Input tester: OFF");
         testerButton.setOnClickListener(v -> setTester(!testerOn));
@@ -360,6 +388,118 @@ public class MainActivity extends Activity {
             testerAxesText.setText("");
         } else {
             testerText.setText("Press buttons on any controller…");
+        }
+    }
+
+    // ------------------------------------------------------------------ button shortcuts
+
+    private String remapSpec() {
+        return getSharedPreferences("dockpad", MODE_PRIVATE).getString("remaps", "");
+    }
+
+    private void saveRemapSpec(String spec) {
+        getSharedPreferences("dockpad", MODE_PRIVATE).edit().putString("remaps", spec).apply();
+        pushRemaps();
+        refreshShortcutList();
+    }
+
+    private void pushRemaps() {
+        IBridge b = bridge;
+        String spec = remapSpec();
+        if (b != null) bg.execute(() -> {
+            try {
+                b.setRemaps(spec);
+            } catch (RemoteException ignored) {
+            }
+        });
+    }
+
+    private void onAddShortcut() {
+        IBridge b = bridge;
+        boolean running = false;
+        try {
+            running = b != null && b.isRunning();
+        } catch (RemoteException ignored) {
+        }
+        if (!running) {
+            new AlertDialog.Builder(this).setMessage("Start the bridge first, then add shortcuts.")
+                    .setPositiveButton("OK", null).show();
+            return;
+        }
+        captureDialog = new AlertDialog.Builder(this)
+                .setTitle("Press a button")
+                .setMessage("Press the button you want to change, on any controller. Waiting 10 seconds…")
+                .setNegativeButton("Cancel", null)
+                .show();
+        bg.execute(() -> {
+            String r;
+            try {
+                r = b.captureKey(10000);
+            } catch (Throwable t) {
+                r = "";
+            }
+            String res = r;
+            ui.post(() -> onCaptured(res));
+        });
+    }
+
+    private void onCaptured(String result) {
+        if (captureDialog == null || !captureDialog.isShowing()) return; // cancelled
+        captureDialog.dismiss();
+        if (result.isEmpty()) {
+            new AlertDialog.Builder(this).setTitle("No button detected")
+                    .setMessage("No controller sent a button press. If you pressed a button and nothing was detected, "
+                            + "that button doesn't reach Android at all (some controllers handle it internally), "
+                            + "so it can't be remapped. Try another controller mode, or pick a different button.")
+                    .setPositiveButton("OK", null).show();
+            return;
+        }
+        String[] f = result.split("\t");
+        String device = f[0];
+        int code = Integer.parseInt(f[1]);
+        new AlertDialog.Builder(this)
+                .setTitle(device + ": " + Codes.keyName(code) + " → ?")
+                .setItems(Codes.OUTPUT_LABELS, (d, which) -> {
+                    StringBuilder spec = new StringBuilder();
+                    for (String line : remapSpec().split("\n")) {
+                        if (line.isEmpty() || line.startsWith(device + "\t" + code + "\t")) continue;
+                        spec.append(line).append('\n');
+                    }
+                    spec.append(device).append('\t').append(code).append('\t').append(Codes.OUTPUT_CODES[which]).append('\n');
+                    saveRemapSpec(spec.toString());
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void refreshShortcutList() {
+        shortcutList.removeAllViews();
+        String spec = remapSpec();
+        boolean any = false;
+        for (String line : spec.split("\n")) {
+            String[] f = line.split("\t");
+            if (f.length != 3) continue;
+            any = true;
+            Button item = new Button(this);
+            item.setAllCaps(false);
+            item.setText(f[0] + ": " + Codes.keyName(Integer.parseInt(f[1])) + "  →  "
+                    + Codes.outputLabel(Integer.parseInt(f[2])));
+            item.setOnClickListener(v -> new AlertDialog.Builder(this)
+                    .setMessage("Remove this shortcut?")
+                    .setPositiveButton("Remove", (d, w) -> {
+                        StringBuilder out = new StringBuilder();
+                        for (String l : remapSpec().split("\n")) {
+                            if (!l.isEmpty() && !l.equals(line)) out.append(l).append('\n');
+                        }
+                        saveRemapSpec(out.toString());
+                    })
+                    .setNegativeButton("Keep", null).show());
+            shortcutList.addView(item);
+        }
+        if (!any) {
+            TextView none = new TextView(this);
+            none.setText("No shortcuts yet.");
+            shortcutList.addView(none);
         }
     }
 

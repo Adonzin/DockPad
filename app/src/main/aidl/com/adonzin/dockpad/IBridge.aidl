@@ -8,4 +8,6 @@ interface IBridge {
     void stop() = 2;
     String status() = 3;
     boolean isRunning() = 4;
+    void setRemaps(String spec) = 5;
+    String captureKey(int timeoutMs) = 6;
 }

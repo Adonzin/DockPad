@@ -49,6 +49,52 @@ final class Bridge {
     private TargetEncoder encoder;
     private final AtomicLong written = new AtomicLong();
 
+    // button shortcuts: "deviceName\tcode" -> output evdev code (-1 = nothing)
+    private volatile Map<String, Integer> remaps = new java.util.HashMap<>();
+    private final Object captureLock = new Object();
+    private volatile boolean capturing;
+    private String captured;
+
+    void setRemaps(String spec) {
+        Map<String, Integer> m = new java.util.HashMap<>();
+        for (String line : spec.split("\n")) {
+            String[] f = line.split("\t");
+            if (f.length != 3) continue;
+            try {
+                m.put(f[0] + "\t" + Integer.parseInt(f[1]), Integer.parseInt(f[2]));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        remaps = m;
+    }
+
+    /** Waits for the next button press on any controller; returns "deviceName\tcode" or "". */
+    String captureKey(int timeoutMs) throws InterruptedException {
+        synchronized (captureLock) {
+            captured = null;
+            capturing = true;
+            long end = System.currentTimeMillis() + timeoutMs;
+            while (capturing && captured == null) {
+                long left = end - System.currentTimeMillis();
+                if (left <= 0) break;
+                captureLock.wait(left);
+            }
+            capturing = false;
+            return captured == null ? "" : captured;
+        }
+    }
+
+    private boolean offerCapture(String name, int code) {
+        if (!capturing) return false;
+        synchronized (captureLock) {
+            if (!capturing) return false;
+            captured = name + "\t" + code;
+            capturing = false;
+            captureLock.notifyAll();
+            return true;
+        }
+    }
+
     synchronized String start(boolean includeBuiltIn) {
         this.includeBuiltIn = includeBuiltIn;
         if (running) {
@@ -98,6 +144,8 @@ final class Bridge {
                     .append("    ").append(s.mapper == null ? "" : s.mapper.layoutDescription).append('\n')
                     .append("    exclusive: ").append(s.hideMethod)
                     .append(", events: ").append(s.eventsRead.get()).append('\n');
+            if (s.lastKey >= 0) b.append("    last button: ").append(com.adonzin.dockpad.core.Codes.keyName(s.lastKey))
+                    .append(String.format(" (0x%x)", s.lastKey)).append('\n');
         }
         b.append("Events sent to virtual controller: ").append(written.get()).append('\n');
         if (!lastError.isEmpty()) b.append("Last error: ").append(lastError).append('\n');
@@ -237,6 +285,9 @@ final class Bridge {
         final AtomicLong eventsRead = new AtomicLong();
         private FileInputStream in;
         private int disabledAndroidId = -1;
+        volatile int lastKey = -1;
+        private final Set<Integer> swallowed = new HashSet<>();
+        private final Map<Integer, Integer> remapHeld = new java.util.HashMap<>();
 
         Source(EvdevDevice dev, TargetEncoder sink) {
             this.dev = dev;
@@ -279,6 +330,7 @@ final class Bridge {
                         int code = bb.getShort(p + off + 2) & 0xffff;
                         int value = bb.getInt(p + off + 4);
                         eventsRead.incrementAndGet();
+                        if (type == 1 /* EV_KEY */ && handleKey(code, value)) continue;
                         mapper.onEvent(type, code, value);
                     }
                 }
@@ -289,9 +341,43 @@ final class Bridge {
             }
         }
 
+        /** Shortcut capture and remapping. Returns true if the key was fully handled here. */
+        private boolean handleKey(int code, int value) {
+            if (value == 1) lastKey = code;
+            if (value == 1 && offerCapture(dev.name, code)) {
+                swallowed.add(code);
+                return true;
+            }
+            if (swallowed.contains(code)) {
+                if (value == 0) swallowed.remove(code);
+                return true;
+            }
+            Integer out = remaps.get(dev.name + "\t" + code);
+            if (out == null) return false;
+            if (value == 2) return true;
+            boolean down = value != 0;
+            if (down) {
+                if (out >= 0 && !remapHeld.containsKey(code)) {
+                    remapHeld.put(code, out);
+                    sink.rawKey(out, true);
+                }
+            } else {
+                Integer held = remapHeld.remove(code);
+                if (held != null) sink.rawKey(held, false);
+            }
+            return true;
+        }
+
         synchronized void close() {
             boolean wasAlive = alive;
             alive = false;
+            for (Integer held : remapHeld.values()) {
+                try {
+                    sink.rawKey(held, false);
+                } catch (Throwable ignored) {
+                }
+            }
+            remapHeld.clear();
             if (wasAlive && mapper != null) {
                 try {
                     mapper.releaseAll();

@@ -34,4 +34,50 @@ public final class Codes {
     // Android motion axes
     public static final int AXIS_X = 0, AXIS_Y = 1, AXIS_Z = 11, AXIS_RX = 12, AXIS_RY = 13, AXIS_RZ = 14,
             AXIS_HAT_X = 15, AXIS_HAT_Y = 16, AXIS_LTRIGGER = 17, AXIS_RTRIGGER = 18, AXIS_GAS = 22, AXIS_BRAKE = 23;
+
+    public static final int KEY_VOLUMEDOWN = 0x72, KEY_VOLUMEUP = 0x73, KEY_APPSELECT = 0x244;
+
+    /** Things a button can be remapped to: label + evdev key code on the virtual controller (-1 = nothing). */
+    public static final String[] OUTPUT_LABELS = {"Home", "Back", "Recent apps", "Volume up", "Volume down",
+            "A", "B", "X", "Y", "L1", "R1", "L2", "R2", "Start", "Select", "L3 (stick press)", "R3 (stick press)",
+            "Guide / Mode", "D-pad up", "D-pad down", "D-pad left", "D-pad right", "Do nothing"};
+    public static final int[] OUTPUT_CODES = {KEY_HOME, KEY_BACK, KEY_APPSELECT, KEY_VOLUMEUP, KEY_VOLUMEDOWN,
+            BTN_SOUTH, BTN_EAST, BTN_NORTH, BTN_WEST, BTN_TL, BTN_TR, BTN_TL2, BTN_TR2, BTN_START, BTN_SELECT,
+            BTN_THUMBL, BTN_THUMBR, BTN_MODE, BTN_DPAD_UP, BTN_DPAD_DOWN, BTN_DPAD_LEFT, BTN_DPAD_RIGHT, -1};
+
+    public static String outputLabel(int code) {
+        for (int i = 0; i < OUTPUT_CODES.length; i++) if (OUTPUT_CODES[i] == code) return OUTPUT_LABELS[i];
+        return String.format("key 0x%x", code);
+    }
+
+    /** Human name of a raw evdev key code, as a controller reports it. */
+    public static String keyName(int code) {
+        switch (code) {
+            case BTN_SOUTH: return "A / Cross (bottom)";
+            case BTN_EAST: return "B / Circle (right)";
+            case BTN_NORTH: return "X / Triangle (top)";
+            case BTN_WEST: return "Y / Square (left)";
+            case BTN_C: return "C";
+            case BTN_Z: return "Z";
+            case BTN_TL: return "L1";
+            case BTN_TR: return "R1";
+            case BTN_TL2: return "L2";
+            case BTN_TR2: return "R2";
+            case BTN_SELECT: return "Select / Share";
+            case BTN_START: return "Start / Options";
+            case BTN_MODE: return "Guide / Home / PS";
+            case BTN_THUMBL: return "L3";
+            case BTN_THUMBR: return "R3";
+            case BTN_DPAD_UP: return "D-pad up";
+            case BTN_DPAD_DOWN: return "D-pad down";
+            case BTN_DPAD_LEFT: return "D-pad left";
+            case BTN_DPAD_RIGHT: return "D-pad right";
+            case KEY_HOME: case KEY_HOMEPAGE: return "Home key";
+            case KEY_BACK: return "Back key";
+            case KEY_APPSELECT: return "Recent apps key";
+            case KEY_VOLUMEUP: return "Volume up";
+            case KEY_VOLUMEDOWN: return "Volume down";
+            default: return String.format("button 0x%x", code);
+        }
+    }
 }
