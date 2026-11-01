@@ -2,7 +2,7 @@
 
 Use any Bluetooth or USB controller as if it were your Android handheld's **built-in controls**, so you don't have to remap Player 1 in every emulator when you dock.
 
-DockPad creates one virtual **DockPad Controller** with the same layout and hardware IDs as the built-in controls. It then takes exclusive control of the built-in controls and every external controller and feeds them all into that one virtual controller. Map each emulator to the DockPad Controller once, and after that it works the same whichever controller you're holding.
+DockPad takes exclusive control of external controllers, translates their input to the built-in controls' layout, and writes it straight into the built-in controls' own input device. Apps see the presses as coming from the built-in controls, so emulators already set up for them work with any controller without remapping. Extra players get virtual controllers ("DockPad Controller 2", "3", "4").
 
 Status: early test version, built for the Retroid Pocket 5.
 

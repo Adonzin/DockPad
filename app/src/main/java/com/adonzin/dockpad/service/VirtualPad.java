@@ -19,7 +19,7 @@ import java.util.List;
  * system treats as real hardware. It copies the capabilities and hardware IDs of the
  * built-in controls, under its own name.
  */
-final class VirtualPad implements TargetEncoder.Out {
+final class VirtualPad implements PadOut {
     static final String NAME = "DockPad Controller";
     private String name = NAME;
 
@@ -32,7 +32,8 @@ final class VirtualPad implements TargetEncoder.Out {
         return deviceName != null && deviceName.startsWith(NAME);
     }
 
-    String name() {
+    @Override
+    public String name() {
         return name;
     }
 
@@ -69,11 +70,13 @@ final class VirtualPad implements TargetEncoder.Out {
         }
     }
 
-    boolean isAlive() {
+    @Override
+    public boolean isAlive() {
         return process != null && process.isAlive();
     }
 
-    String describe() {
+    @Override
+    public String describe() {
         if (isAlive()) return "active";
         String out = String.join(" | ", toolOutput);
         return "NOT running" + (error.isEmpty() ? "" : " — " + error) + (out.isEmpty() ? "" : " — " + out);
@@ -126,7 +129,8 @@ final class VirtualPad implements TargetEncoder.Out {
         stdin.flush();
     }
 
-    synchronized void close() {
+    @Override
+    public synchronized void close() {
         try {
             if (stdin != null) stdin.close(); // EOF makes the tool remove the device
         } catch (IOException ignored) {

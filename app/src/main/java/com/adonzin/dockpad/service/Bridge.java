@@ -65,10 +65,10 @@ final class Bridge {
 
     private static final class Slot {
         final int player; // 1-based
-        final VirtualPad pad;
+        final PadOut pad;
         final TargetEncoder encoder;
 
-        Slot(int player, VirtualPad pad, TargetEncoder encoder) {
+        Slot(int player, PadOut pad, TargetEncoder encoder) {
             this.player = player;
             this.pad = pad;
             this.encoder = encoder;
@@ -91,10 +91,22 @@ final class Bridge {
     private Slot slot(int index) {
         while (slots.size() <= index) {
             int player = slots.size() + 1;
-            VirtualPad pad = new VirtualPad();
-            if (!pad.create(target, VirtualPad.nameFor(player))) {
-                lastError = pad.describe();
-                return slots.isEmpty() ? null : slots.get(0);
+            PadOut pad;
+            if (player == 1) {
+                // Player 1 goes straight into the built-in controls: no remapping anywhere.
+                BuiltInWriter w = new BuiltInWriter(target);
+                if (!w.open()) {
+                    lastError = w.describe();
+                    return null;
+                }
+                pad = w;
+            } else {
+                VirtualPad v = new VirtualPad();
+                if (!v.create(target, VirtualPad.nameFor(player))) {
+                    lastError = v.describe();
+                    return slots.isEmpty() ? null : slots.get(0);
+                }
+                pad = v;
             }
             TargetEncoder enc = new TargetEncoder(target, events -> {
                 pad.write(events);
@@ -337,8 +349,7 @@ final class Bridge {
             Set<String> present = new HashSet<>();
             for (EvdevDevice d : devs) present.add(d.path);
             for (Source s : new ArrayList<>(sources.values())) {
-                boolean unwanted = (s.dev.path.equals(target.path) && !includeBuiltIn)
-                        || (s.touchpad && !touchpadAsButton);
+                boolean unwanted = s.dev.path.equals(target.path) || (s.touchpad && !touchpadAsButton);
                 if (!s.alive || !present.contains(s.dev.path) || unwanted) {
                     s.close();
                     sources.remove(s.dev.path);
@@ -350,7 +361,7 @@ final class Bridge {
             for (EvdevDevice d : devs) {
                 boolean touchpad = touchpadAsButton && d.isControllerTouchpad();
                 if (!(d.isGamepad() || touchpad) || VirtualPad.isOurs(d.name) || sources.containsKey(d.path)) continue;
-                if (d.path.equals(target.path) && !includeBuiltIn) continue;
+                if (d.path.equals(target.path)) continue; // the built-in controls work natively
                 fresh.add(d);
             }
             fresh.sort((a, b) -> Integer.compare(eventNumber(a.path), eventNumber(b.path)));
@@ -386,7 +397,7 @@ final class Bridge {
         if (!multiplayer) return 0;
         Set<Integer> used = new HashSet<>();
         for (Source s : sources.values()) {
-            if (s.touchpad || s.dev.path.equals(target.path)) continue;
+            if (s.touchpad) continue;
             used.add(s.player - 1);
         }
         for (int i = 0; i < MAX_PLAYERS; i++) if (!used.contains(i)) return i;

@@ -374,7 +374,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         }
         if (!running) {
             bridgeTitle.setText("DockPad is off");
-            bridgeSubtitle.setText("Controllers work as they normally do.");
+            bridgeSubtitle.setText("Turn on to use external controllers as your built-in controls.");
             return;
         }
         JSONArray ctrls = o == null ? null : o.optJSONArray("controllers");
@@ -389,7 +389,8 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
             bridgeSubtitle.setText("Waiting for the built-in controls…");
         } else {
             bridgeTitle.setText("DockPad is on");
-            bridgeSubtitle.setText(n == 1 ? "1 controller connected" : n + " controllers connected");
+            bridgeSubtitle.setText(n == 0 ? "No external controller connected"
+                    : n == 1 ? "1 external controller connected" : n + " external controllers connected");
         }
         JSONArray players = o == null ? null : o.optJSONArray("players");
         if (players != null) for (int i = 0; i < players.length(); i++) {
@@ -404,9 +405,16 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
     private void renderControllers(JSONObject o) {
         controllersList.removeAllViews();
         JSONArray ctrls = o == null ? null : o.optJSONArray("controllers");
+        if (o != null && !o.isNull("builtIn")) {
+            View row = addInfoRow(controllersList, R.drawable.ic_handheld, "Built-in controls",
+                    "Work as normal. External controllers on player 1 act as these.");
+            TextView badge = row.findViewById(R.id.row_badge);
+            badge.setVisibility(View.VISIBLE);
+            badge.setText("Player 1");
+        }
         if (ctrls == null || ctrls.length() == 0) {
             addInfoRow(controllersList, R.drawable.ic_gamepad,
-                    o == null ? "Turn DockPad on to see your controllers." : "No controllers found.",
+                    o == null ? "Turn DockPad on to see your controllers." : "No external controllers connected.",
                     o == null ? null : "Connect a controller over Bluetooth or USB. It appears here within a few seconds.");
         } else {
             for (int i = 0; i < ctrls.length(); i++) {
@@ -427,15 +435,15 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
             }
         }
         JSONArray players = o == null ? null : o.optJSONArray("players");
-        if (players != null && players.length() > 0) {
-            StringBuilder b = new StringBuilder("In your emulators, choose ");
-            for (int i = 0; i < players.length(); i++) {
+        if (o != null) {
+            StringBuilder b = new StringBuilder("Player 1 needs no setup: emulators already set up for the "
+                    + "built-in controls respond to it.");
+            if (players != null) for (int i = 0; i < players.length(); i++) {
                 JSONObject p = players.optJSONObject(i);
-                if (p == null) continue;
-                if (i > 0) b.append(i == players.length() - 1 ? " and " : ", ");
-                b.append('"').append(p.optString("name")).append("\" for player ").append(p.optInt("player"));
+                if (p == null || p.optInt("player") < 2) continue;
+                b.append(" For player ").append(p.optInt("player")).append(", choose \"")
+                        .append(p.optString("name")).append("\" in your emulator once.");
             }
-            b.append('.');
             TextView tip = new TextView(this);
             tip.setText(b);
             tip.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall);
@@ -483,14 +491,8 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
 
     private void buildSettings() {
         settingsList.removeAllViews();
-        addSwitch("Include the built-in controls",
-                "Send the built-in controls through the DockPad Controller too, so emulators work the same handheld or docked.",
-                prefs.includeBuiltIn(), v -> {
-                    prefs.includeBuiltIn(v);
-                    pushSettings();
-                });
         addSwitch("Multiplayer",
-                "Each extra controller becomes the next player (DockPad Controller 2, 3, 4). When off, every controller is player 1.",
+                "Player 1 is the built-in controls plus your first external controller. Each further controller becomes the next player (\"DockPad Controller 2\", \"3\", \"4\"). When off, every controller is player 1.",
                 prefs.multiplayer(), v -> {
                     prefs.multiplayer(v);
                     pushSettings();
