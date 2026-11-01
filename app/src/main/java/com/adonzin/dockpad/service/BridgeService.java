@@ -80,4 +80,18 @@ public class BridgeService extends IBridge.Stub {
     public void setLayouts(String spec) {
         bridge.setLayouts(spec);
     }
+
+    @Override
+    public void setBuiltIn(String spec) {
+        bridge.setBuiltIn(spec);
+    }
+
+    @Override
+    public String identifyController(int timeoutMs) {
+        try {
+            return bridge.identifyController(timeoutMs);
+        } catch (Exception e) {
+            return "";
+        }
+    }
 }

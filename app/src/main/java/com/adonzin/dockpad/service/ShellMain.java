@@ -79,6 +79,8 @@ public final class ShellMain {
                     case "setMultiplayer": svc.setMultiplayer(a.optBoolean(0)); break;
                     case "setShortcuts": svc.setShortcuts(a.optString(0)); break;
                     case "setLayouts": svc.setLayouts(a.optString(0)); break;
+                    case "setBuiltIn": svc.setBuiltIn(a.optString(0)); break;
+                    case "identifyController": r = svc.identifyController(a.optInt(0, 15000)); break;
                     case "captureCombo": r = svc.captureCombo(a.optInt(0, 15000), a.optBoolean(1)); break;
                     case "exit":
                         res.put("r", JSONObject.NULL);

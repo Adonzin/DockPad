@@ -136,4 +136,15 @@ public final class SocketBridge implements IBridge {
     public void setLayouts(String spec) throws RemoteException {
         rc("setLayouts", spec);
     }
+
+    @Override
+    public void setBuiltIn(String spec) throws RemoteException {
+        rc("setBuiltIn", spec);
+    }
+
+    @Override
+    public String identifyController(int timeoutMs) throws RemoteException {
+        Object r = rcTimeout("identifyController", timeoutMs + 5000, timeoutMs);
+        return r == null ? "" : r.toString();
+    }
 }

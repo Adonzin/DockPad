@@ -539,12 +539,24 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
     private void renderControllers(JSONObject o) {
         controllersList.removeAllViews();
         JSONArray ctrls = o == null ? null : o.optJSONArray("controllers");
-        if (o != null && !o.isNull("builtIn")) {
-            View row = addInfoRow(controllersList, R.drawable.ic_handheld, "Built-in controls",
-                    "Work as normal. External controllers on player 1 act as these.");
-            TextView badge = row.findViewById(R.id.row_badge);
-            badge.setVisibility(View.VISIBLE);
-            badge.setText("Player 1");
+        if (o != null) {
+            View row;
+            if (o.isNull("builtIn")) {
+                row = addInfoRow(controllersList, R.drawable.ic_error, "Built-in controls not found",
+                        "Tap to choose them by pressing one of their buttons.");
+            } else {
+                String how = o.optString("builtInHow");
+                String howText = "chosen".equals(how) ? "chosen by you" : "detected".equals(how)
+                        ? "detected automatically" : "recognised";
+                row = addInfoRow(controllersList, R.drawable.ic_handheld, "Built-in controls",
+                        o.optString("builtIn") + " (" + howText + "). External controllers on player 1 act as these. Tap to change.");
+                TextView badge = row.findViewById(R.id.row_badge);
+                badge.setVisibility(View.VISIBLE);
+                badge.setText("Player 1");
+            }
+            row.setFocusable(true);
+            row.setClickable(true);
+            row.setOnClickListener(v -> chooseBuiltIn());
         }
         if (ctrls == null || ctrls.length() == 0) {
             addInfoRow(controllersList, R.drawable.ic_gamepad,
@@ -602,6 +614,75 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         else sub.setText(subtitle);
         parent.addView(row);
         return row;
+    }
+
+    // ------------------------------------------------------------------ built-in controls
+
+    private void chooseBuiltIn() {
+        String[] options = {"Press a button on them", "Detect automatically"};
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("Which are the built-in controls?")
+                .setItems(options, (d, which) -> {
+                    if (which == 1) {
+                        prefs.builtIn("");
+                        pushSettings();
+                        lastControllersJson = "";
+                    } else {
+                        identifyBuiltIn();
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void identifyBuiltIn() {
+        IBridge b = bridge;
+        if (b == null) {
+            Toast.makeText(this, "Turn DockPad on first.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        com.google.android.material.progressindicator.LinearProgressIndicator progress =
+                new com.google.android.material.progressindicator.LinearProgressIndicator(this);
+        progress.setIndeterminate(true);
+        LinearLayout wrap = new LinearLayout(this);
+        wrap.setPadding(dp(24), dp(8), dp(24), 0);
+        wrap.addView(progress, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+        androidx.appcompat.app.AlertDialog waiting = new MaterialAlertDialogBuilder(this)
+                .setTitle("Press a button on the built-in controls")
+                .setMessage("Any button on the device's own controls (not an external controller).")
+                .setView(wrap)
+                .setNegativeButton("Cancel", null)
+                .show();
+        bg.execute(() -> {
+            String r;
+            try {
+                r = b.identifyController(15000);
+            } catch (Exception e) {
+                r = "";
+            }
+            String res = r;
+            ui.post(() -> {
+                if (!waiting.isShowing()) return;
+                waiting.dismiss();
+                String[] f = res.split("\t");
+                if (f.length != 3) {
+                    new MaterialAlertDialogBuilder(this).setMessage("No button press detected.")
+                            .setPositiveButton("OK", null).show();
+                    return;
+                }
+                new MaterialAlertDialogBuilder(this)
+                        .setTitle("Use \"" + f[0] + "\" as the built-in controls?")
+                        .setMessage("External controllers on player 1 will act as this controller.")
+                        .setPositiveButton("Use it", (d, w) -> {
+                            prefs.builtIn(res);
+                            pushSettings();
+                            lastControllersJson = "";
+                        })
+                        .setNegativeButton("Cancel", null)
+                        .show();
+            });
+        });
     }
 
     // ------------------------------------------------------------------ shortcuts

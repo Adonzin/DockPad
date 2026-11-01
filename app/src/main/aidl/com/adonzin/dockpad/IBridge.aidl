@@ -14,4 +14,6 @@ interface IBridge {
     void setShortcuts(String spec) = 10;
     String captureCombo(int timeoutMs, boolean raw) = 11;
     void setLayouts(String spec) = 12;
+    void setBuiltIn(String spec) = 13;
+    String identifyController(int timeoutMs) = 14;
 }

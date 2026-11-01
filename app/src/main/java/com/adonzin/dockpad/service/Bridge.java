@@ -245,6 +245,7 @@ final class Bridge {
         try {
             o.put("running", running);
             o.put("builtIn", target == null ? JSONObject.NULL : target.name);
+            o.put("builtInHow", builtInHow);
             o.put("multiplayer", multiplayer);
             o.put("error", lastError);
             JSONArray players = new JSONArray();
@@ -334,18 +335,139 @@ final class Bridge {
         }
     }
 
-    private void rescan() throws IOException, InterruptedException {
-        List<EvdevDevice> devs = EvdevDevice.parse(run("getevent", "-i"));
-        EvdevDevice newTarget = null;
-        outer:
-        for (int[] k : KNOWN_BUILT_IN) {
+    // ---------------------------------------------------------------- built-in controls
+
+    private volatile String[] builtInChoice; // name, vendor, product chosen by the user (null = automatic)
+    private volatile String builtInHow = "";
+
+    void setBuiltIn(String spec) {
+        String[] f = spec == null ? new String[0] : spec.split("\t");
+        builtInChoice = f.length == 3 ? f : null;
+        lastDevList = ""; // rescan
+    }
+
+    /**
+     * Finds the built-in controls: the user's choice if set, else a known device, else the
+     * gamepad that looks most like it's part of the device (not Bluetooth, not removable).
+     */
+    private EvdevDevice pickBuiltIn(List<EvdevDevice> devs) {
+        String[] choice = builtInChoice;
+        if (choice != null) {
             for (EvdevDevice d : devs) {
-                if (d.vendor == k[0] && d.product == k[1] && d.isGamepad() && !VirtualPad.isOurs(d.name)) {
-                    newTarget = d;
-                    break outer;
+                if (d.isGamepad() && !VirtualPad.isOurs(d.name) && d.name.equals(choice[0])
+                        && String.valueOf(d.vendor).equals(choice[1]) && String.valueOf(d.product).equals(choice[2])) {
+                    builtInHow = "chosen";
+                    return d;
                 }
             }
         }
+        for (int[] k : KNOWN_BUILT_IN) {
+            for (EvdevDevice d : devs) {
+                if (d.vendor == k[0] && d.product == k[1] && d.isGamepad() && !VirtualPad.isOurs(d.name)) {
+                    builtInHow = "known";
+                    return d;
+                }
+            }
+        }
+        EvdevDevice best = null;
+        int bestScore = Integer.MIN_VALUE;
+        for (EvdevDevice d : devs) {
+            if (!d.isGamepad() || VirtualPad.isOurs(d.name)) continue;
+            int score = 0;
+            if (d.bus == 0x05) score -= 100; // Bluetooth: never built in
+            if (d.bus == 0x18 || d.bus == 0x19 || d.bus == 0x06 || d.bus == 0x1c) score += 30; // I2C, host, virtual, SPI
+            InputDevice ad = findAndroidDevice(d);
+            if (ad != null && !ad.isExternal()) score += 50;
+            score -= eventNumber(d.path) / 10; // created early (at boot) is more likely built in
+            if (score > bestScore) {
+                bestScore = score;
+                best = d;
+            }
+        }
+        if (best != null && bestScore >= 25) {
+            builtInHow = "detected";
+            return best;
+        }
+        builtInHow = "";
+        return null;
+    }
+
+    // "press a button on the built-in controls"
+    private final Object identifyLock = new Object();
+    private volatile boolean identifying;
+    private String identified;
+
+    private void offerIdentify(EvdevDevice d) {
+        if (!identifying) return;
+        synchronized (identifyLock) {
+            if (!identifying || identified != null) return;
+            identified = d.name + "\t" + d.vendor + "\t" + d.product;
+            identifyLock.notifyAll();
+        }
+    }
+
+    /** Waits for a button press on any controller; returns "name\tvendor\tproduct" or "". */
+    String identifyController(int timeoutMs) throws Exception {
+        List<EvdevDevice> devs = EvdevDevice.parse(run("getevent", "-i"));
+        List<FileInputStream> streams = new ArrayList<>();
+        synchronized (identifyLock) {
+            identified = null;
+            identifying = true;
+        }
+        try {
+            Set<String> taken;
+            synchronized (this) {
+                taken = new HashSet<>(sources.keySet()); // already read by the bridge (they report too)
+            }
+            for (EvdevDevice d : devs) {
+                if (!d.isGamepad() || VirtualPad.isOurs(d.name) || taken.contains(d.path)) continue;
+                FileInputStream in = new FileInputStream(d.path);
+                streams.add(in);
+                Thread t = new Thread(() -> {
+                    int size = Process.is64Bit() ? 24 : 16;
+                    int off = size == 24 ? 16 : 8;
+                    byte[] buf = new byte[size * 16];
+                    ByteBuffer bb = ByteBuffer.wrap(buf).order(ByteOrder.LITTLE_ENDIAN);
+                    try {
+                        while (identifying) {
+                            int n = in.read(buf);
+                            if (n <= 0) return;
+                            for (int p = 0; p + size <= n; p += size) {
+                                int type = bb.getShort(p + off) & 0xffff;
+                                int value = bb.getInt(p + off + 4);
+                                if (type == Codes.EV_KEY && value == 1) offerIdentify(d);
+                            }
+                        }
+                    } catch (IOException ignored) {
+                    }
+                }, "DockPad-identify");
+                t.setDaemon(true);
+                t.start();
+            }
+            synchronized (identifyLock) {
+                long end = System.currentTimeMillis() + timeoutMs;
+                while (identified == null) {
+                    long left = end - System.currentTimeMillis();
+                    if (left <= 0) break;
+                    identifyLock.wait(left);
+                }
+                identifying = false;
+                return identified == null ? "" : identified;
+            }
+        } finally {
+            identifying = false;
+            for (FileInputStream in : streams) {
+                try {
+                    in.close();
+                } catch (IOException ignored) {
+                }
+            }
+        }
+    }
+
+    private void rescan() throws IOException, InterruptedException {
+        List<EvdevDevice> devs = EvdevDevice.parse(run("getevent", "-i"));
+        EvdevDevice newTarget = pickBuiltIn(devs);
 
         synchronized (this) {
             if (!running) return;
@@ -535,6 +657,10 @@ final class Bridge {
                         synchronized (this) {
                             if (!alive) break;
                             if (type == Codes.EV_KEY) {
+                                if (identifying && value == 1) {
+                                    offerIdentify(dev);
+                                    continue;
+                                }
                                 // raw recording (for changing this controller's buttons)
                                 if (value != 2 && captureRaw && captureEvent(dev.name, code, value != 0)) {
                                     if (value != 0) swallowed.add(code);

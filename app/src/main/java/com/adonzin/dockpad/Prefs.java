@@ -71,7 +71,12 @@ final class Prefs {
     void turnOffWirelessDebugging(boolean v) { p.edit().putBoolean("turnOffWD", v).apply(); }
 
     /** Sends every setting to a running bridge and turns it on if the user wants it on. */
+    /** User-chosen built-in controls: "name \t vendor \t product", or "" for automatic. */
+    String builtIn() { return p.getString("builtIn", ""); }
+    void builtIn(String v) { p.edit().putString("builtIn", v).apply(); }
+
     void applyTo(IBridge b, boolean startIfWanted) throws Exception {
+        b.setBuiltIn(builtIn());
         b.setLayouts(layoutsSpec());
         b.setMultiplayer(multiplayer());
         b.setTouchpadAsButton(touchpadAsButton());
