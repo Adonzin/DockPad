@@ -28,6 +28,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:excludeFromRecents="true"
             android:configChanges="orientation|screenSize|screenLayout|keyboard|keyboardHidden|navigation|smallestScreenSize|density|uiMode">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -38,6 +39,7 @@
         <activity
             android:name=".TesterActivity"
             android:exported="false"
+            android:excludeFromRecents="true"
             android:configChanges="orientation|screenSize|screenLayout|keyboard|keyboardHidden|navigation|smallestScreenSize|density|uiMode" />
 
         <service
