@@ -77,7 +77,7 @@ final class ShortcutEditor {
         host.runInBackground(() -> {
             String r;
             try {
-                r = b.captureCombo(15000);
+                r = b.captureCombo(15000, false);
             } catch (Exception e) {
                 r = "";
             }

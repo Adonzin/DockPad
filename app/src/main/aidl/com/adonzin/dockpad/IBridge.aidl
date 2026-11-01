@@ -12,5 +12,6 @@ interface IBridge {
     void setMultiplayer(boolean on) = 8;
     String statusJson() = 9;
     void setShortcuts(String spec) = 10;
-    String captureCombo(int timeoutMs) = 11;
+    String captureCombo(int timeoutMs, boolean raw) = 11;
+    void setLayouts(String spec) = 12;
 }

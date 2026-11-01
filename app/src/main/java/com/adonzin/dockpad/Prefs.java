@@ -3,9 +3,11 @@ package com.adonzin.dockpad;
 import android.content.Context;
 import android.content.SharedPreferences;
 
+import com.adonzin.dockpad.core.ControllerLayout;
 import com.adonzin.dockpad.core.Shortcut;
 
 import java.util.List;
+import java.util.Map;
 
 /** All saved settings in one place. */
 final class Prefs {
@@ -38,4 +40,23 @@ final class Prefs {
     List<Shortcut> shortcuts() { return Shortcut.decodeAll(p.getString("shortcuts", "")); }
     String shortcutsSpec() { return p.getString("shortcuts", ""); }
     void shortcuts(List<Shortcut> list) { p.edit().putString("shortcuts", Shortcut.encodeAll(list)).apply(); }
+
+    Map<String, ControllerLayout> layouts() { return ControllerLayout.decodeAll(p.getString("layouts", "")); }
+    String layoutsSpec() { return p.getString("layouts", ""); }
+    void layouts(Map<String, ControllerLayout> all) { p.edit().putString("layouts", ControllerLayout.encodeAll(all)).apply(); }
+
+    ControllerLayout layout(String device) {
+        ControllerLayout l = layouts().get(device);
+        if (l == null) {
+            l = new ControllerLayout();
+            l.device = device;
+        }
+        return l;
+    }
+
+    void saveLayout(ControllerLayout l) {
+        Map<String, ControllerLayout> all = layouts();
+        all.put(l.device, l);
+        layouts(all);
+    }
 }

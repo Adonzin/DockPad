@@ -160,6 +160,7 @@ public final class Mapper {
         if (type == EV_KEY) {
             if (value == 2) return; // autorepeat
             Integer kc = keyMap.get(code);
+            if (kc == null) kc = STANDARD_KEYS.get(code); // e.g. a remapped button the device doesn't have
             boolean pressed = value != 0;
             if (kc == null) {
                 if (!rawKeys.contains(code)) return;

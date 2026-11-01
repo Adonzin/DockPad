@@ -39,7 +39,7 @@ import java.util.concurrent.Executors;
 
 import rikka.shizuku.Shizuku;
 
-public class MainActivity extends AppCompatActivity implements ShortcutEditor.Host {
+public class MainActivity extends AppCompatActivity implements ShortcutEditor.Host, ControllerDialog.Host {
     static final String SHIZUKU_PACKAGE = "moe.shizuku.privileged.api";
     private static final int REQ = 42;
 
@@ -47,6 +47,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
     private final ExecutorService bg = Executors.newSingleThreadExecutor();
     private Prefs prefs;
     private ShortcutEditor editor;
+    private ControllerDialog controllerDialog;
 
     private MaterialCardView setupCard;
     private LinearLayout setupSteps, controllersList, shortcutsList, settingsList;
@@ -115,6 +116,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         setContentView(R.layout.activity_main);
         prefs = new Prefs(this);
         editor = new ShortcutEditor(this, this);
+        controllerDialog = new ControllerDialog(this, this);
 
         setupCard = findViewById(R.id.setup_card);
         setupSteps = findViewById(R.id.setup_steps);
@@ -187,6 +189,12 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
     @Override
     public Prefs prefs() {
         return prefs;
+    }
+
+    @Override
+    public void layoutsChanged() {
+        lastControllersJson = ""; // re-render rows with the new summary
+        pushSettings();
     }
 
     @Override
@@ -324,8 +332,10 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         if (b == null) return;
         boolean mp = prefs.multiplayer(), tp = prefs.touchpadAsButton(), bi = prefs.includeBuiltIn();
         String spec = prefs.shortcutsSpec();
+        String layouts = prefs.layoutsSpec();
         bg.execute(() -> {
             try {
+                b.setLayouts(layouts);
                 b.setMultiplayer(mp);
                 b.setTouchpadAsButton(tp);
                 b.setShortcuts(spec);
@@ -422,7 +432,9 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
                 if (c == null) continue;
                 boolean builtIn = c.optBoolean("builtIn");
                 boolean touchpad = c.optBoolean("touchpad");
-                String sub = builtIn ? "Built-in controls" : touchpad ? "Touchpad: click works as a button" : "External controller";
+                String name = c.optString("name");
+                String sub = builtIn ? "Built-in controls" : touchpad ? "Touchpad: click works as a button"
+                        : prefs.layout(name).summary() + " · tap to change";
                 if (!c.optBoolean("exclusive")) sub += " · couldn't take over: apps may see it twice";
                 String last = c.optString("lastButton", "");
                 if (!last.isEmpty()) sub += " · last: " + last;
@@ -432,6 +444,11 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
                 TextView badge = row.findViewById(R.id.row_badge);
                 badge.setVisibility(View.VISIBLE);
                 badge.setText("Player " + c.optInt("player", 1));
+                if (!touchpad && !builtIn) {
+                    row.setFocusable(true);
+                    row.setClickable(true);
+                    row.setOnClickListener(v -> controllerDialog.show(name));
+                }
             }
         }
         JSONArray players = o == null ? null : o.optJSONArray("players");

@@ -5,6 +5,7 @@ import android.util.Log;
 import android.view.InputDevice;
 
 import com.adonzin.dockpad.core.Codes;
+import com.adonzin.dockpad.core.ControllerLayout;
 import com.adonzin.dockpad.core.EvdevDevice;
 import com.adonzin.dockpad.core.Shortcut;
 import com.adonzin.dockpad.core.ShortcutEngine;
@@ -132,6 +133,14 @@ final class Bridge {
         lastDevList = ""; // rescan
     }
 
+    private volatile Map<String, Map<Integer, Integer>> layouts = new java.util.HashMap<>();
+
+    void setLayouts(String spec) {
+        Map<String, Map<Integer, Integer>> m = new java.util.HashMap<>();
+        for (ControllerLayout l : ControllerLayout.decodeAll(spec).values()) m.put(l.device, l.table());
+        layouts = m;
+    }
+
     void setShortcuts(String spec) {
         shortcuts = Shortcut.decodeAll(spec);
         List<Source> list;
@@ -144,6 +153,7 @@ final class Bridge {
     // combo recording
     private final Object captureLock = new Object();
     private volatile boolean capturing;
+    private volatile boolean captureRaw;
     private String captureDevice, captured;
     private final List<Integer> captureOrder = new ArrayList<>();
     private final Set<Integer> captureHeld = new HashSet<>();
@@ -152,8 +162,9 @@ final class Bridge {
      * Records the next button or combination: everything pressed on one controller until all
      * buttons are released again. Returns "deviceName\tcode,code" or "" on timeout.
      */
-    String captureCombo(int timeoutMs) throws InterruptedException {
+    String captureCombo(int timeoutMs, boolean raw) throws InterruptedException {
         synchronized (captureLock) {
+            captureRaw = raw;
             captured = null;
             captureDevice = null;
             captureOrder.clear();
@@ -523,7 +534,23 @@ final class Bridge {
                         eventsRead.incrementAndGet();
                         synchronized (this) {
                             if (!alive) break;
-                            if (type == Codes.EV_KEY && handleKey(code, value)) continue;
+                            if (type == Codes.EV_KEY) {
+                                // raw recording (for changing this controller's buttons)
+                                if (value != 2 && captureRaw && captureEvent(dev.name, code, value != 0)) {
+                                    if (value != 0) swallowed.add(code);
+                                    else swallowed.remove(code);
+                                    continue;
+                                }
+                                Map<Integer, Integer> lay = layouts.get(dev.name);
+                                if (lay != null && !touchpad) {
+                                    Integer to = lay.get(code);
+                                    if (to != null) {
+                                        if (to < 0) continue; // disabled
+                                        code = to;
+                                    }
+                                }
+                                if (handleKey(code, value)) continue;
+                            }
                             mapper.onEvent(type, code, value);
                         }
                     }
@@ -569,7 +596,7 @@ final class Bridge {
             if (value == 1) lastKey = code;
             if (value == 2) return true; // key repeat: never needed
             boolean down = value != 0;
-            if (captureEvent(dev.name, code, down)) {
+            if (!captureRaw && captureEvent(dev.name, code, down)) {
                 if (down) swallowed.add(code);
                 else swallowed.remove(code);
                 return true;

@@ -58,9 +58,9 @@ public class BridgeService extends IBridge.Stub {
     }
 
     @Override
-    public String captureCombo(int timeoutMs) {
+    public String captureCombo(int timeoutMs, boolean raw) {
         try {
-            return bridge.captureCombo(timeoutMs);
+            return bridge.captureCombo(timeoutMs, raw);
         } catch (InterruptedException e) {
             return "";
         }
@@ -74,5 +74,10 @@ public class BridgeService extends IBridge.Stub {
     @Override
     public void setMultiplayer(boolean on) {
         bridge.setMultiplayer(on);
+    }
+
+    @Override
+    public void setLayouts(String spec) {
+        bridge.setLayouts(spec);
     }
 }
