@@ -8,9 +8,11 @@ Status: early test version, built for the Retroid Pocket 5.
 
 ## Install
 
-1. Set up [Shizuku](https://shizuku.rikka.app/) and start it with **Start via Wireless debugging** (no root needed). This has to be done again after every reboot.
-2. On the device, download **DockPad.apk** from [the latest release](../../releases/latest) and install it.
-3. Open DockPad, tap **Start bridge**, and allow the Shizuku permission.
+1. On the device, download **DockPad.apk** from [the latest release](../../releases/latest) and install it.
+2. Open DockPad and follow the setup: turn on Developer options, connect to Wi-Fi, then **Pair**. In Wireless debugging, tap "Pair device with pairing code" and type the code into DockPad's notification. You only need to do this once.
+3. DockPad starts itself again after every restart. It switches Wireless debugging on just long enough to start, then off again.
+
+If you already use [Shizuku](https://shizuku.rikka.app/), DockPad can use it instead of pairing.
 
 ## How it works
 

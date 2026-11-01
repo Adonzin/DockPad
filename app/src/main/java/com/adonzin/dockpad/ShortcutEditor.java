@@ -182,7 +182,7 @@ final class ShortcutEditor {
                 .setItems(Codes.OUTPUT_LABELS, (d, which) -> {
                     s.steps.clear();
                     int code = Codes.OUTPUT_CODES[which];
-                    if (code >= 0) s.steps.add(new int[]{code});
+                    if (code != -1) s.steps.add(new int[]{code});
                     refresh.run();
                 })
                 .show());

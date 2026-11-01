@@ -40,12 +40,23 @@ public final class EvdevDevice {
         return abs.containsKey(code);
     }
 
-    /** Looks like a gamepad: a stick plus at least one face/start button. */
+    /** Looks like a gamepad: a stick plus at least one face/start button, and not a keyboard. */
     public boolean isGamepad() {
         boolean stick = hasAbs(Codes.ABS_X) && hasAbs(Codes.ABS_Y);
         boolean buttons = hasKey(Codes.BTN_SOUTH) || hasKey(Codes.BTN_EAST) || hasKey(Codes.BTN_START);
-        return stick && buttons;
+        return stick && buttons && !isKeyboard();
     }
+
+    /** A real keyboard: has most of the letter keys. Keyboards are never taken over. */
+    public boolean isKeyboard() {
+        int letters = 0;
+        for (int k : LETTER_KEYS) if (hasKey(k)) letters++;
+        return letters >= 20;
+    }
+
+    // KEY_Q..KEY_P, KEY_A..KEY_L, KEY_Z..KEY_M
+    private static final int[] LETTER_KEYS = {16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 30, 31, 32, 33, 34, 35, 36,
+            37, 38, 44, 45, 46, 47, 48, 49, 50};
 
     /** A controller's built-in touchpad (e.g. DualShock 4 / DualSense), which Android treats as a mouse. */
     public boolean isControllerTouchpad() {

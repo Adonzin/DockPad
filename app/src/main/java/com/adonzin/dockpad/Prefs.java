@@ -59,4 +59,23 @@ final class Prefs {
         all.put(l.device, l);
         layouts(all);
     }
+
+    /** DockPad has been paired with Wireless debugging (built-in mode, no Shizuku needed). */
+    boolean paired() { return p.getBoolean("paired", false); }
+    void paired(boolean v) { p.edit().putBoolean("paired", v).apply(); }
+
+    boolean autoStart() { return p.getBoolean("autoStart", true); }
+    void autoStart(boolean v) { p.edit().putBoolean("autoStart", v).apply(); }
+
+    boolean turnOffWirelessDebugging() { return p.getBoolean("turnOffWD", true); }
+    void turnOffWirelessDebugging(boolean v) { p.edit().putBoolean("turnOffWD", v).apply(); }
+
+    /** Sends every setting to a running bridge and turns it on if the user wants it on. */
+    void applyTo(IBridge b, boolean startIfWanted) throws Exception {
+        b.setLayouts(layoutsSpec());
+        b.setMultiplayer(multiplayer());
+        b.setTouchpadAsButton(touchpadAsButton());
+        b.setShortcuts(shortcutsSpec());
+        if (b.isRunning() || (startIfWanted && bridgeWanted())) b.start(true);
+    }
 }

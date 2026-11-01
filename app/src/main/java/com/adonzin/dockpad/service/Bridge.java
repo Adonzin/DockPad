@@ -566,6 +566,10 @@ final class Bridge {
             engine = new ShortcutEngine(shortcuts, dev.name, new ShortcutEngine.Out() {
                 @Override
                 public void output(int code, boolean down) {
+                    if (Actions.isAction(code)) {
+                        if (down) Actions.run(code);
+                        return;
+                    }
                     sink.rawKey(code, down);
                 }
 

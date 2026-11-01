@@ -1,5 +1,6 @@
 package com.adonzin.dockpad;
 
+import android.Manifest;
 import android.content.ActivityNotFoundException;
 import android.content.ClipData;
 import android.content.ClipboardManager;
@@ -9,7 +10,9 @@ import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.graphics.Typeface;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
@@ -22,6 +25,7 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.adonzin.dockpad.adb.Starter;
 import com.adonzin.dockpad.core.Shortcut;
 import com.adonzin.dockpad.service.BridgeService;
 import com.google.android.material.button.MaterialButton;
@@ -69,7 +73,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
     private final ServiceConnection connection = new ServiceConnection() {
         @Override
         public void onServiceConnected(ComponentName name, IBinder binder) {
-            if (binder == null || !binder.pingBinder()) return;
+            if (binder == null || !binder.pingBinder() || usingOwnService) return;
             IBridge b = IBridge.Stub.asInterface(binder);
             bridge = b;
             boolean start = startWhenConnected || prefs.bridgeWanted();
@@ -77,7 +81,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
             pushSettings();
             if (start) bg.execute(() -> {
                 try {
-                    if (!b.isRunning()) b.start(prefs.includeBuiltIn());
+                    if (!b.isRunning()) b.start(true);
                 } catch (Exception ignored) {
                 }
             });
@@ -203,7 +207,13 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         pushSettings();
     }
 
-    // ------------------------------------------------------------------ Shizuku setup
+    // ------------------------------------------------------------------ backends
+    // 1) DockPad's own service, started over Wireless debugging (no other apps needed)
+    // 2) Shizuku, for people who already use it
+
+    private volatile boolean usingOwnService;
+    private boolean starting;
+    private static final int REQ_NOTIFY = 7;
 
     private boolean shizukuInstalled() {
         try {
@@ -230,28 +240,77 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         }
     }
 
-    private void refreshSetup() {
-        boolean installed = shizukuInstalled() || shizukuRunning();
-        boolean running = shizukuRunning();
-        boolean allowed = shizukuAllowed();
+    private boolean ready() {
+        return usingOwnService || prefs.paired() || shizukuAllowed();
+    }
 
-        setupSteps.removeAllViews();
-        addSetupStep(installed, "Install Shizuku", "A free app that lets DockPad manage controllers.",
-                installed ? null : "Get it", this::openShizukuStore);
-        addSetupStep(running, "Start Shizuku",
-                "Open Shizuku and tap Start under \"Start via Wireless debugging\". Needed again after every restart.",
-                installed && !running ? "Open" : null, this::openShizuku);
-        addSetupStep(allowed, "Allow DockPad", "Give DockPad permission in Shizuku.",
-                running && !allowed ? "Allow" : null, () -> {
+    private void refreshSetup() {
+        bg.execute(() -> {
+            boolean own = Starter.isRunning(this);
+            ui.post(() -> applyBackend(own));
+        });
+    }
+
+    private void applyBackend(boolean ownRunning) {
+        if (ownRunning) {
+            if (!usingOwnService) {
+                usingOwnService = true;
+                bridge = Starter.bridge(this);
+                if (bound) { // don't run two bridges at once
                     try {
-                        Shizuku.requestPermission(REQ);
+                        Shizuku.unbindUserService(serviceArgs, connection, true);
                     } catch (Throwable ignored) {
                     }
-                });
-        setupCard.setVisibility(allowed ? View.GONE : View.VISIBLE);
-        bridgeButton.setEnabled(allowed);
-        if (allowed) bindBridge();
-        else renderBridge(false, null);
+                    bound = false;
+                }
+                pushSettings(true);
+            }
+        } else {
+            if (usingOwnService) {
+                usingOwnService = false;
+                bridge = null;
+            }
+            if (prefs.paired()) {
+                if (prefs.bridgeWanted() && !starting) startOwnService();
+            } else if (shizukuAllowed()) {
+                bindBridge();
+            }
+        }
+        renderSetup();
+        if (!ready()) renderBridge(false, null);
+    }
+
+    private boolean wifiConnected() {
+        android.net.ConnectivityManager cm = getSystemService(android.net.ConnectivityManager.class);
+        for (android.net.Network n : cm.getAllNetworks()) {
+            android.net.NetworkCapabilities nc = cm.getNetworkCapabilities(n);
+            if (nc != null && nc.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI)) return true;
+        }
+        return false;
+    }
+
+    private void renderSetup() {
+        setupSteps.removeAllViews();
+        boolean ready = ready();
+        setupCard.setVisibility(ready ? View.GONE : View.VISIBLE);
+        bridgeButton.setEnabled(ready);
+        if (ready) return;
+        boolean dev = Settings.Global.getInt(getContentResolver(), Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) == 1;
+        boolean wifi = wifiConnected();
+        addSetupStep(dev, "Turn on Developer options",
+                "In Settings → About, tap \"Build number\" 7 times.",
+                dev ? null : "Open", () -> openSettings(Settings.ACTION_DEVICE_INFO_SETTINGS));
+        addSetupStep(wifi, "Connect to Wi-Fi", "Wireless debugging only works over Wi-Fi.",
+                wifi ? null : "Open", () -> openSettings(Settings.ACTION_WIFI_SETTINGS));
+        addSetupStep(false, "Pair DockPad (one time only)",
+                "Tap Pair. In Wireless debugging, turn it on and tap \"Pair device with pairing code\". "
+                        + "Then type the 6-digit code into DockPad's notification (pull down from the top).",
+                "Pair", this::beginPairing);
+        TextView alt = new TextView(this);
+        alt.setText("Already use Shizuku? Start it and allow DockPad. That works too.");
+        alt.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall);
+        alt.setPadding(0, dp(8), 0, 0);
+        setupSteps.addView(alt);
     }
 
     private void addSetupStep(boolean done, String title, String subtitle, String action, Runnable onAction) {
@@ -269,22 +328,53 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         setupSteps.addView(row);
     }
 
-    private void openShizukuStore() {
+    private void openSettings(String action) {
         try {
-            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + SHIZUKU_PACKAGE)));
+            startActivity(new Intent(action));
         } catch (ActivityNotFoundException e) {
-            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://shizuku.rikka.app/download/")));
+            startActivity(new Intent(Settings.ACTION_SETTINGS));
         }
     }
 
-    private void openShizuku() {
-        Intent i = getPackageManager().getLaunchIntentForPackage(SHIZUKU_PACKAGE);
-        if (i != null) startActivity(i);
-        else openShizukuStore();
+    private void beginPairing() {
+        if (Build.VERSION.SDK_INT >= 33
+                && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_NOTIFY);
+            return;
+        }
+        beginPairingNow();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQ_NOTIFY) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) beginPairingNow();
+            else new MaterialAlertDialogBuilder(this)
+                    .setTitle("Notifications needed")
+                    .setMessage("DockPad asks for the pairing code in a notification, so you can type it while the "
+                            + "Wireless debugging screen stays open. Please allow notifications and try again.")
+                    .setPositiveButton("OK", null).show();
+        }
+    }
+
+    private void beginPairingNow() {
+        PairingService.start(this);
+        Toast.makeText(this, "Open Wireless debugging → Pair device with pairing code", Toast.LENGTH_LONG).show();
+        Intent i = new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS);
+        i.putExtra(":settings:fragment_args_key", "toggle_adb_wireless"); // highlights Wireless debugging
+        Bundle args = new Bundle();
+        args.putString(":settings:fragment_args_key", "toggle_adb_wireless");
+        i.putExtra(":settings:show_fragment_args", args);
+        try {
+            startActivity(i);
+        } catch (ActivityNotFoundException e) {
+            openSettings(Settings.ACTION_SETTINGS);
+        }
     }
 
     private void bindBridge() {
-        if (bound) return;
+        if (bound || usingOwnService) return;
         try {
             Shizuku.bindUserService(serviceArgs, connection);
             bound = true;
@@ -293,25 +383,61 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         }
     }
 
+    private void startOwnService() {
+        starting = true;
+        bridgeTitle.setText("Turning on…");
+        bridgeSubtitle.setText("Connecting to Wireless debugging…");
+        bg.execute(() -> {
+            Starter.Result r = Starter.start(this, prefs.turnOffWirelessDebugging());
+            ui.post(() -> {
+                starting = false;
+                if (r.ok) {
+                    usingOwnService = false; // re-attach below
+                    applyBackend(true);
+                    return;
+                }
+                if (r.needsPairing) prefs.paired(false);
+                renderSetup();
+                renderBridge(false, null);
+                new MaterialAlertDialogBuilder(this)
+                        .setTitle("DockPad couldn't turn on")
+                        .setMessage(r.message)
+                        .setPositiveButton("OK", null)
+                        .show();
+            });
+        });
+    }
+
     // ------------------------------------------------------------------ bridge on/off
 
     private void startBridge() {
-        if (!shizukuAllowed()) {
-            refreshSetup();
-            return;
-        }
         prefs.bridgeWanted(true);
         IBridge b = bridge;
-        if (b != null) {
+        if (usingOwnService && b != null) {
             bg.execute(() -> {
                 try {
-                    b.start(prefs.includeBuiltIn());
+                    b.start(true);
                 } catch (Exception ignored) {
                 }
             });
+        } else if (prefs.paired()) {
+            startOwnService();
+            return;
+        } else if (shizukuAllowed()) {
+            if (b != null) {
+                bg.execute(() -> {
+                    try {
+                        b.start(true);
+                    } catch (Exception ignored) {
+                    }
+                });
+            } else {
+                startWhenConnected = true;
+                bindBridge();
+            }
         } else {
-            startWhenConnected = true;
-            bindBridge();
+            renderSetup();
+            return;
         }
         bridgeTitle.setText("Turning on…");
     }
@@ -328,18 +454,15 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
     }
 
     private void pushSettings() {
+        pushSettings(false);
+    }
+
+    private void pushSettings(boolean startIfWanted) {
         IBridge b = bridge;
         if (b == null) return;
-        boolean mp = prefs.multiplayer(), tp = prefs.touchpadAsButton(), bi = prefs.includeBuiltIn();
-        String spec = prefs.shortcutsSpec();
-        String layouts = prefs.layoutsSpec();
         bg.execute(() -> {
             try {
-                b.setLayouts(layouts);
-                b.setMultiplayer(mp);
-                b.setTouchpadAsButton(tp);
-                b.setShortcuts(spec);
-                if (b.isRunning()) b.start(bi); // applies the built-in setting
+                prefs.applyTo(b, startIfWanted);
             } catch (Exception ignored) {
             }
         });
@@ -356,6 +479,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
                 json = b.statusJson();
             } catch (Exception e) {
                 json = null;
+                if (usingOwnService) ui.post(this::refreshSetup);
             }
             String j = json;
             ui.post(() -> {
@@ -377,7 +501,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
     private void renderBridge(boolean running, JSONObject o) {
         lastRunning = running;
         bridgeButton.setText(running ? "Turn off" : "Turn on");
-        if (!shizukuAllowed()) {
+        if (!ready()) {
             bridgeTitle.setText("DockPad is off");
             bridgeSubtitle.setText("Finish the setup above first.");
             return;
@@ -514,6 +638,12 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
                     prefs.multiplayer(v);
                     pushSettings();
                 });
+        addSwitch("Start automatically after a restart",
+                "After pairing, DockPad turns itself back on when the device restarts (needs Wi-Fi).",
+                prefs.autoStart(), prefs::autoStart);
+        addSwitch("Turn off Wireless debugging once started",
+                "DockPad only needs Wireless debugging for a moment while starting. Turning it off afterwards is safer.",
+                prefs.turnOffWirelessDebugging(), prefs::turnOffWirelessDebugging);
         addSwitch("Touchpad as a button",
                 "On controllers with a touchpad (DualShock 4, DualSense), pressing the pad becomes a button you can use in shortcuts instead of a mouse.",
                 prefs.touchpadAsButton(), v -> {
