@@ -39,6 +39,9 @@ public final class Codes {
     public static final int ABS_MT_POSITION_X = 0x35;
     public static final int KEY_VOLUMEDOWN = 0x72, KEY_VOLUMEUP = 0x73, KEY_APPSELECT = 0x244;
 
+    /** Special actions (not buttons) are negative codes from -100 down. */
+    public static final int ACTION_CLEAR_RECENTS = -100;
+
     /** Things a button can be remapped to: label + evdev key code on the virtual controller (-1 = nothing). */
     public static final String[] OUTPUT_LABELS = {"Home", "Back", "Recent apps", "Volume up", "Volume down",
             "A", "B", "X", "Y", "L1", "R1", "L2", "R2", "Start", "Select", "L3 (stick press)", "R3 (stick press)",
@@ -48,9 +51,6 @@ public final class Codes {
             BTN_SOUTH, BTN_EAST, BTN_NORTH, BTN_WEST, BTN_TL, BTN_TR, BTN_TL2, BTN_TR2, BTN_START, BTN_SELECT,
             BTN_THUMBL, BTN_THUMBR, BTN_MODE, BTN_DPAD_UP, BTN_DPAD_DOWN, BTN_DPAD_LEFT, BTN_DPAD_RIGHT,
             ACTION_CLEAR_RECENTS, -1};
-
-    /** Special actions (not buttons) are negative codes from -100 down. */
-    public static final int ACTION_CLEAR_RECENTS = -100;
 
     public static String outputLabel(int code) {
         for (int i = 0; i < OUTPUT_CODES.length; i++) if (OUTPUT_CODES[i] == code) return OUTPUT_LABELS[i];
