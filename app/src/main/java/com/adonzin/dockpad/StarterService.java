@@ -53,6 +53,7 @@ public class StarterService extends Service {
         } else {
             String msg = r == null ? "Unknown problem." : r.message;
             if (!wifiConnected()) msg = "No Wi-Fi connection. DockPad needs Wi-Fi to start. Open DockPad once you're connected.";
+            else if (r != null && r.needsPairing) msg += " Open DockPad → Reset connection → Pair again.";
             stopForeground(STOP_FOREGROUND_DETACH);
             Notifications.show(this, ID, Notifications.builder(this, "DockPad didn't start", msg)
                     .setAutoCancel(true).build());

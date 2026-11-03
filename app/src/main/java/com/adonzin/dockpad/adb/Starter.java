@@ -98,19 +98,29 @@ public final class Starter {
         try {
             m = AdbManager.get(c);
             boolean connected = false;
-            for (int attempt = 0; attempt < 3 && !connected; attempt++) {
+            int pairingErrors = 0;
+            for (int attempt = 0; attempt < 4 && !connected; attempt++) {
                 try {
                     connected = m.isConnected() || m.autoConnect(c, 8000);
                 } catch (AdbPairingRequiredException e) {
-                    return new Result(false, "DockPad needs to be paired with Wireless debugging first.", true);
+                    // Can also happen briefly while Wireless debugging is still starting: retry first.
+                    pairingErrors++;
+                    Log.w(TAG, "connect: pairing required (attempt " + attempt + ")", e);
+                    sleep(2000);
                 } catch (Exception e) {
                     Log.w(TAG, "connect attempt failed", e);
                     sleep(1500);
                 }
             }
             if (!connected) {
-                return new Result(false, "Couldn't connect to Wireless debugging. Make sure Wi-Fi is connected "
-                        + "and Wireless debugging is on, then try again.", false);
+                if (weTurnedOn) setWirelessDebugging(c, false);
+                if (pairingErrors >= 3) {
+                    return new Result(false, "Android no longer accepts DockPad's pairing (this can happen if "
+                            + "debugging authorizations were revoked or expired). Tap \"Pair again\".", true);
+                }
+                return new Result(false, "Couldn't connect to Wireless debugging. Make sure Wi-Fi is connected. "
+                        + "If Android asked \"Allow wireless debugging on this network?\", tick \"Always allow\" "
+                        + "and tap Allow, then try again.", false);
             }
             String pkg = c.getPackageName();
             // Lets DockPad switch wireless debugging on by itself after a restart.

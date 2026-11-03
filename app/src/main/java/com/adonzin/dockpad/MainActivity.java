@@ -218,6 +218,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
     // 2) Shizuku, for people who already use it
 
     private volatile boolean usingOwnService;
+    private boolean autoStartTried;
     private boolean starting;
     private static final int REQ_NOTIFY = 7;
 
@@ -277,7 +278,11 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
                 bridge = null;
             }
             if (prefs.paired()) {
-                if (prefs.bridgeWanted() && !starting) startOwnService();
+                // try once per visit; failures here are shown quietly, never reset the pairing
+                if (prefs.bridgeWanted() && !starting && !autoStartTried) {
+                    autoStartTried = true;
+                    startOwnService(false);
+                }
             } else if (shizukuAllowed()) {
                 bindBridge();
             }
@@ -312,6 +317,16 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
                 "Tap Pair. In Wireless debugging, turn it on and tap \"Pair device with pairing code\". "
                         + "Then type the 6-digit code into DockPad's notification (pull down from the top).",
                 "Pair", this::beginPairing);
+        if (new java.io.File(getFilesDir(), "adb_private.key").exists()) {
+            addSetupStep(false, "Paired before?",
+                    "If DockPad was paired on this device already, try connecting without pairing again.",
+                    "Connect", () -> {
+                        prefs.paired(true);
+                        prefs.bridgeWanted(true);
+                        renderSetup();
+                        startOwnService(true);
+                    });
+        }
         TextView alt = new TextView(this);
         alt.setText("Already use Shizuku? Start it and allow DockPad. That works too.");
         alt.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall);
@@ -389,7 +404,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         }
     }
 
-    private void startOwnService() {
+    private void startOwnService(boolean userAsked) {
         starting = true;
         bridgeTitle.setText("Turning on…");
         bridgeSubtitle.setText("Connecting to Wireless debugging…");
@@ -402,14 +417,22 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
                     applyBackend(true);
                     return;
                 }
-                if (r.needsPairing) prefs.paired(false);
                 renderSetup();
                 renderBridge(false, null);
-                new MaterialAlertDialogBuilder(this)
+                bridgeSubtitle.setText("Couldn't turn on: " + r.message);
+                if (!userAsked) return; // automatic attempt: just show it on the card
+                MaterialAlertDialogBuilder d = new MaterialAlertDialogBuilder(this)
                         .setTitle("DockPad couldn't turn on")
                         .setMessage(r.message)
-                        .setPositiveButton("OK", null)
-                        .show();
+                        .setPositiveButton("OK", null);
+                if (r.needsPairing) {
+                    d.setNeutralButton("Pair again", (x, w) -> {
+                        prefs.paired(false);
+                        renderSetup();
+                        beginPairing();
+                    });
+                }
+                d.show();
             });
         });
     }
@@ -427,7 +450,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
                 }
             });
         } else if (prefs.paired()) {
-            startOwnService();
+            startOwnService(true);
             return;
         } else if (shizukuAllowed()) {
             if (b != null) {
