@@ -753,27 +753,24 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
 
     private void showReset() {
         String[] options = {
-                "Restart DockPad\nRestarts the background service. Keeps pairing and settings.",
-                "Start over from setup\nForgets the pairing so you can pair again. Keeps shortcuts and settings.",
-                "Erase everything\nForgets the pairing and deletes all shortcuts, button layouts and settings."};
+                "Restart DockPad\nStops and starts DockPad's background service again.",
+                "Pair again\nGoes back to the pairing step, for when connecting or starting keeps failing."};
         new MaterialAlertDialogBuilder(this)
-                .setTitle("Reset")
+                .setTitle("Reset connection")
                 .setItems(options, (d, which) -> {
                     if (which == 0) restartService();
-                    else confirmStartOver(which == 2);
+                    else confirmPairAgain();
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
     }
 
-    private void confirmStartOver(boolean eraseAll) {
+    private void confirmPairAgain() {
         new MaterialAlertDialogBuilder(this)
-                .setTitle(eraseAll ? "Erase everything?" : "Start over?")
-                .setMessage((eraseAll ? "All shortcuts, button layouts and settings will be deleted. " : "")
-                        + "DockPad will turn off and forget its pairing. You'll go through setup again. "
-                        + "(Optional: in Developer options, \"Revoke wireless debugging authorizations\" "
-                        + "also removes the old pairing from Android's side.)")
-                .setPositiveButton(eraseAll ? "Erase" : "Start over", (d, w) -> startOver(eraseAll))
+                .setTitle("Pair again?")
+                .setMessage("DockPad will turn off and show the pairing step again. "
+                        + "Your shortcuts, button layouts and settings stay as they are.")
+                .setPositiveButton("Pair again", (d, w) -> pairAgain())
                 .setNegativeButton("Cancel", null)
                 .show();
     }
@@ -815,18 +812,12 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         });
     }
 
-    private void startOver(boolean eraseAll) {
+    private void pairAgain() {
         bg.execute(() -> {
             stopEverything();
-            com.adonzin.dockpad.adb.AdbManager.reset(this);
-            if (eraseAll) {
-                getSharedPreferences("dockpad", MODE_PRIVATE).edit().clear().commit();
-            } else {
-                prefs.paired(false);
-                prefs.bridgeWanted(false);
-            }
+            prefs.paired(false);
             ui.post(() -> {
-                Toast.makeText(this, eraseAll ? "Everything erased." : "Ready to set up again.", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Ready to pair again.", Toast.LENGTH_SHORT).show();
                 recreate();
             });
         });

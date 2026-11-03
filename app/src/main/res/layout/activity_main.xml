@@ -266,7 +266,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="Reset or start over…" />
+            android:text="Reset connection…" />
 
         <TextView
             android:id="@+id/version"
