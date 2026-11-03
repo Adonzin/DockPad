@@ -25,6 +25,8 @@ final class ShortcutEditor {
 
     interface Host {
         IBridge bridge();
+        /** Last known on/off state (never asks the service from the UI thread). */
+        boolean bridgeRunning();
         void runInBackground(Runnable r);
         Prefs prefs();
         void shortcutsChanged();
@@ -47,12 +49,7 @@ final class ShortcutEditor {
 
     void record(Recorded then) {
         IBridge b = host.bridge();
-        boolean running = false;
-        try {
-            running = b != null && b.isRunning();
-        } catch (Exception ignored) {
-        }
-        if (!running) {
+        if (b == null || !host.bridgeRunning()) {
             new MaterialAlertDialogBuilder(activity)
                     .setTitle("Turn DockPad on first")
                     .setMessage("Shortcuts are recorded from your controllers, so DockPad needs to be running.")

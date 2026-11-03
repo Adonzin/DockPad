@@ -187,6 +187,11 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
     }
 
     @Override
+    public boolean bridgeRunning() {
+        return lastRunning;
+    }
+
+    @Override
     public void runInBackground(Runnable r) {
         bg.execute(r);
     }
