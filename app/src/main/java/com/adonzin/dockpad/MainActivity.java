@@ -138,6 +138,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         findViewById(R.id.add_shortcut).setOnClickListener(v -> editor.addNew());
         findViewById(R.id.open_tester).setOnClickListener(v -> startActivity(new Intent(this, TesterActivity.class)));
         findViewById(R.id.open_diagnostics).setOnClickListener(v -> showDiagnostics());
+        findViewById(R.id.open_reset).setOnClickListener(v -> showReset());
         ((TextView) findViewById(R.id.version)).setText("DockPad " + BuildConfig.VERSION_NAME);
 
         buildSettings();
@@ -746,6 +747,89 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         sw.setOnCheckedChangeListener((b, checked) -> onChange.set(checked));
         row.setOnClickListener(v -> sw.toggle());
         settingsList.addView(row);
+    }
+
+    // ------------------------------------------------------------------ reset
+
+    private void showReset() {
+        String[] options = {
+                "Restart DockPad\nRestarts the background service. Keeps pairing and settings.",
+                "Start over from setup\nForgets the pairing so you can pair again. Keeps shortcuts and settings.",
+                "Erase everything\nForgets the pairing and deletes all shortcuts, button layouts and settings."};
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("Reset")
+                .setItems(options, (d, which) -> {
+                    if (which == 0) restartService();
+                    else confirmStartOver(which == 2);
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void confirmStartOver(boolean eraseAll) {
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(eraseAll ? "Erase everything?" : "Start over?")
+                .setMessage((eraseAll ? "All shortcuts, button layouts and settings will be deleted. " : "")
+                        + "DockPad will turn off and forget its pairing. You'll go through setup again. "
+                        + "(Optional: in Developer options, \"Revoke wireless debugging authorizations\" "
+                        + "also removes the old pairing from Android's side.)")
+                .setPositiveButton(eraseAll ? "Erase" : "Start over", (d, w) -> startOver(eraseAll))
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void stopEverything() {
+        IBridge b = bridge;
+        try {
+            if (b != null) b.stop();
+        } catch (Exception ignored) {
+        }
+        Starter.bridge(this).exit(); // DockPad's own service, if running
+        ui.post(() -> {
+            if (bound) {
+                try {
+                    Shizuku.unbindUserService(serviceArgs, connection, true);
+                } catch (Throwable ignored) {
+                }
+            }
+            bound = false;
+            bridge = null;
+            usingOwnService = false;
+        });
+        try {
+            stopService(new Intent(this, PairingService.class));
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void restartService() {
+        Toast.makeText(this, "Restarting DockPad…", Toast.LENGTH_SHORT).show();
+        bg.execute(() -> {
+            stopEverything();
+            try {
+                Thread.sleep(800);
+            } catch (InterruptedException ignored) {
+            }
+            prefs.bridgeWanted(true);
+            ui.post(this::refreshSetup); // starts again (own service or Shizuku)
+        });
+    }
+
+    private void startOver(boolean eraseAll) {
+        bg.execute(() -> {
+            stopEverything();
+            com.adonzin.dockpad.adb.AdbManager.reset(this);
+            if (eraseAll) {
+                getSharedPreferences("dockpad", MODE_PRIVATE).edit().clear().commit();
+            } else {
+                prefs.paired(false);
+                prefs.bridgeWanted(false);
+            }
+            ui.post(() -> {
+                Toast.makeText(this, eraseAll ? "Everything erased." : "Ready to set up again.", Toast.LENGTH_SHORT).show();
+                recreate();
+            });
+        });
     }
 
     // ------------------------------------------------------------------ diagnostics

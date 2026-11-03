@@ -260,6 +260,14 @@
                 android:text="Diagnostics" />
         </LinearLayout>
 
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/open_reset"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Reset or start over…" />
+
         <TextView
             android:id="@+id/version"
             android:layout_width="match_parent"

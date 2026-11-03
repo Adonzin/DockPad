@@ -48,6 +48,19 @@ public final class AdbManager extends AbsAdbConnectionManager {
         return instance;
     }
 
+    /** Forgets DockPad's pairing identity; the next pairing creates a new one. */
+    public static synchronized void reset(Context context) {
+        if (instance != null) {
+            try {
+                instance.disconnect();
+            } catch (Exception ignored) {
+            }
+            instance = null;
+        }
+        new File(context.getFilesDir(), "adb_private.key").delete();
+        new File(context.getFilesDir(), "adb_cert.der").delete();
+    }
+
     private final PrivateKey privateKey;
     private final Certificate certificate;
 
