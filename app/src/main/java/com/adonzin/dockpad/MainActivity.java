@@ -830,6 +830,11 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
 
     // ------------------------------------------------------------------ shortcuts
 
+    static String holdText(int ms) {
+        float sec = ms / 1000f;
+        return (sec == Math.round(sec) ? String.valueOf(Math.round(sec)) : String.format(java.util.Locale.US, "%.1f", sec)) + " s";
+    }
+
     private void renderShortcuts() {
         shortcutsList.removeAllViews();
         List<Shortcut> all = prefs.shortcuts();
@@ -843,7 +848,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         }
         for (int i = 0; i < all.size(); i++) {
             Shortcut s = all.get(i);
-            String title = (s.hold ? "Hold " : "") + s.triggerLabel() + "  →  " + s.actionLabel();
+            String title = (s.hold ? "Hold " + holdText(s.holdMs) + " " : "") + s.triggerLabel() + "  →  " + s.actionLabel();
             View row = addInfoRow(shortcutsList, R.drawable.ic_bolt, title, s.deviceLabel());
             row.setFocusable(true);
             row.setClickable(true);

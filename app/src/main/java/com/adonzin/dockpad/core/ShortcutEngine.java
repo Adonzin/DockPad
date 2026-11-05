@@ -106,7 +106,7 @@ public final class ShortcutEngine {
                         pendingFired = true;
                         start(code, h);
                     }
-                }, HOLD_MS);
+                }, Math.max(100, h.holdMs));
             }
             return true;
         } else {

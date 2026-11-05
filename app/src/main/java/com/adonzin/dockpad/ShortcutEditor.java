@@ -303,6 +303,13 @@ final class ShortcutEditor {
         RadioButton whenHold = v.findViewById(R.id.when_hold);
         RadioGroup whenGroup = v.findViewById(R.id.when_group);
         RadioGroup scopeGroup = v.findViewById(R.id.scope_group);
+        TextView holdLabel = v.findViewById(R.id.hold_label);
+        com.google.android.material.slider.Slider holdTime = v.findViewById(R.id.hold_time);
+        holdTime.setValue(Math.max(0.3f, Math.min(10f, Math.round(s.holdMs / 100f) / 10f)));
+        holdTime.addOnChangeListener((sl, value, fromUser) -> {
+            s.holdMs = Math.round(value * 1000);
+            holdLabel.setText("Hold for " + MainActivity.holdText(s.holdMs));
+        });
 
         final String[] device = {recordedDevice};
         Runnable refresh = () -> {
@@ -315,6 +322,9 @@ final class ShortcutEditor {
                 scopeDevice.setEnabled(false);
             }
             actionText.setText(s.actionLabel());
+            holdLabel.setVisibility(s.hold ? View.VISIBLE : View.GONE);
+            holdTime.setVisibility(s.hold ? View.VISIBLE : View.GONE);
+            holdLabel.setText("Hold for " + MainActivity.holdText(s.holdMs));
             StringBuilder h = new StringBuilder();
             if (s.trigger.length > 1) {
                 h.append("In a combo, the earlier buttons still reach the game; the last one you press "

@@ -14,7 +14,8 @@ public final class Shortcut {
 
     public String device = ANY;       // controller name, or ANY
     public int[] trigger = new int[0]; // raw evdev key codes, in the order they are pressed
-    public boolean hold;              // false: when pressed, true: when held for half a second
+    public boolean hold;              // false: when pressed, true: when held for holdMs
+    public int holdMs = 500;          // how long to hold, for hold shortcuts
     public List<int[]> steps = new ArrayList<>(); // empty = do nothing (block the buttons)
     /** Extra data for some actions: for "Open an app", "package|App name". */
     public String param = "";
@@ -24,6 +25,7 @@ public final class Shortcut {
         s.device = device;
         s.trigger = trigger.clone();
         s.hold = hold;
+        s.holdMs = holdMs;
         for (int[] st : steps) s.steps.add(st.clone());
         s.param = param;
         return s;
@@ -82,7 +84,8 @@ public final class Shortcut {
             st.append(csv(step));
         }
         String p = param.replace("\t", " ").replace("\n", " ");
-        return device + "\t" + csv(trigger) + "\t" + (hold ? "H" : "P") + "\t" + (st.length() == 0 ? "-" : st)
+        String when = hold ? (holdMs == 500 ? "H" : "H" + holdMs) : "P";
+        return device + "\t" + csv(trigger) + "\t" + when + "\t" + (st.length() == 0 ? "-" : st)
                 + (p.isEmpty() ? "" : "\t" + p);
     }
 
@@ -94,7 +97,8 @@ public final class Shortcut {
             s.device = f[0];
             s.trigger = parseCsv(f[1]);
             if (s.trigger.length == 0) return null;
-            s.hold = "H".equals(f[2]);
+            s.hold = f[2].startsWith("H");
+            if (s.hold && f[2].length() > 1) s.holdMs = Math.max(100, Integer.parseInt(f[2].substring(1)));
             if (f.length == 5) s.param = f[4];
             if (!"-".equals(f[3])) {
                 for (String step : f[3].split(";")) {

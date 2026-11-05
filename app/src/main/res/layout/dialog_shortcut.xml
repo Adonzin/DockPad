@@ -84,8 +84,23 @@
                 android:id="@+id/when_hold"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Held for half a second" />
+                android:text="Held down" />
         </RadioGroup>
+
+        <TextView
+            android:id="@+id/hold_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textAppearance="?attr/textAppearanceBodyMedium" />
+
+        <com.google.android.material.slider.Slider
+            android:id="@+id/hold_time"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:stepSize="0.1"
+            android:valueFrom="0.3"
+            android:valueTo="10.0" />
 
         <TextView
             android:layout_width="wrap_content"
