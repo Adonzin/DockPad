@@ -320,6 +320,53 @@ final class Bridge {
         }
     }
 
+    /** Presses a key on the built-in controls (e.g. Home/Back). False if it can't right now. */
+    boolean tapBuiltInKey(int evdevCode) {
+        EvdevDevice t = target;
+        if (pcModeOn || t == null || !t.hasKey(evdevCode)) return false;
+        TargetEncoder enc;
+        synchronized (this) {
+            enc = slots.isEmpty() ? null : slots.get(0).encoder;
+        }
+        if (enc == null) return false;
+        enc.rawKey(evdevCode, true);
+        Extras.sleep(50);
+        enc.rawKey(evdevCode, false);
+        return true;
+    }
+
+    // face-button swap for all external controllers (quick menu / shortcuts)
+    private volatile boolean swapAB, swapXY;
+
+    void toggleSwap(boolean ab, boolean xy) {
+        List<Source> list;
+        synchronized (this) {
+            list = new ArrayList<>(sources.values());
+        }
+        for (Source s : list) s.modeChanged(); // let go of held buttons first
+        if (ab && xy) {
+            boolean on = !(swapAB && swapXY);
+            swapAB = on;
+            swapXY = on;
+        } else {
+            if (ab) swapAB = !swapAB;
+            if (xy) swapXY = !swapXY;
+        }
+        Log.i(TAG, "Face swap: A/B " + swapAB + ", X/Y " + swapXY);
+    }
+
+    private int applySwap(int code) {
+        if (swapAB) {
+            if (code == Codes.BTN_SOUTH) return Codes.BTN_EAST;
+            if (code == Codes.BTN_EAST) return Codes.BTN_SOUTH;
+        }
+        if (swapXY) {
+            if (code == Codes.BTN_NORTH) return Codes.BTN_WEST;
+            if (code == Codes.BTN_WEST) return Codes.BTN_NORTH;
+        }
+        return code;
+    }
+
     private void commandOutput(int code, boolean down, String param) {
         if (Codes.isAction(code)) {
             if (down) Actions.run(code, param, null);
@@ -367,6 +414,8 @@ final class Bridge {
             o.put("builtInHow", builtInHow);
             o.put("multiplayer", multiplayer);
             o.put("pcMode", pcModeOn);
+            o.put("swapAB", swapAB);
+            o.put("swapXY", swapXY);
             o.put("error", lastError);
             JSONArray players = new JSONArray();
             for (Slot sl : slots) {
@@ -805,6 +854,7 @@ final class Bridge {
                                         code = to;
                                     }
                                 }
+                                if (!touchpad && !builtIn) code = applySwap(code);
                                 if (handleKey(code, value)) continue;
                             }
                             deliver(type, code, value);

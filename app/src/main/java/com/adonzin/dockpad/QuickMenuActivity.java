@@ -35,7 +35,7 @@ public class QuickMenuActivity extends AppCompatActivity {
     private LinearLayout list;
     private TextView status;
     private volatile IBridge bridge;
-    private boolean running, cursor;
+    private boolean running, cursor, swapAB, swapXY;
     private View firstRow;
 
     @Override
@@ -106,6 +106,13 @@ public class QuickMenuActivity extends AppCompatActivity {
         section("Tools");
         row(R.drawable.ic_mouse, cursor ? "Turn Cursor mode off" : "Turn Cursor mode on",
                 "Controllers act as a mouse and keyboard", () -> withBridge(b -> b.setPcMode(!cursor)));
+        row(R.drawable.ic_gamepad, "Nintendo layout: " + (swapAB && swapXY ? "on" : "off"),
+                "Swaps A/B and X/Y on external controllers", () -> withBridge(b -> b.runCommand(
+                        oneAction(Codes.ACTION_SWAP_FACE), 0)));
+        row(R.drawable.ic_gamepad, "Swap A/B: " + (swapAB ? "on" : "off"), null,
+                () -> withBridge(b -> b.runCommand(oneAction(Codes.ACTION_SWAP_AB), 0)));
+        row(R.drawable.ic_gamepad, "Swap X/Y: " + (swapXY ? "on" : "off"), null,
+                () -> withBridge(b -> b.runCommand(oneAction(Codes.ACTION_SWAP_XY), 0)));
         row(R.drawable.ic_keyboard, "Show keyboard (Moonlight)", null, () -> command(Codes.ACTION_MOONLIGHT_KEYBOARD));
         row(R.drawable.ic_camera, "Screenshot", null, () -> command(Codes.ACTION_SCREENSHOT));
         row(R.drawable.ic_close_app, "Force close the game", "Closes the app that's open right now",
@@ -182,13 +189,18 @@ public class QuickMenuActivity extends AppCompatActivity {
         }, "DockPad-menu").start();
     }
 
-    /** Closes the menu, then runs one action on the game underneath. */
-    private void command(int action) {
+    private static String oneAction(int action) {
         Shortcut s = new Shortcut();
         s.trigger = new int[]{0};
         s.steps.add(new int[]{action});
+        return s.encode();
+    }
+
+    /** Closes the menu, then runs one action on the game underneath. */
+    private void command(int action) {
+        String spec = oneAction(action);
         finish();
-        runInBackground(b -> b.runCommand(s.encode(), 350));
+        runInBackground(b -> b.runCommand(spec, 350));
     }
 
     /** Runs something and refreshes the menu (it stays open). */
@@ -206,9 +218,12 @@ public class QuickMenuActivity extends AppCompatActivity {
             JSONObject o = new JSONObject(b.statusJson());
             ui.post(() -> {
                 boolean r = o.optBoolean("running"), c = o.optBoolean("pcMode");
-                boolean changed = r != running || c != cursor;
+                boolean ab = o.optBoolean("swapAB"), xy = o.optBoolean("swapXY");
+                boolean changed = r != running || c != cursor || ab != swapAB || xy != swapXY;
                 running = r;
                 cursor = c;
+                swapAB = ab;
+                swapXY = xy;
                 status.setText((running ? "On" : "Off") + (cursor ? " · Cursor mode on" : ""));
                 if (changed) {
                     View focused = getCurrentFocus();

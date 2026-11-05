@@ -44,7 +44,7 @@ final class Actions {
                 Thread.sleep(300);
                 exec("input", "keyevent", "KEYCODE_APP_SWITCH");
                 break;
-            case Codes.ACTION_SCREENSHOT: key(x, 99, "KEYCODE_SYSRQ"); break;
+            case Codes.ACTION_SCREENSHOT: exec("input", "keyevent", "KEYCODE_SYSRQ"); break;
             case Codes.ACTION_NOTIFICATIONS: exec("cmd", "statusbar", "expand-notifications"); break;
             case Codes.ACTION_QUICK_SETTINGS: exec("cmd", "statusbar", "expand-settings"); break;
             case Codes.ACTION_CLOSE_PANELS: exec("cmd", "statusbar", "collapse"); break;
@@ -55,21 +55,31 @@ final class Actions {
             }
             case Codes.ACTION_OPEN_APP: openApp(param); break;
             case Codes.ACTION_TOGGLE_PC_MODE: if (b != null) b.setPcMode(!b.isPcMode()); break;
-            case Codes.ACTION_SLEEP: key(x, 142, "KEYCODE_SLEEP"); break;
-            case Codes.ACTION_BRIGHTNESS_UP: key(x, 225, "KEYCODE_BRIGHTNESS_UP"); break;
-            case Codes.ACTION_BRIGHTNESS_DOWN: key(x, 224, "KEYCODE_BRIGHTNESS_DOWN"); break;
-            case Codes.ACTION_PLAY_PAUSE: key(x, 164, "KEYCODE_MEDIA_PLAY_PAUSE"); break;
-            case Codes.ACTION_NEXT_TRACK: key(x, 163, "KEYCODE_MEDIA_NEXT"); break;
-            case Codes.ACTION_PREVIOUS_TRACK: key(x, 165, "KEYCODE_MEDIA_PREVIOUS"); break;
-            case Codes.ACTION_MUTE: key(x, 113, "KEYCODE_VOLUME_MUTE"); break;
+            // system-only keys: apps never see these, so Android's own injection is fine
+            case Codes.ACTION_SLEEP: exec("input", "keyevent", "KEYCODE_SLEEP"); break;
+            case Codes.ACTION_BRIGHTNESS_UP: exec("input", "keyevent", "KEYCODE_BRIGHTNESS_UP"); break;
+            case Codes.ACTION_BRIGHTNESS_DOWN: exec("input", "keyevent", "KEYCODE_BRIGHTNESS_DOWN"); break;
+            case Codes.ACTION_PLAY_PAUSE: exec("input", "keyevent", "KEYCODE_MEDIA_PLAY_PAUSE"); break;
+            case Codes.ACTION_NEXT_TRACK: exec("input", "keyevent", "KEYCODE_MEDIA_NEXT"); break;
+            case Codes.ACTION_PREVIOUS_TRACK: exec("input", "keyevent", "KEYCODE_MEDIA_PREVIOUS"); break;
+            case Codes.ACTION_MUTE: exec("input", "keyevent", "KEYCODE_VOLUME_MUTE"); break;
+            case Codes.ACTION_SWAP_AB: if (b != null) b.toggleSwap(true, false); break;
+            case Codes.ACTION_SWAP_XY: if (b != null) b.toggleSwap(false, true); break;
+            case Codes.ACTION_SWAP_FACE: if (b != null) b.toggleSwap(true, true); break;
             case Codes.ACTION_MOONLIGHT_KEYBOARD: if (x != null) x.threeFingerTap(); break;
             case Codes.ACTION_QUICK_MENU:
                 // a second press while it's open closes it (the menu handles that itself)
                 exec("am", "start", "-n", BuildConfig.APPLICATION_ID + "/" + BuildConfig.APPLICATION_ID
                         + ".QuickMenuActivity", "--activity-no-animation");
                 break;
-            case Codes.ACTION_HOME: exec("input", "keyevent", "KEYCODE_HOME"); break;
-            case Codes.ACTION_BACK: exec("input", "keyevent", "KEYCODE_BACK"); break;
+            // Home/Back: pressed on the built-in controls, so apps see a real controller key
+            // (Android's injection tool shows up as an unknown "Virtual" device in some apps)
+            case Codes.ACTION_HOME:
+                if (b == null || !b.tapBuiltInKey(Codes.KEY_HOME)) exec("input", "keyevent", "KEYCODE_HOME");
+                break;
+            case Codes.ACTION_BACK:
+                if (b == null || !b.tapBuiltInKey(Codes.KEY_BACK)) exec("input", "keyevent", "KEYCODE_BACK");
+                break;
         }
     }
 
