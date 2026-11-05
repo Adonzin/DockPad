@@ -28,6 +28,13 @@ public final class TargetEncoder implements Mapper.Sink {
     private final Map<Integer, Boolean> keyState = new HashMap<>();
     private final int[] dpadKeyCount = new int[4]; // up, down, left, right
     private float hatX, hatY;
+    /** How the built-in controls report the d-pad: 1 = buttons, 2 = hat, 3 = both. */
+    private volatile int dpadForm = DPAD_HAT;
+    public static final int DPAD_BUTTONS = 1, DPAD_HAT = 2;
+
+    public void setDpadForm(int form) {
+        if (form >= 1 && form <= 3) dpadForm = form;
+    }
     private final List<Integer> pending = new ArrayList<>();
 
     public TargetEncoder(EvdevDevice target, Out out) {
@@ -131,12 +138,23 @@ public final class TargetEncoder implements Mapper.Sink {
         boolean down = dpadKeyCount[1] > 0 || hatY > 0.5f;
         boolean left = dpadKeyCount[2] > 0 || hatX < -0.5f;
         boolean right = dpadKeyCount[3] > 0 || hatX > 0.5f;
-        setKeyState(BTN_DPAD_UP, up);
-        setKeyState(BTN_DPAD_DOWN, down);
-        setKeyState(BTN_DPAD_LEFT, left);
-        setKeyState(BTN_DPAD_RIGHT, right);
-        if (axisCode[Mapper.HX] >= 0) setAbs(ABS_HAT0X, right ? 1 : left ? -1 : 0);
-        if (axisCode[Mapper.HY] >= 0) setAbs(ABS_HAT0Y, down ? 1 : up ? -1 : 0);
+        // Send the d-pad the same way the built-in controls do. Sending both forms makes apps
+        // react twice (e.g. menus move two steps).
+        int form = dpadForm;
+        boolean hasHat = axisCode[Mapper.HX] >= 0;
+        boolean hasButtons = target.hasKey(BTN_DPAD_UP);
+        boolean useButtons = hasButtons && ((form & DPAD_BUTTONS) != 0 || !hasHat);
+        boolean useHat = hasHat && ((form & DPAD_HAT) != 0 || !hasButtons);
+        if (useButtons) {
+            setKeyState(BTN_DPAD_UP, up);
+            setKeyState(BTN_DPAD_DOWN, down);
+            setKeyState(BTN_DPAD_LEFT, left);
+            setKeyState(BTN_DPAD_RIGHT, right);
+        }
+        if (useHat) {
+            setAbs(ABS_HAT0X, right ? 1 : left ? -1 : 0);
+            if (axisCode[Mapper.HY] >= 0) setAbs(ABS_HAT0Y, down ? 1 : up ? -1 : 0);
+        }
     }
 
     private void setKeyState(int code, boolean pressed) {

@@ -295,6 +295,8 @@
                     android:valueTo="3.0" />
 
                 <com.google.android.material.materialswitch.MaterialSwitch
+                    android:foreground="@drawable/focus_ring"
+                    android:padding="6dp"
                     android:id="@+id/pc_left"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"

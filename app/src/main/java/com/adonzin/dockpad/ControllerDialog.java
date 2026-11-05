@@ -48,10 +48,14 @@ final class ControllerDialog {
         box.addView(intro);
 
         MaterialSwitch ab = new MaterialSwitch(activity);
+        ab.setForeground(activity.getDrawable(R.drawable.focus_ring));
+        ab.setPadding(dp(6), dp(10), dp(6), dp(10));
         ab.setText("Swap A and B");
         ab.setChecked(layout.swapAB);
         box.addView(ab);
         MaterialSwitch xy = new MaterialSwitch(activity);
+        xy.setForeground(activity.getDrawable(R.drawable.focus_ring));
+        xy.setPadding(dp(6), dp(10), dp(6), dp(10));
         xy.setText("Swap X and Y");
         xy.setChecked(layout.swapXY);
         box.addView(xy);

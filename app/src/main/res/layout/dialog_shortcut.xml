@@ -46,11 +46,13 @@
             android:layout_height="wrap_content">
 
             <RadioButton
+                android:foreground="@drawable/focus_ring"
                 android:id="@+id/scope_device"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content" />
 
             <RadioButton
+                android:foreground="@drawable/focus_ring"
                 android:id="@+id/scope_any"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -71,12 +73,14 @@
             android:layout_height="wrap_content">
 
             <RadioButton
+                android:foreground="@drawable/focus_ring"
                 android:id="@+id/when_press"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Pressed" />
 
             <RadioButton
+                android:foreground="@drawable/focus_ring"
                 android:id="@+id/when_hold"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

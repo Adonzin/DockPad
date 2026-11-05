@@ -113,6 +113,7 @@ final class Bridge {
                 pad.write(events);
                 written.addAndGet(events.length / 3);
             });
+            enc.setDpadForm(dpadForm);
             slots.add(new Slot(player, pad, enc));
             Log.i(TAG, "Created " + pad.name() + " cloning " + target);
         }
@@ -229,6 +230,46 @@ final class Bridge {
 
     // ---------------------------------------------------------------- PC control mode
 
+    // ---------------------------------------------------------------- d-pad form
+
+    private static final java.io.File DPAD_FILE = new java.io.File("/data/local/tmp/dockpad_dpad_form");
+    private volatile int dpadForm = readDpadForm();
+    private volatile int dpadSeen;
+
+    private static int readDpadForm() {
+        try (java.io.FileInputStream in = new java.io.FileInputStream(DPAD_FILE)) {
+            int v = in.read() - '0';
+            return v >= 1 && v <= 3 ? v : TargetEncoder.DPAD_HAT;
+        } catch (Exception e) {
+            return TargetEncoder.DPAD_HAT;
+        }
+    }
+
+    /** Watches the built-in controls' d-pad to learn whether it reports buttons, a hat or both. */
+    private void observeBuiltInDpad(int type, int code, int value) {
+        int seen = dpadSeen;
+        if (type == Codes.EV_KEY && code >= Codes.BTN_DPAD_UP && code <= Codes.BTN_DPAD_RIGHT && value == 1) {
+            seen |= TargetEncoder.DPAD_BUTTONS;
+        } else if (type == Codes.EV_ABS && (code == Codes.ABS_HAT0X || code == Codes.ABS_HAT0Y) && value != 0) {
+            seen |= TargetEncoder.DPAD_HAT;
+        } else {
+            return;
+        }
+        if (seen == dpadSeen) return;
+        dpadSeen = seen;
+        if (seen != dpadForm) {
+            dpadForm = seen;
+            synchronized (this) {
+                for (Slot sl : slots) sl.encoder.setDpadForm(seen);
+            }
+            try (java.io.FileOutputStream o = new java.io.FileOutputStream(DPAD_FILE)) {
+                o.write('0' + seen);
+            } catch (Exception ignored) {
+            }
+            Log.i(TAG, "Built-in d-pad form: " + seen);
+        }
+    }
+
     private final Extras extras = new Extras();
     private final PcMode pc = new PcMode(extras);
     private volatile boolean pcModeOn;
@@ -326,6 +367,8 @@ final class Bridge {
         EvdevDevice t = target;
         b.append("Built-in controls: ").append(t == null ? "not found" : t.name + " [" + t.id() + "]").append('\n');
         b.append("Cursor mode: ").append(pcModeOn ? "ON" : "off").append('\n');
+        b.append("D-pad sent as: ").append(dpadForm == 1 ? "buttons" : dpadForm == 2 ? "hat" : "buttons + hat")
+                .append(dpadSeen == 0 ? " (not learned yet: press the built-in d-pad once)" : " (learned)").append('\n');
         b.append("Multiplayer: ").append(multiplayer ? "on" : "off (everything is player 1)").append('\n');
         if (slots.isEmpty()) b.append("Virtual controller: not created\n");
         for (Slot sl : slots) {
@@ -705,6 +748,7 @@ final class Bridge {
                         int code = bb.getShort(p + off + 2) & 0xffff;
                         int value = bb.getInt(p + off + 4);
                         eventsRead.incrementAndGet();
+                        if (builtIn) observeBuiltInDpad(type, code, value);
                         synchronized (this) {
                             if (!alive) break;
                             if (type == Codes.EV_KEY) {
