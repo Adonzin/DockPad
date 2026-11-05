@@ -178,4 +178,9 @@ public final class SocketBridge implements IBridge {
     public void typeKey(int code, boolean shift) throws RemoteException {
         rc("typeKey", code, shift);
     }
+
+    @Override
+    public void typeCombo(String csv) throws RemoteException {
+        rc("typeCombo", csv);
+    }
 }

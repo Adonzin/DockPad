@@ -30,9 +30,13 @@ final class KeyboardInput {
 
             @Override
             public void axes(float[] s) {
+                // the d-pad as a hat (how many controllers report it), else the left stick
+                float hx = s[Mapper.HX], hy = s[Mapper.HY];
                 float x = s[Mapper.LX], y = s[Mapper.LY];
                 String dir = null;
-                if (Math.abs(x) > 0.6f || Math.abs(y) > 0.6f) {
+                if (hx != 0 || hy != 0) {
+                    dir = hx != 0 ? (hx > 0 ? "right" : "left") : (hy > 0 ? "down" : "up");
+                } else if (Math.abs(x) > 0.6f || Math.abs(y) > 0.6f) {
                     dir = Math.abs(x) > Math.abs(y) ? (x > 0 ? "right" : "left") : (y > 0 ? "down" : "up");
                 }
                 synchronized (KeyboardInput.this) {
@@ -58,6 +62,8 @@ final class KeyboardInput {
             case Codes.KEYCODE_BUTTON_Y: return "y";
             case Codes.KEYCODE_BUTTON_L1: return "l1";
             case Codes.KEYCODE_BUTTON_R1: return "r1";
+            case Codes.KEYCODE_BUTTON_L2: return "l2";
+            case Codes.KEYCODE_BUTTON_R2: return "r2";
             case Codes.KEYCODE_BUTTON_START: return "start";
             case Codes.KEYCODE_BUTTON_SELECT: return "select";
             default: return null;

@@ -100,8 +100,21 @@ final class PcMode {
                 synchronized (axes) {
                     System.arraycopy(state, 0, axes, 0, Math.min(state.length, axes.length));
                 }
+                hatArrows(state[Mapper.HX], state[Mapper.HY]);
             }
         };
+    }
+
+    private boolean hatUp, hatDown, hatLeft, hatRight;
+
+    /** Controllers that report the d-pad as a hat: turn it into arrow keys too. */
+    private synchronized void hatArrows(float hx, float hy) {
+        if (!active) return;
+        boolean up = hy < 0, down = hy > 0, left = hx < 0, right = hx > 0;
+        if (up != hatUp) extras.key(KEY_UP, hatUp = up);
+        if (down != hatDown) extras.key(KEY_DOWN, hatDown = down);
+        if (left != hatLeft) extras.key(KEY_LEFT, hatLeft = left);
+        if (right != hatRight) extras.key(KEY_RIGHT, hatRight = right);
     }
 
     private void onKey(int kc, boolean down) {

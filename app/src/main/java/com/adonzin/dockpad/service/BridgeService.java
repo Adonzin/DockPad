@@ -124,4 +124,9 @@ public class BridgeService extends IBridge.Stub {
     public void typeKey(int code, boolean shift) {
         bridge.typeKey(code, shift);
     }
+
+    @Override
+    public void typeCombo(String csv) {
+        bridge.typeCombo(csv);
+    }
 }

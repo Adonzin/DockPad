@@ -316,6 +316,20 @@ final class Bridge {
         return keyboardInput.drain();
     }
 
+    /** Presses the keys in order and lets go in reverse, e.g. "29,46" = Ctrl+C. */
+    void typeCombo(String csv) {
+        List<Integer> codes = new ArrayList<>();
+        for (String p : csv.split(",")) {
+            try {
+                codes.add(Integer.parseInt(p.trim()));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        for (int c : codes) extras.key(c, true);
+        Extras.sleep(25);
+        for (int i = codes.size() - 1; i >= 0; i--) extras.key(codes.get(i), false);
+    }
+
     void typeKey(int code, boolean shift) {
         if (shift) extras.key(42, true);
         extras.tap(code);
