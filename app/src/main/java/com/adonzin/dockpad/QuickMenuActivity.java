@@ -96,27 +96,48 @@ public class QuickMenuActivity extends AppCompatActivity {
 
     // ------------------------------------------------------------------ content
 
+    /** Built-in items the user can show or hide: id, label (for the settings checklist). */
+    static final String[][] ITEMS = {
+            {"home", "Home"}, {"back", "Back"}, {"cursor", "Cursor mode on/off"},
+            {"nintendo", "Nintendo layout (swap A/B and X/Y)"}, {"swapab", "Swap A/B"}, {"swapxy", "Swap X/Y"},
+            {"keyboard", "Show keyboard (Moonlight)"}, {"screenshot", "Screenshot"},
+            {"forceclose", "Force close the game"}, {"controllers", "Controllers list"},
+            {"power", "Turn DockPad on/off"}, {"openapp", "Open DockPad"}};
+
+    private java.util.Set<String> hidden;
+
+    private boolean shown(String id) {
+        return !hidden.contains(id);
+    }
+
     private void build() {
         list.removeAllViews();
         firstRow = null;
-        section("Navigation");
-        row(R.drawable.ic_home, "Home", null, () -> command(Codes.ACTION_HOME));
-        row(R.drawable.ic_back, "Back", null, () -> command(Codes.ACTION_BACK));
+        controllersAnchor = null;
+        hidden = new Prefs(this).menuHidden();
 
-        section("Tools");
-        row(R.drawable.ic_mouse, cursor ? "Turn Cursor mode off" : "Turn Cursor mode on",
+        if (shown("home") || shown("back")) section("Navigation");
+        if (shown("home")) row(R.drawable.ic_home, "Home", null, () -> command(Codes.ACTION_HOME));
+        if (shown("back")) row(R.drawable.ic_back, "Back", null, () -> command(Codes.ACTION_BACK));
+
+        String[] tools = {"cursor", "nintendo", "swapab", "swapxy", "keyboard", "screenshot", "forceclose"};
+        boolean anyTool = false;
+        for (String t : tools) anyTool |= shown(t);
+        if (anyTool) section("Tools");
+        if (shown("cursor")) row(R.drawable.ic_mouse, cursor ? "Turn Cursor mode off" : "Turn Cursor mode on",
                 "Controllers act as a mouse and keyboard", () -> withBridge(b -> b.setPcMode(!cursor)));
-        row(R.drawable.ic_gamepad, "Nintendo layout: " + (swapAB && swapXY ? "on" : "off"),
+        if (shown("nintendo")) row(R.drawable.ic_gamepad, "Nintendo layout: " + (swapAB && swapXY ? "on" : "off"),
                 "Swaps A/B and X/Y on external controllers", () -> withBridge(b -> b.runCommand(
                         oneAction(Codes.ACTION_SWAP_FACE), 0)));
-        row(R.drawable.ic_gamepad, "Swap A/B: " + (swapAB ? "on" : "off"), null,
+        if (shown("swapab")) row(R.drawable.ic_gamepad, "Swap A/B: " + (swapAB ? "on" : "off"), null,
                 () -> withBridge(b -> b.runCommand(oneAction(Codes.ACTION_SWAP_AB), 0)));
-        row(R.drawable.ic_gamepad, "Swap X/Y: " + (swapXY ? "on" : "off"), null,
+        if (shown("swapxy")) row(R.drawable.ic_gamepad, "Swap X/Y: " + (swapXY ? "on" : "off"), null,
                 () -> withBridge(b -> b.runCommand(oneAction(Codes.ACTION_SWAP_XY), 0)));
-        row(R.drawable.ic_keyboard, "Show keyboard (Moonlight)", null, () -> command(Codes.ACTION_MOONLIGHT_KEYBOARD));
-        row(R.drawable.ic_camera, "Screenshot", null, () -> command(Codes.ACTION_SCREENSHOT));
-        row(R.drawable.ic_close_app, "Force close the game", "Closes the app that's open right now",
-                () -> command(Codes.ACTION_FORCE_CLOSE));
+        if (shown("keyboard")) row(R.drawable.ic_keyboard, "Show keyboard (Moonlight)", null,
+                () -> command(Codes.ACTION_MOONLIGHT_KEYBOARD));
+        if (shown("screenshot")) row(R.drawable.ic_camera, "Screenshot", null, () -> command(Codes.ACTION_SCREENSHOT));
+        if (shown("forceclose")) row(R.drawable.ic_close_app, "Force close the game",
+                "Closes the app that's open right now", () -> command(Codes.ACTION_FORCE_CLOSE));
 
         List<Shortcut> mine = new Prefs(this).menuCommands();
         if (!mine.isEmpty()) {
@@ -129,21 +150,29 @@ public class QuickMenuActivity extends AppCompatActivity {
             }
         }
 
-        section("Controllers");
-        controllersAnchor = new LinearLayout(this);
-        controllersAnchor.setOrientation(LinearLayout.VERTICAL);
-        list.addView(controllersAnchor);
+        if (shown("controllers")) {
+            section("Controllers");
+            controllersAnchor = new LinearLayout(this);
+            controllersAnchor.setOrientation(LinearLayout.VERTICAL);
+            list.addView(controllersAnchor);
+        }
 
-        section("DockPad");
-        row(R.drawable.ic_power, running ? "Turn DockPad off" : "Turn DockPad on", null, () -> withBridge(b -> {
-            new Prefs(this).bridgeWanted(!running);
-            if (running) b.stop();
-            else b.start(true);
-        }));
-        row(R.drawable.ic_open, "Open DockPad", null, () -> {
+        if (shown("power") || shown("openapp")) section("DockPad");
+        if (shown("power")) row(R.drawable.ic_power, running ? "Turn DockPad off" : "Turn DockPad on", null,
+                () -> withBridge(b -> {
+                    new Prefs(this).bridgeWanted(!running);
+                    if (running) b.stop();
+                    else b.start(true);
+                }));
+        if (shown("openapp")) row(R.drawable.ic_open, "Open DockPad", null, () -> {
             startActivity(new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             finish();
         });
+        if (list.getChildCount() == 0) {
+            TextView t = new TextView(this);
+            t.setText("Everything is hidden. Choose items in DockPad → Quick menu.");
+            list.addView(t);
+        }
     }
 
     private LinearLayout controllersAnchor;

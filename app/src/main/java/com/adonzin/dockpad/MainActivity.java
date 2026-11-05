@@ -145,6 +145,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         findViewById(R.id.menu_open).setOnClickListener(v ->
                 startActivity(new Intent(this, QuickMenuActivity.class)));
         findViewById(R.id.add_command).setOnClickListener(v -> editor.addCommand());
+        findViewById(R.id.menu_items).setOnClickListener(v -> chooseMenuItems());
         commandsList = findViewById(R.id.commands_list);
         renderCommands();
         ((TextView) findViewById(R.id.version)).setText("DockPad " + BuildConfig.VERSION_NAME);
@@ -229,6 +230,28 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
     }
 
     private LinearLayout commandsList;
+
+    private void chooseMenuItems() {
+        String[][] items = QuickMenuActivity.ITEMS;
+        String[] labels = new String[items.length];
+        boolean[] checked = new boolean[items.length];
+        java.util.Set<String> hidden = prefs.menuHidden();
+        for (int i = 0; i < items.length; i++) {
+            labels[i] = items[i][1];
+            checked[i] = !hidden.contains(items[i][0]);
+        }
+        new DpDialog(this)
+                .setTitle("Show in the quick menu")
+                .setMultiChoiceItems(labels, checked, (d, i, c) -> checked[i] = c)
+                .setPositiveButton("Save", (d, w) -> {
+                    java.util.Set<String> h = new java.util.HashSet<>();
+                    for (int i = 0; i < items.length; i++) if (!checked[i]) h.add(items[i][0]);
+                    prefs.menuHidden(h);
+                    Toast.makeText(this, "Saved. Your own commands always show.", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
 
     private void renderCommands() {
         commandsList.removeAllViews();

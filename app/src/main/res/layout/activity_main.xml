@@ -256,6 +256,13 @@
                         android:text="Preview" />
                 </LinearLayout>
 
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/menu_items"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Choose what's in the menu" />
+
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"

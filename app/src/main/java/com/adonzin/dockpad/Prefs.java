@@ -37,6 +37,12 @@ final class Prefs {
     boolean bridgeWanted() { return p.getBoolean("bridgeWanted", false); }
     void bridgeWanted(boolean v) { p.edit().putBoolean("bridgeWanted", v).apply(); }
 
+    /** Built-in quick menu items the user has hidden (ids from QuickMenuActivity.ITEMS). */
+    java.util.Set<String> menuHidden() {
+        return new java.util.HashSet<>(java.util.Arrays.asList(p.getString("menuHidden", "").split(",")));
+    }
+    void menuHidden(java.util.Set<String> ids) { p.edit().putString("menuHidden", String.join(",", ids)).apply(); }
+
     /** Quick menu commands: name in Shortcut.device, the action/macro in steps. */
     List<Shortcut> menuCommands() { return Shortcut.decodeAll(p.getString("menuCommands", "")); }
     void menuCommands(List<Shortcut> list) { p.edit().putString("menuCommands", Shortcut.encodeAll(list)).apply(); }

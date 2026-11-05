@@ -44,7 +44,7 @@ final class Actions {
                 Thread.sleep(300);
                 exec("input", "keyevent", "KEYCODE_APP_SWITCH");
                 break;
-            case Codes.ACTION_SCREENSHOT: exec("input", "keyevent", "KEYCODE_SYSRQ"); break;
+            case Codes.ACTION_SCREENSHOT: screenshot(); break;
             case Codes.ACTION_NOTIFICATIONS: exec("cmd", "statusbar", "expand-notifications"); break;
             case Codes.ACTION_QUICK_SETTINGS: exec("cmd", "statusbar", "expand-settings"); break;
             case Codes.ACTION_CLOSE_PANELS: exec("cmd", "statusbar", "collapse"); break;
@@ -87,6 +87,20 @@ final class Actions {
     private static void key(Extras x, int evdevKey, String keyName) {
         if (x != null) x.tap(evdevKey);
         else exec("input", "keyevent", keyName);
+    }
+
+    /** Saves a screenshot without sending any key (some systems pass the key on to the game). */
+    private static void screenshot() {
+        String name = "Screenshot_" + new java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.US)
+                .format(new java.util.Date()) + "_DockPad.png";
+        String dir = "/sdcard/Pictures/Screenshots";
+        exec("mkdir", "-p", dir);
+        String path = dir + "/" + name;
+        exec("screencap", "-p", path);
+        // make it show up in the gallery, and let the app show "Screenshot saved"
+        exec("am", "broadcast", "-a", "android.intent.action.MEDIA_SCANNER_SCAN_FILE", "-d", "file://" + path);
+        exec("am", "broadcast", "-n", BuildConfig.APPLICATION_ID + "/" + BuildConfig.APPLICATION_ID
+                + ".MessageReceiver", "--es", "message", "Screenshot saved to Pictures/Screenshots");
     }
 
     private static String launcherPackage() {
