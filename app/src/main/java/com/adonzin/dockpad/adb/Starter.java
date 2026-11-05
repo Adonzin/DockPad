@@ -169,6 +169,10 @@ public final class Starter {
         return out.toString("UTF-8");
     }
 
+    public static void sleepQuietly(long ms) {
+        sleep(ms);
+    }
+
     static void sleep(long ms) {
         try {
             Thread.sleep(ms);

@@ -18,12 +18,18 @@ final class Tiles {
     /** Current state, read from DockPad's own background service (built-in pairing). */
     static final class State {
         boolean serviceUp, running, cursor;
+        IBridge bridge; // whichever is running: DockPad's own service or the Shizuku one
     }
 
+    /** Call off the main thread. */
     static State read(TileService t) {
         State st = new State();
-        SocketBridge b = Starter.bridge(t);
-        if (b.version() < 0) return st;
+        IBridge b;
+        SocketBridge own = Starter.bridge(t);
+        if (own.version() >= 0) b = own;
+        else b = ShizukuLink.bridge();
+        if (b == null) return st;
+        st.bridge = b;
         st.serviceUp = true;
         try {
             JSONObject o = new JSONObject(b.statusJson());
@@ -65,7 +71,7 @@ final class Tiles {
     public static class DockPadTile extends TileService {
         @Override
         public void onStartListening() {
-            refresh();
+            ShizukuLink.connect(this::refresh);
         }
 
         private void refresh() {
@@ -79,17 +85,18 @@ final class Tiles {
         @Override
         public void onClick() {
             Prefs prefs = new Prefs(this);
-            if (!prefs.paired()) { // Shizuku or not set up yet: use the app
-                openApp(this);
-                return;
-            }
-            set(this, Tile.STATE_UNAVAILABLE, "…");
-            bg(() -> {
+            ShizukuLink.connect(() -> bg(() -> {
                 State st = read(this);
                 try {
                     if (st.running) {
                         prefs.bridgeWanted(false);
-                        Starter.bridge(this).stop();
+                        st.bridge.stop();
+                    } else if (st.bridge != null && !(st.bridge instanceof SocketBridge)) {
+                        prefs.bridgeWanted(true); // Shizuku
+                        prefs.applyTo(st.bridge, true);
+                    } else if (!prefs.paired()) {
+                        ui(() -> openApp(this)); // not set up yet
+                        return;
                     } else {
                         prefs.bridgeWanted(true);
                         if (!st.serviceUp) {
@@ -104,7 +111,7 @@ final class Tiles {
                 } catch (Exception ignored) {
                 }
                 refresh();
-            });
+            }));
         }
     }
 
@@ -113,14 +120,15 @@ final class Tiles {
     public static class CursorTile extends TileService {
         @Override
         public void onStartListening() {
-            refresh();
+            ShizukuLink.connect(this::refresh);
         }
 
         private void refresh() {
             bg(() -> {
                 State st = read(this);
                 ui(() -> {
-                    if (!st.running) set(this, Tile.STATE_UNAVAILABLE, "DockPad is off");
+                    // stays tappable when off (a tap opens DockPad); unavailable tiles ignore taps
+                    if (!st.running) set(this, Tile.STATE_INACTIVE, "DockPad is off");
                     else set(this, st.cursor ? Tile.STATE_ACTIVE : Tile.STATE_INACTIVE, st.cursor ? "On" : "Off");
                 });
             });
@@ -128,18 +136,19 @@ final class Tiles {
 
         @Override
         public void onClick() {
-            bg(() -> {
+            ShizukuLink.connect(() -> bg(() -> {
                 State st = read(this);
                 if (!st.running) {
                     ui(() -> openApp(this));
                     return;
                 }
                 try {
-                    Starter.bridge(this).setPcMode(!st.cursor);
+                    st.bridge.setPcMode(!st.cursor);
                 } catch (Exception ignored) {
                 }
+                Starter.sleepQuietly(300);
                 refresh();
-            });
+            }));
         }
     }
 }
