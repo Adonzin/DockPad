@@ -108,7 +108,7 @@ final class ShortcutEditor {
         addNewWithAction(Codes.KEY_HOME);
     }
 
-    /** Record buttons, with the action already filled in (e.g. "Toggle PC control mode"). */
+    /** Record buttons, with the action already filled in (e.g. "Toggle Cursor mode"). */
     void addNewWithAction(int action) {
         record((device, codes) -> {
             Shortcut s = new Shortcut();

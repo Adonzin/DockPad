@@ -26,7 +26,7 @@ jobs:
       - name: Build APK
         run: |
           set -o pipefail
-          gradle :app:assembleDebug 2>&1 | tee build.log
+          gradle :app:assembleRelease 2>&1 | tee build.log
 
       - name: Report build errors
         if: failure()
@@ -39,7 +39,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk DockPad.apk
+          cp app/build/outputs/apk/release/app-release.apk DockPad.apk
           gh release delete latest --yes --cleanup-tag || true
           gh release create latest DockPad.apk \
             --target "$GITHUB_SHA" \

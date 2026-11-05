@@ -77,7 +77,7 @@ public final class Codes {
             {"Clear all recent apps", "Force close the current app", "Switch to the previous app", "Screenshot",
                     "Open notifications", "Open quick settings", "Close notifications / quick settings",
                     "Toggle on-screen keyboard (with controllers connected)", "Open an app…",
-                    "Toggle PC control mode", "Sleep (screen off)", "Brightness up", "Brightness down",
+                    "Toggle Cursor mode", "Sleep (screen off)", "Brightness up", "Brightness down",
                     "Play / pause", "Next track", "Previous track", "Mute",
                     "Moonlight: show keyboard (three-finger tap)"}};
 

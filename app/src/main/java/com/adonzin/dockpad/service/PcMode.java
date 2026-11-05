@@ -7,7 +7,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * PC control mode: controllers act as a mouse and keyboard (for Moonlight and other remote
+ * Cursor mode: controllers act as a mouse and keyboard (for Moonlight and other remote
  * desktop apps, or any app without controller support).
  *
  *   Right stick  pointer          Left stick  scroll

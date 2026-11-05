@@ -255,7 +255,7 @@ final class Bridge {
         for (Source s : list) s.modeChanged(); // let go of anything held in the other mode
         pc.setActive(on);
         lastDevList = ""; // the built-in controls are taken over only in PC mode: rescan
-        Log.i(TAG, "PC control mode " + (on ? "on" : "off"));
+        Log.i(TAG, "Cursor mode " + (on ? "on" : "off"));
     }
 
     /** "speed,pointerOnLeft" e.g. "1.0,false" */
@@ -325,7 +325,7 @@ final class Bridge {
         b.append("Bridge: ").append(running ? "RUNNING" : "stopped").append('\n');
         EvdevDevice t = target;
         b.append("Built-in controls: ").append(t == null ? "not found" : t.name + " [" + t.id() + "]").append('\n');
-        b.append("PC control mode: ").append(pcModeOn ? "ON" : "off").append('\n');
+        b.append("Cursor mode: ").append(pcModeOn ? "ON" : "off").append('\n');
         b.append("Multiplayer: ").append(multiplayer ? "on" : "off (everything is player 1)").append('\n');
         if (slots.isEmpty()) b.append("Virtual controller: not created\n");
         for (Slot sl : slots) {
