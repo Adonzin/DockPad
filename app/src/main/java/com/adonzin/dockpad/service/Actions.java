@@ -14,20 +14,95 @@ import java.util.List;
 final class Actions {
     private Actions() {}
 
+    /** Set by the bridge so actions can reach the virtual devices and PC mode. */
+    static volatile Bridge bridge;
+
     static boolean isAction(int code) {
         return code <= -100;
     }
 
-    static void run(int code) {
+    static void run(int code, String param, Object unused) {
         Thread t = new Thread(() -> {
             try {
-                if (code == Codes.ACTION_CLEAR_RECENTS) clearRecents();
+                runNow(code, param == null ? "" : param);
             } catch (Throwable e) {
                 Log.e("DockPad", "action " + code, e);
             }
         }, "DockPad-action");
         t.setDaemon(true);
         t.start();
+    }
+
+    private static void runNow(int code, String param) throws Exception {
+        Bridge b = bridge;
+        Extras x = b == null ? null : b.extras();
+        switch (code) {
+            case Codes.ACTION_CLEAR_RECENTS: clearRecents(); break;
+            case Codes.ACTION_FORCE_CLOSE: forceCloseCurrent(); break;
+            case Codes.ACTION_PREVIOUS_APP:
+                exec("input", "keyevent", "KEYCODE_APP_SWITCH");
+                Thread.sleep(300);
+                exec("input", "keyevent", "KEYCODE_APP_SWITCH");
+                break;
+            case Codes.ACTION_SCREENSHOT: key(x, 99, "KEYCODE_SYSRQ"); break;
+            case Codes.ACTION_NOTIFICATIONS: exec("cmd", "statusbar", "expand-notifications"); break;
+            case Codes.ACTION_QUICK_SETTINGS: exec("cmd", "statusbar", "expand-settings"); break;
+            case Codes.ACTION_CLOSE_PANELS: exec("cmd", "statusbar", "collapse"); break;
+            case Codes.ACTION_TOGGLE_IME_SETTING: {
+                String v = exec("settings", "get", "secure", "show_ime_with_hard_keyboard").trim();
+                exec("settings", "put", "secure", "show_ime_with_hard_keyboard", "1".equals(v) ? "0" : "1");
+                break;
+            }
+            case Codes.ACTION_OPEN_APP: openApp(param); break;
+            case Codes.ACTION_TOGGLE_PC_MODE: if (b != null) b.setPcMode(!b.isPcMode()); break;
+            case Codes.ACTION_SLEEP: key(x, 142, "KEYCODE_SLEEP"); break;
+            case Codes.ACTION_BRIGHTNESS_UP: key(x, 225, "KEYCODE_BRIGHTNESS_UP"); break;
+            case Codes.ACTION_BRIGHTNESS_DOWN: key(x, 224, "KEYCODE_BRIGHTNESS_DOWN"); break;
+            case Codes.ACTION_PLAY_PAUSE: key(x, 164, "KEYCODE_MEDIA_PLAY_PAUSE"); break;
+            case Codes.ACTION_NEXT_TRACK: key(x, 163, "KEYCODE_MEDIA_NEXT"); break;
+            case Codes.ACTION_PREVIOUS_TRACK: key(x, 165, "KEYCODE_MEDIA_PREVIOUS"); break;
+            case Codes.ACTION_MUTE: key(x, 113, "KEYCODE_VOLUME_MUTE"); break;
+            case Codes.ACTION_MOONLIGHT_KEYBOARD: if (x != null) x.threeFingerTap(); break;
+        }
+    }
+
+    /** Presses a key on the virtual keyboard (fast), or falls back to the slower `input` tool. */
+    private static void key(Extras x, int evdevKey, String keyName) {
+        if (x != null) x.tap(evdevKey);
+        else exec("input", "keyevent", keyName);
+    }
+
+    private static String launcherPackage() {
+        String out = exec("cmd", "package", "resolve-activity", "--brief", "-a", "android.intent.action.MAIN",
+                "-c", "android.intent.category.HOME");
+        String[] lines = out.trim().split("\n");
+        String last = lines[lines.length - 1].trim();
+        return last.contains("/") ? last.substring(0, last.indexOf('/')) : "";
+    }
+
+    private static void forceCloseCurrent() {
+        String out = exec("dumpsys", "window", "displays");
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("mCurrentFocus=Window\\{[^}]*\\s([A-Za-z0-9_.]+)/").matcher(out);
+        String pkg = m.find() ? m.group(1) : null;
+        if (pkg == null) {
+            m = java.util.regex.Pattern.compile("mFocusedApp=.*?\\s([A-Za-z0-9_.]+)/").matcher(out);
+            pkg = m.find() ? m.group(1) : null;
+        }
+        if (pkg == null || pkg.equals(BuildConfig.APPLICATION_ID) || pkg.equals(launcherPackage())
+                || pkg.equals("com.android.systemui")) return;
+        exec("am", "force-stop", pkg);
+    }
+
+    private static void openApp(String param) {
+        String pkg = param.contains("|") ? param.substring(0, param.indexOf('|')) : param;
+        if (pkg.isEmpty()) return;
+        String out = exec("cmd", "package", "resolve-activity", "--brief", "-a", "android.intent.action.MAIN",
+                "-c", "android.intent.category.LAUNCHER", pkg);
+        String[] lines = out.trim().split("\n");
+        String comp = lines[lines.length - 1].trim();
+        if (comp.contains("/")) exec("am", "start", "-n", comp);
+        else exec("monkey", "-p", pkg, "-c", "android.intent.category.LAUNCHER", "1");
     }
 
     /**
@@ -69,12 +144,18 @@ final class Actions {
         exec("input", "keyevent", "KEYCODE_HOME");
     }
 
-    private static void exec(String... cmd) {
+    static String exec(String... cmd) {
         try {
             Process p = new ProcessBuilder(cmd).redirectErrorStream(true).start();
-            p.getInputStream().close();
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[8192];
+            int n;
+            java.io.InputStream in = p.getInputStream();
+            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
             p.waitFor();
-        } catch (Exception ignored) {
+            return out.toString("UTF-8");
+        } catch (Exception e) {
+            return "";
         }
     }
 }

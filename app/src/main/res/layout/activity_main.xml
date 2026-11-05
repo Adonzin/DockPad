@@ -207,6 +207,101 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
+        <!-- PC control mode -->
+        <com.google.android.material.card.MaterialCardView
+            style="?attr/materialCardViewOutlinedStyle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="PC control mode"
+                            android:textAppearance="?attr/textAppearanceTitleMedium" />
+
+                        <TextView
+                            android:id="@+id/pc_status"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Off"
+                            android:textAppearance="?attr/textAppearanceBodySmall"
+                            android:textColor="?attr/colorOnSurfaceVariant" />
+                    </LinearLayout>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/pc_toggle"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Turn on" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="Controllers become a mouse and keyboard, for Moonlight and other remote-desktop apps, or apps without controller support."
+                    android:textAppearance="?attr/textAppearanceBodySmall"
+                    android:textColor="?attr/colorOnSurfaceVariant" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:fontFamily="monospace"
+                    android:text="Right stick  pointer      Left stick  scroll\nA  left click   B  right click   R3  middle\nX  Backspace    Y  keyboard (Moonlight)\nStart  Enter   Select  Esc   Guide  Windows\nL1/R1  Alt+Tab (back/forward)\nL2  Ctrl   R2  Shift   L3  Tab   D-pad  arrows"
+                    android:textAppearance="?attr/textAppearanceBodySmall" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/pc_add_shortcut"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="Set a button combo to switch it on/off" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="Pointer speed"
+                    android:textAppearance="?attr/textAppearanceBodyMedium" />
+
+                <com.google.android.material.slider.Slider
+                    android:id="@+id/pc_speed"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:stepSize="0.25"
+                    android:valueFrom="0.25"
+                    android:valueTo="3.0" />
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/pc_left"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Move the pointer with the left stick" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
         <!-- Settings -->
         <com.google.android.material.card.MaterialCardView
             style="?attr/materialCardViewOutlinedStyle"

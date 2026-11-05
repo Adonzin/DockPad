@@ -105,13 +105,103 @@ final class ShortcutEditor {
     // ------------------------------------------------------------ editing
 
     void addNew() {
+        addNewWithAction(Codes.KEY_HOME);
+    }
+
+    /** Record buttons, with the action already filled in (e.g. "Toggle PC control mode"). */
+    void addNewWithAction(int action) {
         record((device, codes) -> {
             Shortcut s = new Shortcut();
             s.device = device;
             s.trigger = codes;
-            s.steps.add(new int[]{Codes.KEY_HOME});
+            s.steps.add(new int[]{action});
             edit(s, -1, device);
         });
+    }
+
+    // ------------------------------------------------------------ choosing outputs
+
+    interface Codes1 {
+        void onCodes(int[] codes);
+    }
+
+    /**
+     * Category first (controller button / keyboard key / system action), then the item.
+     * With multi = true, several buttons or keys can be pressed together.
+     */
+    private void pickOutputs(Shortcut s, boolean multi, Codes1 then) {
+        String[] cats = multi ? Codes.CATEGORIES
+                : new String[]{Codes.CATEGORIES[0], Codes.CATEGORIES[1], Codes.CATEGORIES[2], "Do nothing (block)"};
+        new MaterialAlertDialogBuilder(activity)
+                .setTitle("What should it do?")
+                .setItems(cats, (d, cat) -> {
+                    if (cat == 3) {
+                        then.onCodes(new int[0]);
+                        return;
+                    }
+                    String[] labels = Codes.CAT_LABELS[cat];
+                    int[] codes = Codes.CAT_CODES[cat];
+                    if (cat == 2 || !multi) {
+                        new MaterialAlertDialogBuilder(activity)
+                                .setTitle(Codes.CATEGORIES[cat])
+                                .setItems(labels, (d2, i) -> {
+                                    if (codes[i] == Codes.ACTION_OPEN_APP) {
+                                        pickApp(app -> {
+                                            s.param = app;
+                                            then.onCodes(new int[]{codes[i]});
+                                        });
+                                    } else {
+                                        then.onCodes(new int[]{codes[i]});
+                                    }
+                                })
+                                .setNegativeButton("Back", (d2, w) -> pickOutputs(s, multi, then))
+                                .show();
+                        return;
+                    }
+                    boolean[] checked = new boolean[labels.length];
+                    new MaterialAlertDialogBuilder(activity)
+                            .setTitle("Press together (pick one or more)")
+                            .setMultiChoiceItems(labels, checked, (d2, i, c) -> checked[i] = c)
+                            .setPositiveButton("Add", (d2, w) -> {
+                                List<Integer> sel = new ArrayList<>();
+                                for (int i = 0; i < labels.length; i++) if (checked[i]) sel.add(codes[i]);
+                                if (sel.isEmpty()) return;
+                                int[] out = new int[sel.size()];
+                                for (int i = 0; i < out.length; i++) out[i] = sel.get(i);
+                                then.onCodes(out);
+                            })
+                            .setNegativeButton("Back", (d2, w) -> pickOutputs(s, multi, then))
+                            .show();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    interface AppResult {
+        void onApp(String packageAndLabel);
+    }
+
+    private void pickApp(AppResult then) {
+        android.content.pm.PackageManager pm = activity.getPackageManager();
+        android.content.Intent main = new android.content.Intent(android.content.Intent.ACTION_MAIN)
+                .addCategory(android.content.Intent.CATEGORY_LAUNCHER);
+        List<android.content.pm.ResolveInfo> apps = pm.queryIntentActivities(main, 0);
+        List<String[]> list = new ArrayList<>();
+        for (android.content.pm.ResolveInfo r : apps) {
+            String pkg = r.activityInfo.packageName;
+            if (pkg.equals(activity.getPackageName())) continue;
+            boolean dup = false;
+            for (String[] e : list) if (e[0].equals(pkg)) dup = true;
+            if (!dup) list.add(new String[]{pkg, String.valueOf(r.loadLabel(pm))});
+        }
+        list.sort((a, b) -> a[1].compareToIgnoreCase(b[1]));
+        String[] names = new String[list.size()];
+        for (int i = 0; i < names.length; i++) names[i] = list.get(i)[1];
+        new MaterialAlertDialogBuilder(activity)
+                .setTitle("Open which app?")
+                .setItems(names, (d, i) -> then.onApp(list.get(i)[0] + "|" + list.get(i)[1]))
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     void editExisting(int index) {
@@ -174,18 +264,14 @@ final class ShortcutEditor {
         }));
 
         MaterialButton choose = v.findViewById(R.id.choose_action);
-        choose.setOnClickListener(x -> new MaterialAlertDialogBuilder(activity)
-                .setTitle("What should it do?")
-                .setItems(Codes.OUTPUT_LABELS, (d, which) -> {
-                    s.steps.clear();
-                    int code = Codes.OUTPUT_CODES[which];
-                    if (code != -1) s.steps.add(new int[]{code});
-                    refresh.run();
-                })
-                .show());
+        choose.setOnClickListener(x -> pickOutputs(s, false, codes -> {
+            s.steps.clear();
+            if (codes.length > 0) s.steps.add(codes);
+            refresh.run();
+        }));
 
         MaterialButton macro = v.findViewById(R.id.build_macro);
-        macro.setOnClickListener(x -> buildMacro(s.steps, steps -> {
+        macro.setOnClickListener(x -> buildMacro(s, steps -> {
             s.steps.clear();
             s.steps.addAll(steps);
             refresh.run();
@@ -228,9 +314,9 @@ final class ShortcutEditor {
         void onSteps(List<int[]> steps);
     }
 
-    private void buildMacro(List<int[]> initial, StepsResult result) {
+    private void buildMacro(Shortcut s, StepsResult result) {
         List<int[]> steps = new ArrayList<>();
-        for (int[] st : initial) steps.add(st.clone());
+        for (int[] st : s.steps) steps.add(st.clone());
 
         LinearLayout box = new LinearLayout(activity);
         box.setOrientation(LinearLayout.VERTICAL);
@@ -263,7 +349,7 @@ final class ShortcutEditor {
             } else {
                 StringBuilder b = new StringBuilder();
                 for (int i = 0; i < steps.size(); i++) {
-                    b.append(i + 1).append(". ").append(Shortcut.stepLabel(steps.get(i))).append('\n');
+                    b.append(i + 1).append(". ").append(s.stepLabel(steps.get(i))).append('\n');
                 }
                 list.setText(b.toString().trim());
             }
@@ -271,25 +357,11 @@ final class ShortcutEditor {
         };
         refresh.run();
 
-        String[] labels = new String[Codes.OUTPUT_LABELS.length - 1]; // without "Do nothing"
-        System.arraycopy(Codes.OUTPUT_LABELS, 0, labels, 0, labels.length);
-        add.setOnClickListener(x -> {
-            boolean[] checked = new boolean[labels.length];
-            new MaterialAlertDialogBuilder(activity)
-                    .setTitle("Buttons to press together")
-                    .setMultiChoiceItems(labels, checked, (d, which, isChecked) -> checked[which] = isChecked)
-                    .setPositiveButton("Add", (d, w) -> {
-                        List<Integer> sel = new ArrayList<>();
-                        for (int i = 0; i < labels.length; i++) if (checked[i]) sel.add(Codes.OUTPUT_CODES[i]);
-                        if (sel.isEmpty()) return;
-                        int[] st = new int[sel.size()];
-                        for (int i = 0; i < st.length; i++) st[i] = sel.get(i);
-                        steps.add(st);
-                        refresh.run();
-                    })
-                    .setNegativeButton("Cancel", null)
-                    .show();
-        });
+        add.setOnClickListener(x -> pickOutputs(s, true, codes -> {
+            if (codes.length == 0) return;
+            steps.add(codes);
+            refresh.run();
+        }));
         undo.setOnClickListener(x -> {
             if (!steps.isEmpty()) steps.remove(steps.size() - 1);
             refresh.run();

@@ -39,22 +39,74 @@ public final class Codes {
     public static final int ABS_MT_POSITION_X = 0x35;
     public static final int KEY_VOLUMEDOWN = 0x72, KEY_VOLUMEUP = 0x73, KEY_APPSELECT = 0x244;
 
-    /** Special actions (not buttons) are negative codes from -100 down. */
-    public static final int ACTION_CLEAR_RECENTS = -100;
+    // ------------------------------------------------------------ shortcut outputs
+    // >= 0 and < KB : a button on the (virtual) controller (evdev code)
+    // KB + code      : a key on DockPad's virtual keyboard (evdev key code)
+    // <= -100        : a system action
 
-    /** Things a button can be remapped to: label + evdev key code on the virtual controller (-1 = nothing). */
-    public static final String[] OUTPUT_LABELS = {"Home", "Back", "Recent apps", "Volume up", "Volume down",
-            "A", "B", "X", "Y", "L1", "R1", "L2", "R2", "Start", "Select", "L3 (stick press)", "R3 (stick press)",
-            "Guide / Mode", "D-pad up", "D-pad down", "D-pad left", "D-pad right", "Clear all recent apps",
-            "Do nothing"};
-    public static final int[] OUTPUT_CODES = {KEY_HOME, KEY_BACK, KEY_APPSELECT, KEY_VOLUMEUP, KEY_VOLUMEDOWN,
-            BTN_SOUTH, BTN_EAST, BTN_NORTH, BTN_WEST, BTN_TL, BTN_TR, BTN_TL2, BTN_TR2, BTN_START, BTN_SELECT,
-            BTN_THUMBL, BTN_THUMBR, BTN_MODE, BTN_DPAD_UP, BTN_DPAD_DOWN, BTN_DPAD_LEFT, BTN_DPAD_RIGHT,
-            ACTION_CLEAR_RECENTS, -1};
+    public static final int KB = 0x10000;
+
+    public static boolean isKeyboardOutput(int c) {
+        return c >= KB && c < KB + 0x300;
+    }
+
+    public static boolean isAction(int c) {
+        return c <= -100;
+    }
+
+    public static final int ACTION_CLEAR_RECENTS = -100, ACTION_FORCE_CLOSE = -101, ACTION_PREVIOUS_APP = -102,
+            ACTION_SCREENSHOT = -103, ACTION_NOTIFICATIONS = -104, ACTION_QUICK_SETTINGS = -105,
+            ACTION_CLOSE_PANELS = -106, ACTION_TOGGLE_IME_SETTING = -107, ACTION_OPEN_APP = -108,
+            ACTION_TOGGLE_PC_MODE = -109, ACTION_SLEEP = -110, ACTION_BRIGHTNESS_UP = -111,
+            ACTION_BRIGHTNESS_DOWN = -112, ACTION_PLAY_PAUSE = -113, ACTION_NEXT_TRACK = -114,
+            ACTION_PREVIOUS_TRACK = -115, ACTION_MUTE = -116, ACTION_MOONLIGHT_KEYBOARD = -117;
+
+    public static final String[] CATEGORIES = {"Controller button", "Keyboard key", "System action"};
+
+    public static final String[][] CAT_LABELS = {
+            {"A", "B", "X", "Y", "L1", "R1", "L2", "R2", "Start", "Select", "L3 (stick press)", "R3 (stick press)",
+                    "Guide / Mode", "D-pad up", "D-pad down", "D-pad left", "D-pad right",
+                    "Home", "Back", "Recent apps", "Volume up", "Volume down"},
+            {"Esc", "Enter", "Tab", "Space", "Backspace", "Delete", "Arrow up", "Arrow down", "Arrow left",
+                    "Arrow right", "Home (key)", "End", "Page up", "Page down", "Insert", "Ctrl", "Shift", "Alt",
+                    "Windows", "Print Screen", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11",
+                    "F12", "A (key)", "B (key)", "C (key)", "D (key)", "E (key)", "F (key)", "G (key)", "H (key)",
+                    "I (key)", "J (key)", "K (key)", "L (key)", "M (key)", "N (key)", "O (key)", "P (key)",
+                    "Q (key)", "R (key)", "S (key)", "T (key)", "U (key)", "V (key)", "W (key)", "X (key)",
+                    "Y (key)", "Z (key)", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"},
+            {"Clear all recent apps", "Force close the current app", "Switch to the previous app", "Screenshot",
+                    "Open notifications", "Open quick settings", "Close notifications / quick settings",
+                    "Toggle on-screen keyboard (with controllers connected)", "Open an app…",
+                    "Toggle PC control mode", "Sleep (screen off)", "Brightness up", "Brightness down",
+                    "Play / pause", "Next track", "Previous track", "Mute",
+                    "Moonlight: show keyboard (three-finger tap)"}};
+
+    public static final int[][] CAT_CODES = {
+            {BTN_SOUTH, BTN_EAST, BTN_NORTH, BTN_WEST, BTN_TL, BTN_TR, BTN_TL2, BTN_TR2, BTN_START, BTN_SELECT,
+                    BTN_THUMBL, BTN_THUMBR, BTN_MODE, BTN_DPAD_UP, BTN_DPAD_DOWN, BTN_DPAD_LEFT, BTN_DPAD_RIGHT,
+                    KEY_HOME, KEY_BACK, KEY_APPSELECT, KEY_VOLUMEUP, KEY_VOLUMEDOWN},
+            {KB + 1, KB + 28, KB + 15, KB + 57, KB + 14, KB + 111, KB + 103, KB + 108, KB + 105, KB + 106,
+                    KB + 102, KB + 107, KB + 104, KB + 109, KB + 110, KB + 29, KB + 42, KB + 56, KB + 125, KB + 99,
+                    KB + 59, KB + 60, KB + 61, KB + 62, KB + 63, KB + 64, KB + 65, KB + 66, KB + 67, KB + 68,
+                    KB + 87, KB + 88,
+                    KB + 30, KB + 48, KB + 46, KB + 32, KB + 18, KB + 33, KB + 34, KB + 35, KB + 23, KB + 36,
+                    KB + 37, KB + 38, KB + 50, KB + 49, KB + 24, KB + 25, KB + 16, KB + 19, KB + 31, KB + 20,
+                    KB + 22, KB + 47, KB + 17, KB + 45, KB + 21, KB + 44,
+                    KB + 11, KB + 2, KB + 3, KB + 4, KB + 5, KB + 6, KB + 7, KB + 8, KB + 9, KB + 10},
+            {ACTION_CLEAR_RECENTS, ACTION_FORCE_CLOSE, ACTION_PREVIOUS_APP, ACTION_SCREENSHOT,
+                    ACTION_NOTIFICATIONS, ACTION_QUICK_SETTINGS, ACTION_CLOSE_PANELS, ACTION_TOGGLE_IME_SETTING,
+                    ACTION_OPEN_APP, ACTION_TOGGLE_PC_MODE, ACTION_SLEEP, ACTION_BRIGHTNESS_UP,
+                    ACTION_BRIGHTNESS_DOWN, ACTION_PLAY_PAUSE, ACTION_NEXT_TRACK, ACTION_PREVIOUS_TRACK,
+                    ACTION_MUTE, ACTION_MOONLIGHT_KEYBOARD}};
 
     public static String outputLabel(int code) {
-        for (int i = 0; i < OUTPUT_CODES.length; i++) if (OUTPUT_CODES[i] == code) return OUTPUT_LABELS[i];
-        return String.format("key 0x%x", code);
+        for (int c = 0; c < CAT_CODES.length; c++) {
+            for (int i = 0; i < CAT_CODES[c].length; i++) {
+                if (CAT_CODES[c][i] == code) return CAT_LABELS[c][i];
+            }
+        }
+        if (isKeyboardOutput(code)) return String.format("key 0x%x", code - KB);
+        return String.format("button 0x%x", code);
     }
 
     /** Human name of a raw evdev key code, as a controller reports it. */

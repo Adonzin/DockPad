@@ -94,4 +94,14 @@ public class BridgeService extends IBridge.Stub {
             return "";
         }
     }
+
+    @Override
+    public void setPcMode(boolean on) {
+        bridge.setPcMode(on);
+    }
+
+    @Override
+    public void setPcSettings(String spec) {
+        bridge.setPcSettings(spec);
+    }
 }

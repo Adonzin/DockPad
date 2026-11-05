@@ -29,7 +29,7 @@ final class VirtualPad implements PadOut {
     }
 
     static boolean isOurs(String deviceName) {
-        return deviceName != null && deviceName.startsWith(NAME);
+        return deviceName != null && deviceName.startsWith("DockPad ");
     }
 
     @Override
@@ -43,6 +43,11 @@ final class VirtualPad implements PadOut {
     private volatile String error = "";
 
     boolean create(EvdevDevice clone, String name) {
+        return createWithJson(name, registerJson(clone, name));
+    }
+
+    /** Creates any kind of virtual device from a uinput "register" command. */
+    boolean createWithJson(String name, String registerJson) {
         this.name = name;
         try {
             process = new ProcessBuilder("uinput", "-").redirectErrorStream(true).start();
@@ -60,7 +65,7 @@ final class VirtualPad implements PadOut {
             }, "DockPad-uinput-log");
             reader.setDaemon(true);
             reader.start();
-            send(registerJson(clone, name));
+            send(registerJson);
             return true;
         } catch (Throwable t) {
             error = "could not start Android's uinput tool: " + t;
@@ -103,6 +108,25 @@ final class VirtualPad implements PadOut {
                 + ",{\"type\":101,\"data\":[" + keys + "]}"  // UI_SET_KEYBIT
                 + ",{\"type\":103,\"data\":[" + absBits + "]}" // UI_SET_ABSBIT
                 + "],\"abs_info\":[" + absInfo + "]}";
+    }
+
+    static String json(String name, int vid, int pid, int[] evBits, int[] keyBits, int[] relBits, int[] absBits,
+                       String absInfo, int[] propBits) {
+        StringBuilder c = new StringBuilder();
+        c.append("{\"type\":100,\"data\":").append(arr(evBits)).append('}');
+        if (keyBits.length > 0) c.append(",{\"type\":101,\"data\":").append(arr(keyBits)).append('}');
+        if (relBits.length > 0) c.append(",{\"type\":102,\"data\":").append(arr(relBits)).append('}');
+        if (absBits.length > 0) c.append(",{\"type\":103,\"data\":").append(arr(absBits)).append('}');
+        if (propBits.length > 0) c.append(",{\"type\":110,\"data\":").append(arr(propBits)).append('}');
+        return "{\"id\":1,\"command\":\"register\",\"name\":\"" + name + "\",\"vid\":" + vid + ",\"pid\":" + pid
+                + ",\"bus\":\"usb\",\"configuration\":[" + c + "]"
+                + (absInfo.isEmpty() ? "" : ",\"abs_info\":[" + absInfo + "]") + "}";
+    }
+
+    private static String arr(int[] a) {
+        StringBuilder b = new StringBuilder("[");
+        for (int i = 0; i < a.length; i++) b.append(i == 0 ? "" : ",").append(a[i]);
+        return b.append(']').toString();
     }
 
     private static List<Integer> sorted(java.util.Collection<Integer> c) {

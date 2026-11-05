@@ -139,6 +139,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         findViewById(R.id.open_tester).setOnClickListener(v -> startActivity(new Intent(this, TesterActivity.class)));
         findViewById(R.id.open_diagnostics).setOnClickListener(v -> showDiagnostics());
         findViewById(R.id.open_reset).setOnClickListener(v -> showReset());
+        setupPcCard();
         ((TextView) findViewById(R.id.version)).setText("DockPad " + BuildConfig.VERSION_NAME);
 
         buildSettings();
@@ -516,6 +517,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
                     JSONObject o = j == null ? null : new JSONObject(j);
                     boolean running = o != null && o.optBoolean("running");
                     renderBridge(running, o);
+                    renderPc(running, running && o.optBoolean("pcMode"));
                     String ctrls = o == null ? "" : o.optJSONArray("controllers") + "|" + o.optJSONArray("players");
                     if (!ctrls.equals(lastControllersJson)) {
                         lastControllersJson = ctrls;
@@ -544,7 +546,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         int n = 0;
         if (ctrls != null) for (int i = 0; i < ctrls.length(); i++) {
             JSONObject c = ctrls.optJSONObject(i);
-            if (c != null && !c.optBoolean("touchpad")) n++;
+            if (c != null && !c.optBoolean("touchpad") && !c.optBoolean("builtIn")) n++;
         }
         String err = o == null ? "" : o.optString("error", "");
         if (o != null && o.isNull("builtIn")) {
@@ -596,6 +598,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
                 JSONObject c = ctrls.optJSONObject(i);
                 if (c == null) continue;
                 boolean builtIn = c.optBoolean("builtIn");
+                if (builtIn) continue; // shown in its own row above
                 boolean touchpad = c.optBoolean("touchpad");
                 String name = c.optString("name");
                 String sub = builtIn ? "Built-in controls" : touchpad ? "Touchpad: click works as a button"
@@ -643,6 +646,50 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         else sub.setText(subtitle);
         parent.addView(row);
         return row;
+    }
+
+    // ------------------------------------------------------------------ PC control mode
+
+    private boolean lastPcMode;
+
+    private void setupPcCard() {
+        MaterialButton toggle = findViewById(R.id.pc_toggle);
+        toggle.setOnClickListener(v -> {
+            IBridge b = bridge;
+            if (b == null || !lastRunning) {
+                Toast.makeText(this, "Turn DockPad on first.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            boolean on = !lastPcMode;
+            bg.execute(() -> {
+                try {
+                    b.setPcMode(on);
+                } catch (Exception ignored) {
+                }
+            });
+        });
+        findViewById(R.id.pc_add_shortcut).setOnClickListener(v ->
+                editor.addNewWithAction(com.adonzin.dockpad.core.Codes.ACTION_TOGGLE_PC_MODE));
+        com.google.android.material.slider.Slider speed = findViewById(R.id.pc_speed);
+        speed.setValue(Math.max(0.25f, Math.min(3f, Math.round(prefs.pcSpeed() * 4) / 4f)));
+        speed.addOnChangeListener((sl, value, fromUser) -> {
+            if (!fromUser) return;
+            prefs.pcSpeed(value);
+            pushSettings();
+        });
+        MaterialSwitch left = findViewById(R.id.pc_left);
+        left.setChecked(prefs.pcPointerLeft());
+        left.setOnCheckedChangeListener((b, c) -> {
+            prefs.pcPointerLeft(c);
+            pushSettings();
+        });
+    }
+
+    private void renderPc(boolean running, boolean pcOn) {
+        lastPcMode = pcOn;
+        ((TextView) findViewById(R.id.pc_status)).setText(!running ? "Available when DockPad is on"
+                : pcOn ? "On: controllers act as a mouse and keyboard" : "Off");
+        ((MaterialButton) findViewById(R.id.pc_toggle)).setText(pcOn ? "Turn off" : "Turn on");
     }
 
     // ------------------------------------------------------------------ built-in controls

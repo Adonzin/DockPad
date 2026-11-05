@@ -16,6 +16,8 @@ public final class Shortcut {
     public int[] trigger = new int[0]; // raw evdev key codes, in the order they are pressed
     public boolean hold;              // false: when pressed, true: when held for half a second
     public List<int[]> steps = new ArrayList<>(); // empty = do nothing (block the buttons)
+    /** Extra data for some actions: for "Open an app", "package|App name". */
+    public String param = "";
 
     public Shortcut copy() {
         Shortcut s = new Shortcut();
@@ -23,6 +25,7 @@ public final class Shortcut {
         s.trigger = trigger.clone();
         s.hold = hold;
         for (int[] st : steps) s.steps.add(st.clone());
+        s.param = param;
         return s;
     }
 
@@ -59,9 +62,13 @@ public final class Shortcut {
         return b.toString();
     }
 
-    public static String stepLabel(int[] step) {
+    public String stepLabel(int[] step) {
         StringBuilder b = new StringBuilder();
-        for (int o : step) b.append(b.length() == 0 ? "" : " + ").append(Codes.outputLabel(o));
+        for (int o : step) {
+            b.append(b.length() == 0 ? "" : " + ");
+            if (o == Codes.ACTION_OPEN_APP && param.contains("|")) b.append("Open ").append(param.substring(param.indexOf('|') + 1));
+            else b.append(Codes.outputLabel(o));
+        }
         return b.toString();
     }
 
@@ -74,18 +81,21 @@ public final class Shortcut {
             if (st.length() > 0) st.append(';');
             st.append(csv(step));
         }
-        return device + "\t" + csv(trigger) + "\t" + (hold ? "H" : "P") + "\t" + (st.length() == 0 ? "-" : st);
+        String p = param.replace("\t", " ").replace("\n", " ");
+        return device + "\t" + csv(trigger) + "\t" + (hold ? "H" : "P") + "\t" + (st.length() == 0 ? "-" : st)
+                + (p.isEmpty() ? "" : "\t" + p);
     }
 
     public static Shortcut decode(String line) {
         String[] f = line.split("\t");
-        if (f.length != 4) return null;
+        if (f.length != 4 && f.length != 5) return null;
         try {
             Shortcut s = new Shortcut();
             s.device = f[0];
             s.trigger = parseCsv(f[1]);
             if (s.trigger.length == 0) return null;
             s.hold = "H".equals(f[2]);
+            if (f.length == 5) s.param = f[4];
             if (!"-".equals(f[3])) {
                 for (String step : f[3].split(";")) {
                     int[] st = parseCsv(step);

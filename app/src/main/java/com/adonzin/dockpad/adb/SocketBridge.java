@@ -147,4 +147,14 @@ public final class SocketBridge implements IBridge {
         Object r = rcTimeout("identifyController", timeoutMs + 5000, timeoutMs);
         return r == null ? "" : r.toString();
     }
+
+    @Override
+    public void setPcMode(boolean on) throws RemoteException {
+        rc("setPcMode", on);
+    }
+
+    @Override
+    public void setPcSettings(String spec) throws RemoteException {
+        rc("setPcSettings", spec);
+    }
 }

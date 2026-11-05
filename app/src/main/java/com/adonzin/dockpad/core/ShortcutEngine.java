@@ -27,8 +27,8 @@ public final class ShortcutEngine {
     public static final long HOLD_MS = 500, STEP_DOWN_MS = 60, STEP_GAP_MS = 40;
 
     public interface Out {
-        /** Press/release an output key on the virtual controller (evdev code). */
-        void output(int code, boolean down);
+        /** Press/release an output (see Codes: controller button, keyboard key or action). */
+        void output(int code, boolean down, Shortcut from);
         /** Let a button press through to the game as if no shortcut existed. */
         void forward(int code, boolean down);
     }
@@ -46,6 +46,7 @@ public final class ShortcutEngine {
     private final Set<Integer> down = new HashSet<>();
     private final Set<Integer> consumed = new HashSet<>();
     private final Map<Integer, int[]> heldOutputs = new HashMap<>(); // trigger key -> outputs held
+    private final Map<Integer, Shortcut> outputFrom = new HashMap<>();
     private final Map<Integer, Integer> outputCount = new HashMap<>();
     private final List<Runnable> macroTimers = new ArrayList<>();
 
@@ -116,7 +117,7 @@ public final class ShortcutEngine {
                 Shortcut press = pendingPress;
                 cancelPending();
                 if (!fired) {
-                    if (press != null) playMacro(press.steps); // short press of a press+hold pair
+                    if (press != null) playMacro(press); // short press of a press+hold pair
                     else {
                         out.forward(code, true);
                         out.forward(code, false);
@@ -125,7 +126,7 @@ public final class ShortcutEngine {
                 }
             }
             int[] held = heldOutputs.remove(code);
-            if (held != null) for (int o : held) release(o);
+            if (held != null) for (int o : held) release(o, null);
             return true;
         }
     }
@@ -134,39 +135,43 @@ public final class ShortcutEngine {
         if (s.steps.size() == 1) {
             int[] outs = s.steps.get(0);
             heldOutputs.put(key, outs);
-            for (int o : outs) press(o);
+            for (int o : outs) press(o, s);
         } else {
-            playMacro(s.steps);
+            playMacro(s);
         }
     }
 
-    private void playMacro(List<int[]> steps) {
+    private void playMacro(Shortcut s) {
+        List<int[]> steps = s.steps;
         if (macroTimers.size() > 200) macroTimers.subList(0, 100).clear(); // old, finished timers
         long t = 0;
         for (int[] step : steps) {
             final int[] st = step;
             macroTimers.add(scheduler.schedule(() -> {
-                for (int o : st) press(o);
+                for (int o : st) press(o, s);
             }, t));
             t += STEP_DOWN_MS;
             macroTimers.add(scheduler.schedule(() -> {
-                for (int o : st) release(o);
+                for (int o : st) release(o, s);
             }, t));
             t += STEP_GAP_MS;
         }
     }
 
-    private void press(int o) {
+    private void press(int o, Shortcut s) {
         int c = outputCount.getOrDefault(o, 0);
         outputCount.put(o, c + 1);
-        if (c == 0) out.output(o, true);
+        if (c == 0) {
+            outputFrom.put(o, s);
+            out.output(o, true, s);
+        }
     }
 
-    private void release(int o) {
+    private void release(int o, Shortcut s) {
         int c = outputCount.getOrDefault(o, 0);
         if (c <= 0) return;
         outputCount.put(o, c - 1);
-        if (c == 1) out.output(o, false);
+        if (c == 1) out.output(o, false, outputFrom.remove(o));
     }
 
     private void cancelPending() {
@@ -183,9 +188,10 @@ public final class ShortcutEngine {
         for (Runnable r : macroTimers) r.run();
         macroTimers.clear();
         for (Map.Entry<Integer, Integer> e : outputCount.entrySet()) {
-            if (e.getValue() > 0) out.output(e.getKey(), false);
+            if (e.getValue() > 0) out.output(e.getKey(), false, outputFrom.get(e.getKey()));
         }
         outputCount.clear();
+        outputFrom.clear();
         heldOutputs.clear();
         down.clear();
         consumed.clear();

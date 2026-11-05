@@ -16,4 +16,6 @@ interface IBridge {
     void setLayouts(String spec) = 12;
     void setBuiltIn(String spec) = 13;
     String identifyController(int timeoutMs) = 14;
+    void setPcMode(boolean on) = 15;
+    void setPcSettings(String spec) = 16;
 }

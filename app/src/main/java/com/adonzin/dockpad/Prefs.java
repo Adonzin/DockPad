@@ -75,8 +75,15 @@ final class Prefs {
     String builtIn() { return p.getString("builtIn", ""); }
     void builtIn(String v) { p.edit().putString("builtIn", v).apply(); }
 
+    float pcSpeed() { return p.getFloat("pcSpeed", 1f); }
+    void pcSpeed(float v) { p.edit().putFloat("pcSpeed", v).apply(); }
+
+    boolean pcPointerLeft() { return p.getBoolean("pcPointerLeft", false); }
+    void pcPointerLeft(boolean v) { p.edit().putBoolean("pcPointerLeft", v).apply(); }
+
     void applyTo(IBridge b, boolean startIfWanted) throws Exception {
         b.setBuiltIn(builtIn());
+        b.setPcSettings(pcSpeed() + "," + pcPointerLeft());
         b.setLayouts(layoutsSpec());
         b.setMultiplayer(multiplayer());
         b.setTouchpadAsButton(touchpadAsButton());

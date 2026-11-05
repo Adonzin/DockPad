@@ -221,7 +221,50 @@ final class Bridge {
     synchronized void stop() {
         running = false;
         if (scanner != null) scanner.interrupt();
+        pcModeOn = false;
+        pc.setActive(false);
         teardown();
+        extras.close();
+    }
+
+    // ---------------------------------------------------------------- PC control mode
+
+    private final Extras extras = new Extras();
+    private final PcMode pc = new PcMode(extras);
+    private volatile boolean pcModeOn;
+
+    {
+        Actions.bridge = this;
+    }
+
+    Extras extras() {
+        return extras;
+    }
+
+    boolean isPcMode() {
+        return pcModeOn;
+    }
+
+    void setPcMode(boolean on) {
+        if (on == pcModeOn || (on && !running)) return;
+        pcModeOn = on;
+        List<Source> list;
+        synchronized (this) {
+            list = new ArrayList<>(sources.values());
+        }
+        for (Source s : list) s.modeChanged(); // let go of anything held in the other mode
+        pc.setActive(on);
+        lastDevList = ""; // the built-in controls are taken over only in PC mode: rescan
+        Log.i(TAG, "PC control mode " + (on ? "on" : "off"));
+    }
+
+    /** "speed,pointerOnLeft" e.g. "1.0,false" */
+    void setPcSettings(String spec) {
+        try {
+            String[] f = spec.split(",");
+            pc.settings(Float.parseFloat(f[0]), f.length > 1 && Boolean.parseBoolean(f[1]));
+        } catch (Exception ignored) {
+        }
     }
 
     private synchronized void teardown() {
@@ -247,6 +290,7 @@ final class Bridge {
             o.put("builtIn", target == null ? JSONObject.NULL : target.name);
             o.put("builtInHow", builtInHow);
             o.put("multiplayer", multiplayer);
+            o.put("pcMode", pcModeOn);
             o.put("error", lastError);
             JSONArray players = new JSONArray();
             for (Slot sl : slots) {
@@ -281,6 +325,7 @@ final class Bridge {
         b.append("Bridge: ").append(running ? "RUNNING" : "stopped").append('\n');
         EvdevDevice t = target;
         b.append("Built-in controls: ").append(t == null ? "not found" : t.name + " [" + t.id() + "]").append('\n');
+        b.append("PC control mode: ").append(pcModeOn ? "ON" : "off").append('\n');
         b.append("Multiplayer: ").append(multiplayer ? "on" : "off (everything is player 1)").append('\n');
         if (slots.isEmpty()) b.append("Virtual controller: not created\n");
         for (Slot sl : slots) {
@@ -482,7 +527,7 @@ final class Bridge {
             Set<String> present = new HashSet<>();
             for (EvdevDevice d : devs) present.add(d.path);
             for (Source s : new ArrayList<>(sources.values())) {
-                boolean unwanted = s.dev.path.equals(target.path) || (s.touchpad && !touchpadAsButton);
+                boolean unwanted = (s.touchpad && !touchpadAsButton) || (s.builtIn && s.wantGrab != pcModeOn);
                 if (!s.alive || !present.contains(s.dev.path) || unwanted) {
                     s.close();
                     sources.remove(s.dev.path);
@@ -494,7 +539,6 @@ final class Bridge {
             for (EvdevDevice d : devs) {
                 boolean touchpad = touchpadAsButton && d.isControllerTouchpad();
                 if (!(d.isGamepad() || touchpad) || VirtualPad.isOurs(d.name) || sources.containsKey(d.path)) continue;
-                if (d.path.equals(target.path)) continue; // the built-in controls work natively
                 fresh.add(d);
             }
             fresh.sort((a, b) -> Integer.compare(eventNumber(a.path), eventNumber(b.path)));
@@ -509,7 +553,7 @@ final class Bridge {
                     else index = nextFreePlayerIndex();
                     Slot sl = slot(index);
                     if (sl == null) continue;
-                    Source s = new Source(d, sl.encoder, sl.player);
+                    Source s = new Source(d, sl.encoder, sl.player, d.path.equals(target.path));
                     sources.put(d.path, s);
                     s.start();
                 }
@@ -530,7 +574,7 @@ final class Bridge {
         if (!multiplayer) return 0;
         Set<Integer> used = new HashSet<>();
         for (Source s : sources.values()) {
-            if (s.touchpad) continue;
+            if (s.touchpad || s.builtIn) continue;
             used.add(s.player - 1);
         }
         for (int i = 0; i < MAX_PLAYERS; i++) if (!used.contains(i)) return i;
@@ -597,8 +641,10 @@ final class Bridge {
         final EvdevDevice dev;
         final TargetEncoder sink;
         final int player;
-        volatile Mapper mapper;
+        volatile Mapper mapper, pcMapper;
         final boolean touchpad;
+        /** The built-in controls: only read (for shortcuts) normally, taken over in PC mode. */
+        final boolean builtIn, wantGrab;
         volatile boolean alive = true;
         volatile String hideMethod = "pending";
         final AtomicLong eventsRead = new AtomicLong();
@@ -608,10 +654,12 @@ final class Bridge {
         private final Set<Integer> swallowed = new HashSet<>();
         private ShortcutEngine engine;
 
-        Source(EvdevDevice dev, TargetEncoder sink, int player) {
+        Source(EvdevDevice dev, TargetEncoder sink, int player, boolean builtIn) {
             this.dev = dev;
             this.sink = sink;
             this.player = player;
+            this.builtIn = builtIn;
+            this.wantGrab = !builtIn || pcModeOn;
             this.touchpad = dev.isControllerTouchpad();
         }
 
@@ -624,8 +672,10 @@ final class Bridge {
         private void readLoop() {
             try {
                 in = new FileInputStream(dev.path);
-                String grabErr = Hidden.grab(in.getFD());
-                if (grabErr == null) {
+                String grabErr = wantGrab ? Hidden.grab(in.getFD()) : "not taken over";
+                if (!wantGrab) {
+                    hideMethod = "no (works as normal)";
+                } else if (grabErr == null) {
                     hideMethod = "yes";
                 } else {
                     InputDevice ad = findAndroidDevice(dev);
@@ -638,6 +688,7 @@ final class Bridge {
                 }
                 synchronized (this) {
                     mapper = new Mapper(dev, sink);
+                    pcMapper = new Mapper(dev, pc.sink());
                     buildEngine();
                 }
                 Log.i(TAG, "Feeding " + dev + " — " + mapper.layoutDescription + ", exclusive: " + hideMethod);
@@ -677,7 +728,7 @@ final class Bridge {
                                 }
                                 if (handleKey(code, value)) continue;
                             }
-                            mapper.onEvent(type, code, value);
+                            deliver(type, code, value);
                         }
                     }
                 }
@@ -688,12 +739,34 @@ final class Bridge {
             }
         }
 
+        /** Sends an event to the game (as player N) or, in PC mode, to the mouse/keyboard. */
+        private void deliver(int type, int code, int value) {
+            if (pcModeOn) {
+                if (wantGrab) pcMapper.onEvent(type, code, value);
+            } else if (!builtIn) {
+                mapper.onEvent(type, code, value); // the built-in controls already reach apps by themselves
+            }
+        }
+
+        synchronized void modeChanged() {
+            try {
+                if (mapper != null) mapper.releaseAll();
+                if (pcMapper != null) pcMapper.releaseAll();
+                if (engine != null) engine.releaseAll();
+            } catch (Throwable ignored) {
+            }
+        }
+
         private void buildEngine() {
             engine = new ShortcutEngine(shortcuts, dev.name, new ShortcutEngine.Out() {
                 @Override
-                public void output(int code, boolean down) {
-                    if (Actions.isAction(code)) {
-                        if (down) Actions.run(code);
+                public void output(int code, boolean down, Shortcut from) {
+                    if (Codes.isAction(code)) {
+                        if (down) Actions.run(code, from == null ? "" : from.param, null);
+                        return;
+                    }
+                    if (Codes.isKeyboardOutput(code)) {
+                        extras.key(code - Codes.KB, down);
                         return;
                     }
                     sink.rawKey(code, down);
@@ -701,7 +774,7 @@ final class Bridge {
 
                 @Override
                 public void forward(int code, boolean down) {
-                    if (mapper != null) mapper.onEvent(Codes.EV_KEY, code, down ? 1 : 0);
+                    if (mapper != null) deliver(Codes.EV_KEY, code, down ? 1 : 0);
                 }
             }, (r, ms) -> {
                 ScheduledFuture<?> f = timer.schedule(() -> {
@@ -750,7 +823,8 @@ final class Bridge {
             }
             if (wasAlive && mapper != null) {
                 try {
-                    mapper.releaseAll();
+                    if (!builtIn) mapper.releaseAll();
+                    if (pcMapper != null) pcMapper.releaseAll();
                 } catch (Throwable ignored) {
                 }
             }
