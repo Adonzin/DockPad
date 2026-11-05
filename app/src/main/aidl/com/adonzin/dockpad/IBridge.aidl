@@ -19,4 +19,7 @@ interface IBridge {
     void setPcMode(boolean on) = 15;
     void setPcSettings(String spec) = 16;
     void runCommand(String spec, int delayMs) = 17;
+    void setKeyboardOpen(boolean on) = 18;
+    String pollKeyboard() = 19;
+    void typeKey(int code, boolean shift) = 20;
 }

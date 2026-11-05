@@ -1,5 +1,6 @@
 package com.adonzin.dockpad;
 
+import android.content.Context;
 import android.content.Intent;
 import android.graphics.Typeface;
 import android.os.Bundle;
@@ -100,7 +101,7 @@ public class QuickMenuActivity extends AppCompatActivity {
     static final String[][] ITEMS = {
             {"home", "Home"}, {"back", "Back"}, {"cursor", "Cursor mode on/off"},
             {"nintendo", "Nintendo layout (swap A/B and X/Y)"}, {"swapab", "Swap A/B"}, {"swapxy", "Swap X/Y"},
-            {"keyboard", "Show keyboard (Moonlight)"}, {"screenshot", "Screenshot"},
+            {"dpkeyboard", "Keyboard (DockPad)"}, {"keyboard", "Show keyboard (Moonlight)"}, {"screenshot", "Screenshot"},
             {"forceclose", "Force close the game"}, {"controllers", "Controllers list"},
             {"power", "Turn DockPad on/off"}, {"openapp", "Open DockPad"}};
 
@@ -120,10 +121,16 @@ public class QuickMenuActivity extends AppCompatActivity {
         if (shown("home")) row(R.drawable.ic_home, "Home", null, () -> command(Codes.ACTION_HOME));
         if (shown("back")) row(R.drawable.ic_back, "Back", null, () -> command(Codes.ACTION_BACK));
 
-        String[] tools = {"cursor", "nintendo", "swapab", "swapxy", "keyboard", "screenshot", "forceclose"};
+        String[] tools = {"dpkeyboard", "cursor", "nintendo", "swapab", "swapxy", "keyboard", "screenshot", "forceclose"};
         boolean anyTool = false;
         for (String t : tools) anyTool |= shown(t);
         if (anyTool) section("Tools");
+        if (shown("dpkeyboard")) row(R.drawable.ic_keyboard, "Keyboard",
+                "Type into whatever app is open", () -> {
+                    finish();
+                    Context app = getApplicationContext();
+                    ui.postDelayed(() -> KeyboardOverlay.show(app), 300);
+                });
         if (shown("cursor")) row(R.drawable.ic_mouse, cursor ? "Turn Cursor mode off" : "Turn Cursor mode on",
                 "Controllers act as a mouse and keyboard", () -> withBridge(b -> b.setPcMode(!cursor)));
         if (shown("nintendo")) row(R.drawable.ic_gamepad, "Nintendo layout: " + (swapAB && swapXY ? "on" : "off"),

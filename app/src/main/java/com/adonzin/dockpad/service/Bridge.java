@@ -213,6 +213,8 @@ final class Bridge {
         }
         running = true;
         lastDevList = "";
+        // lets the app draw DockPad's keyboard over other apps
+        Actions.exec("appops", "set", com.adonzin.dockpad.BuildConfig.APPLICATION_ID, "SYSTEM_ALERT_WINDOW", "allow");
         scanner = new Thread(this::scanLoop, "DockPad-scan");
         scanner.setDaemon(true);
         scanner.start();
@@ -223,6 +225,7 @@ final class Bridge {
         running = false;
         if (scanner != null) scanner.interrupt();
         pcModeOn = false;
+        keyboardOpen = false;
         pc.setActive(false);
         teardown();
         extras.close();
@@ -271,6 +274,57 @@ final class Bridge {
     }
 
     private final Extras extras = new Extras();
+
+    // ---------------------------------------------------------------- on-screen keyboard
+
+    private final KeyboardInput keyboardInput = new KeyboardInput();
+    private volatile boolean keyboardOpen;
+    private volatile long keyboardLastPoll;
+
+    {
+        timer.scheduleAtFixedRate(() -> {
+            if (!keyboardOpen) return;
+            keyboardInput.tick();
+            // the keyboard app stopped asking (closed or killed): give the controllers back
+            if (System.currentTimeMillis() - keyboardLastPoll > 4000) setKeyboardOpen(false);
+        }, 50, 50, TimeUnit.MILLISECONDS);
+    }
+
+    boolean isKeyboardOpen() {
+        return keyboardOpen;
+    }
+
+    /** While open, controllers drive DockPad's keyboard instead of the game. */
+    void setKeyboardOpen(boolean on) {
+        if (on == keyboardOpen || (on && !running)) return;
+        List<Source> list;
+        synchronized (this) {
+            list = new ArrayList<>(sources.values());
+        }
+        for (Source s : list) s.modeChanged();
+        keyboardInput.reset();
+        keyboardLastPoll = System.currentTimeMillis();
+        keyboardOpen = on;
+        if (on) extras.keyboard(); // make sure the virtual keyboard exists before typing
+        lastDevList = ""; // the built-in controls are taken over while it's open: rescan
+    }
+
+    /** Navigation events since the last call ("up,a,…"), or "closed". */
+    String pollKeyboard() {
+        if (!keyboardOpen) return "closed";
+        keyboardLastPoll = System.currentTimeMillis();
+        return keyboardInput.drain();
+    }
+
+    void typeKey(int code, boolean shift) {
+        if (shift) extras.key(42, true);
+        extras.tap(code);
+        if (shift) extras.key(42, false);
+    }
+
+    private boolean takeOverBuiltIn() {
+        return pcModeOn || keyboardOpen;
+    }
     private final PcMode pc = new PcMode(extras);
     private volatile boolean pcModeOn;
 
@@ -416,6 +470,7 @@ final class Bridge {
             o.put("pcMode", pcModeOn);
             o.put("swapAB", swapAB);
             o.put("swapXY", swapXY);
+            o.put("keyboard", keyboardOpen);
             o.put("error", lastError);
             JSONArray players = new JSONArray();
             for (Slot sl : slots) {
@@ -654,7 +709,7 @@ final class Bridge {
             Set<String> present = new HashSet<>();
             for (EvdevDevice d : devs) present.add(d.path);
             for (Source s : new ArrayList<>(sources.values())) {
-                boolean unwanted = (s.touchpad && !touchpadAsButton) || (s.builtIn && s.wantGrab != pcModeOn);
+                boolean unwanted = (s.touchpad && !touchpadAsButton) || (s.builtIn && s.wantGrab != takeOverBuiltIn());
                 if (!s.alive || !present.contains(s.dev.path) || unwanted) {
                     s.close();
                     sources.remove(s.dev.path);
@@ -768,7 +823,7 @@ final class Bridge {
         final EvdevDevice dev;
         final TargetEncoder sink;
         final int player;
-        volatile Mapper mapper, pcMapper;
+        volatile Mapper mapper, pcMapper, kbMapper;
         final boolean touchpad;
         /** The built-in controls: only read (for shortcuts) normally, taken over in PC mode. */
         final boolean builtIn, wantGrab;
@@ -786,7 +841,7 @@ final class Bridge {
             this.sink = sink;
             this.player = player;
             this.builtIn = builtIn;
-            this.wantGrab = !builtIn || pcModeOn;
+            this.wantGrab = !builtIn || takeOverBuiltIn();
             this.touchpad = dev.isControllerTouchpad();
         }
 
@@ -816,6 +871,7 @@ final class Bridge {
                 synchronized (this) {
                     mapper = new Mapper(dev, sink);
                     pcMapper = new Mapper(dev, pc.sink());
+                    kbMapper = new Mapper(dev, keyboardInput.sink());
                     buildEngine();
                 }
                 Log.i(TAG, "Feeding " + dev + " — " + mapper.layoutDescription + ", exclusive: " + hideMethod);
@@ -870,7 +926,9 @@ final class Bridge {
 
         /** Sends an event to the game (as player N) or, in PC mode, to the mouse/keyboard. */
         private void deliver(int type, int code, int value) {
-            if (pcModeOn) {
+            if (keyboardOpen) {
+                if (wantGrab) kbMapper.onEvent(type, code, value);
+            } else if (pcModeOn) {
                 if (wantGrab) pcMapper.onEvent(type, code, value);
             } else if (!builtIn) {
                 mapper.onEvent(type, code, value); // the built-in controls already reach apps by themselves
@@ -881,6 +939,7 @@ final class Bridge {
             try {
                 if (mapper != null) mapper.releaseAll();
                 if (pcMapper != null) pcMapper.releaseAll();
+                if (kbMapper != null) kbMapper.releaseAll();
                 if (engine != null) engine.releaseAll();
             } catch (Throwable ignored) {
             }

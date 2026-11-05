@@ -63,6 +63,16 @@ final class Actions {
             case Codes.ACTION_NEXT_TRACK: exec("input", "keyevent", "KEYCODE_MEDIA_NEXT"); break;
             case Codes.ACTION_PREVIOUS_TRACK: exec("input", "keyevent", "KEYCODE_MEDIA_PREVIOUS"); break;
             case Codes.ACTION_MUTE: exec("input", "keyevent", "KEYCODE_VOLUME_MUTE"); break;
+            case Codes.ACTION_DOCKPAD_KEYBOARD:
+                if (b == null) break;
+                if (b.isKeyboardOpen()) {
+                    b.setKeyboardOpen(false); // the keyboard sees this and closes
+                } else {
+                    b.setKeyboardOpen(true);
+                    exec("am", "broadcast", "-n", BuildConfig.APPLICATION_ID + "/" + BuildConfig.APPLICATION_ID
+                            + ".KeyboardReceiver");
+                }
+                break;
             case Codes.ACTION_SWAP_AB: if (b != null) b.toggleSwap(true, false); break;
             case Codes.ACTION_SWAP_XY: if (b != null) b.toggleSwap(false, true); break;
             case Codes.ACTION_SWAP_FACE: if (b != null) b.toggleSwap(true, true); break;

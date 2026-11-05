@@ -109,4 +109,19 @@ public class BridgeService extends IBridge.Stub {
     public void runCommand(String spec, int delayMs) {
         bridge.runCommand(spec, delayMs);
     }
+
+    @Override
+    public void setKeyboardOpen(boolean on) {
+        bridge.setKeyboardOpen(on);
+    }
+
+    @Override
+    public String pollKeyboard() {
+        return bridge.pollKeyboard();
+    }
+
+    @Override
+    public void typeKey(int code, boolean shift) {
+        bridge.typeKey(code, shift);
+    }
 }

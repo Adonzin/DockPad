@@ -162,4 +162,20 @@ public final class SocketBridge implements IBridge {
     public void runCommand(String spec, int delayMs) throws RemoteException {
         rc("runCommand", spec, delayMs);
     }
+
+    @Override
+    public void setKeyboardOpen(boolean on) throws RemoteException {
+        rc("setKeyboardOpen", on);
+    }
+
+    @Override
+    public String pollKeyboard() throws RemoteException {
+        Object r = rc("pollKeyboard");
+        return r == null ? "" : r.toString();
+    }
+
+    @Override
+    public void typeKey(int code, boolean shift) throws RemoteException {
+        rc("typeKey", code, shift);
+    }
 }

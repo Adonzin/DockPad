@@ -83,6 +83,9 @@ public final class ShellMain {
                     case "setPcMode": svc.setPcMode(a.optBoolean(0)); break;
                     case "setPcSettings": svc.setPcSettings(a.optString(0)); break;
                     case "runCommand": svc.runCommand(a.optString(0), a.optInt(1, 300)); break;
+                    case "setKeyboardOpen": svc.setKeyboardOpen(a.optBoolean(0)); break;
+                    case "pollKeyboard": r = svc.pollKeyboard(); break;
+                    case "typeKey": svc.typeKey(a.optInt(0), a.optBoolean(1)); break;
                     case "identifyController": r = svc.identifyController(a.optInt(0, 15000)); break;
                     case "captureCombo": r = svc.captureCombo(a.optInt(0, 15000), a.optBoolean(1)); break;
                     case "exit":
