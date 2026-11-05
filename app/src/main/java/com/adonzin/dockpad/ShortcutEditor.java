@@ -50,7 +50,7 @@ final class ShortcutEditor {
     void record(Recorded then) {
         IBridge b = host.bridge();
         if (b == null || !host.bridgeRunning()) {
-            new MaterialAlertDialogBuilder(activity)
+            new DpDialog(activity)
                     .setTitle("Turn DockPad on first")
                     .setMessage("Shortcuts are recorded from your controllers, so DockPad needs to be running.")
                     .setPositiveButton("OK", null)
@@ -64,7 +64,7 @@ final class ShortcutEditor {
         wrap.setPadding(pad, dp(8), pad, 0);
         wrap.addView(progress, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT));
-        AlertDialog waiting = new MaterialAlertDialogBuilder(activity)
+        AlertDialog waiting = new DpDialog(activity).ignoreControllerButtons()
                 .setTitle("Press your button or combo")
                 .setMessage("On the controller you want to use, press one button, or hold several "
                         + "buttons together. Let go to finish.")
@@ -83,7 +83,7 @@ final class ShortcutEditor {
                 if (!waiting.isShowing()) return; // cancelled
                 waiting.dismiss();
                 if (result.isEmpty()) {
-                    new MaterialAlertDialogBuilder(activity)
+                    new DpDialog(activity)
                             .setTitle("Nothing detected")
                             .setMessage("No controller sent a button press. If you did press a button, "
                                     + "that button never reaches Android (the controller or the system "
@@ -132,7 +132,7 @@ final class ShortcutEditor {
     private void pickOutputs(Shortcut s, boolean multi, Codes1 then) {
         String[] cats = multi ? Codes.CATEGORIES
                 : new String[]{Codes.CATEGORIES[0], Codes.CATEGORIES[1], Codes.CATEGORIES[2], "Do nothing (block)"};
-        new MaterialAlertDialogBuilder(activity)
+        new DpDialog(activity)
                 .setTitle("What should it do?")
                 .setItems(cats, (d, cat) -> {
                     if (cat == 3) {
@@ -142,7 +142,7 @@ final class ShortcutEditor {
                     String[] labels = Codes.CAT_LABELS[cat];
                     int[] codes = Codes.CAT_CODES[cat];
                     if (cat == 2 || !multi) {
-                        new MaterialAlertDialogBuilder(activity)
+                        new DpDialog(activity)
                                 .setTitle(Codes.CATEGORIES[cat])
                                 .setItems(labels, (d2, i) -> {
                                     if (codes[i] == Codes.ACTION_OPEN_APP) {
@@ -159,7 +159,7 @@ final class ShortcutEditor {
                         return;
                     }
                     boolean[] checked = new boolean[labels.length];
-                    new MaterialAlertDialogBuilder(activity)
+                    new DpDialog(activity)
                             .setTitle("Press together (pick one or more)")
                             .setMultiChoiceItems(labels, checked, (d2, i, c) -> checked[i] = c)
                             .setPositiveButton("Add", (d2, w) -> {
@@ -197,7 +197,7 @@ final class ShortcutEditor {
         list.sort((a, b) -> a[1].compareToIgnoreCase(b[1]));
         String[] names = new String[list.size()];
         for (int i = 0; i < names.length; i++) names[i] = list.get(i)[1];
-        new MaterialAlertDialogBuilder(activity)
+        new DpDialog(activity)
                 .setTitle("Open which app?")
                 .setItems(names, (d, i) -> then.onApp(list.get(i)[0] + "|" + list.get(i)[1]))
                 .setNegativeButton("Cancel", null)
@@ -279,7 +279,7 @@ final class ShortcutEditor {
 
         refresh.run();
 
-        MaterialAlertDialogBuilder b = new MaterialAlertDialogBuilder(activity)
+        MaterialAlertDialogBuilder b = new DpDialog(activity)
                 .setTitle(index < 0 ? "New shortcut" : "Edit shortcut")
                 .setView(v)
                 .setPositiveButton("Save", (d, w) -> {
@@ -367,7 +367,7 @@ final class ShortcutEditor {
             refresh.run();
         });
 
-        new MaterialAlertDialogBuilder(activity)
+        new DpDialog(activity)
                 .setTitle("Macro")
                 .setView(box)
                 .setPositiveButton("Done", (d, w) -> result.onSteps(steps))

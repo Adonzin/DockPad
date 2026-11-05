@@ -102,7 +102,7 @@ final class ControllerDialog {
             save(layout);
         });
         change.setOnClickListener(v -> recordButton(device, code ->
-                new MaterialAlertDialogBuilder(activity)
+                new DpDialog(activity)
                         .setTitle(Codes.keyName(code) + " should act as…")
                         .setItems(ControllerLayout.TARGET_LABELS, (d, which) -> {
                             int to = ControllerLayout.TARGET_CODES[which];
@@ -116,7 +116,7 @@ final class ControllerDialog {
 
         android.widget.ScrollView sv = new android.widget.ScrollView(activity);
         sv.addView(box);
-        new MaterialAlertDialogBuilder(activity)
+        new DpDialog(activity)
                 .setTitle(device)
                 .setView(sv)
                 .setPositiveButton("Done", null)
@@ -146,7 +146,7 @@ final class ControllerDialog {
         wrap.setPadding(dp(24), dp(8), dp(24), 0);
         wrap.addView(progress, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT));
-        AlertDialog waiting = new MaterialAlertDialogBuilder(activity)
+        AlertDialog waiting = new DpDialog(activity).ignoreControllerButtons()
                 .setTitle("Press the button to change")
                 .setMessage("Press it on " + device + ".")
                 .setView(wrap)
@@ -165,7 +165,7 @@ final class ControllerDialog {
                 waiting.dismiss();
                 String[] f = result.split("\t");
                 if (f.length != 2 || !f[0].equals(device)) {
-                    new MaterialAlertDialogBuilder(activity)
+                    new DpDialog(activity)
                             .setMessage(result.isEmpty() ? "No button press detected." :
                                     "That press came from a different controller (" + f[0] + ").")
                             .setPositiveButton("OK", null).show();

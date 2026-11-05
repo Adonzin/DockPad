@@ -2,5 +2,34 @@
     <style name="Theme.DockPad" parent="Theme.Material3.DynamicColors.Dark.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="materialButtonStyle">@style/DockPad.Button</item>
+        <item name="materialButtonOutlinedStyle">@style/DockPad.Button.Outlined</item>
+        <item name="materialAlertDialogTheme">@style/DockPad.Dialog</item>
+    </style>
+
+    <!-- Every button gets a bright outline when selected with a controller -->
+    <style name="DockPad.Button" parent="Widget.Material3.Button">
+        <item name="strokeColor">@color/focus_stroke</item>
+        <item name="strokeWidth">3dp</item>
+    </style>
+    <style name="DockPad.Button.Tonal" parent="Widget.Material3.Button.TonalButton">
+        <item name="strokeColor">@color/focus_stroke</item>
+        <item name="strokeWidth">3dp</item>
+    </style>
+    <style name="DockPad.Button.Outlined" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="strokeColor">@color/focus_stroke_outline</item>
+        <item name="strokeWidth">2dp</item>
+    </style>
+    <style name="DockPad.Button.Text" parent="Widget.Material3.Button.TextButton">
+        <item name="strokeColor">@color/focus_stroke</item>
+        <item name="strokeWidth">3dp</item>
+    </style>
+
+    <style name="DockPad.Dialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
+        <item name="buttonBarPositiveButtonStyle">@style/DockPad.Button.Text</item>
+        <item name="buttonBarNegativeButtonStyle">@style/DockPad.Button.Text</item>
+        <item name="buttonBarNeutralButtonStyle">@style/DockPad.Button.Text</item>
+        <item name="materialButtonStyle">@style/DockPad.Button</item>
+        <item name="materialButtonOutlinedStyle">@style/DockPad.Button.Outlined</item>
     </style>
 </resources>

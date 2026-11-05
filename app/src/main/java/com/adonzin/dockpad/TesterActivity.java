@@ -25,6 +25,7 @@ public class TesterActivity extends AppCompatActivity {
             "Right stick X (RX)", "Right stick Y (RY)", "Left trigger", "Right trigger", "D-pad X", "D-pad Y"};
 
     private TextView buttonText, deviceText, axesDevice;
+    private long bDownAt;
     private final LinearProgressIndicator[] bars = new LinearProgressIndicator[AXES.length];
 
     @Override
@@ -43,8 +44,8 @@ public class TesterActivity extends AppCompatActivity {
 
         TextView help = new TextView(this);
         help.setText("Press buttons and move sticks on any controller. With DockPad on, everything should come "
-                + "from a \"DockPad Controller\". Buttons here won't control the screen. Use Back or the button "
-                + "below to leave.");
+                + "from the built-in controls (player 1) or \"DockPad Controller 2\"+ (other players). Buttons here "
+                + "won't control the screen: hold B for a second, press Back, or tap Done to leave.");
         help.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall);
         help.setPadding(0, dp(4), 0, dp(16));
         root.addView(help);
@@ -110,6 +111,16 @@ public class TesterActivity extends AppCompatActivity {
             return super.dispatchKeyEvent(e);
         }
         if (fromController(e.getSource())) {
+            // hold B for a second to leave (every other button is shown, not acted on)
+            if (e.getKeyCode() == KeyEvent.KEYCODE_BUTTON_B) {
+                if (e.getAction() == KeyEvent.ACTION_DOWN && e.getRepeatCount() == 0) bDownAt = e.getEventTime();
+                else if (e.getAction() == KeyEvent.ACTION_UP) {
+                    boolean held = bDownAt > 0 && e.getEventTime() - bDownAt > 1000;
+                    bDownAt = 0;
+                    if (held) finish();
+                }
+                else if (bDownAt > 0 && e.getEventTime() - bDownAt > 1000) finish();
+            }
             if (e.getRepeatCount() == 0) {
                 String name = KeyEvent.keyCodeToString(e.getKeyCode()).replace("KEYCODE_", "").replace("BUTTON_", "");
                 buttonText.setText(e.getAction() == KeyEvent.ACTION_DOWN ? name : name + " (released)");

@@ -182,6 +182,17 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         super.onDestroy();
     }
 
+    // ------------------------------------------------------------------ controller navigation
+
+    @Override
+    public boolean dispatchKeyEvent(android.view.KeyEvent e) {
+        if (DpDialog.Controller.isFromController(e)
+                && DpDialog.Controller.handle(e, getWindow().getDecorView(), this::finish)) {
+            return true;
+        }
+        return super.dispatchKeyEvent(e);
+    }
+
     // ------------------------------------------------------------------ ShortcutEditor.Host
 
     @Override
@@ -374,7 +385,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == REQ_NOTIFY) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) beginPairingNow();
-            else new MaterialAlertDialogBuilder(this)
+            else new DpDialog(this)
                     .setTitle("Notifications needed")
                     .setMessage("DockPad asks for the pairing code in a notification, so you can type it while the "
                             + "Wireless debugging screen stays open. Please allow notifications and try again.")
@@ -424,7 +435,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
                 renderBridge(false, null);
                 bridgeSubtitle.setText("Couldn't turn on: " + r.message);
                 if (!userAsked) return; // automatic attempt: just show it on the card
-                MaterialAlertDialogBuilder d = new MaterialAlertDialogBuilder(this)
+                MaterialAlertDialogBuilder d = new DpDialog(this)
                         .setTitle("DockPad couldn't turn on")
                         .setMessage(r.message)
                         .setPositiveButton("OK", null);
@@ -698,7 +709,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
 
     private void chooseBuiltIn() {
         String[] options = {"Press a button on them", "Detect automatically"};
-        new MaterialAlertDialogBuilder(this)
+        new DpDialog(this)
                 .setTitle("Which are the built-in controls?")
                 .setItems(options, (d, which) -> {
                     if (which == 1) {
@@ -726,7 +737,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         wrap.setPadding(dp(24), dp(8), dp(24), 0);
         wrap.addView(progress, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT));
-        androidx.appcompat.app.AlertDialog waiting = new MaterialAlertDialogBuilder(this)
+        androidx.appcompat.app.AlertDialog waiting = new DpDialog(this).ignoreControllerButtons()
                 .setTitle("Press a button on the built-in controls")
                 .setMessage("Any button on the device's own controls (not an external controller).")
                 .setView(wrap)
@@ -745,11 +756,11 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
                 waiting.dismiss();
                 String[] f = res.split("\t");
                 if (f.length != 3) {
-                    new MaterialAlertDialogBuilder(this).setMessage("No button press detected.")
+                    new DpDialog(this).setMessage("No button press detected.")
                             .setPositiveButton("OK", null).show();
                     return;
                 }
-                new MaterialAlertDialogBuilder(this)
+                new DpDialog(this)
                         .setTitle("Use \"" + f[0] + "\" as the built-in controls?")
                         .setMessage("External controllers on player 1 will act as this controller.")
                         .setPositiveButton("Use it", (d, w) -> {
@@ -832,7 +843,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         String[] options = {
                 "Restart DockPad\nStops and starts DockPad's background service again.",
                 "Pair again\nGoes back to the pairing step, for when connecting or starting keeps failing."};
-        new MaterialAlertDialogBuilder(this)
+        new DpDialog(this)
                 .setTitle("Reset connection")
                 .setItems(options, (d, which) -> {
                     if (which == 0) restartService();
@@ -843,7 +854,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
     }
 
     private void confirmPairAgain() {
-        new MaterialAlertDialogBuilder(this)
+        new DpDialog(this)
                 .setTitle("Pair again?")
                 .setMessage("DockPad will turn off and show the pairing step again. "
                         + "Your shortcuts, button layouts and settings stay as they are.")
@@ -921,7 +932,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
                 tv.setPadding(dp(24), dp(8), dp(24), 0);
                 android.widget.ScrollView sv = new android.widget.ScrollView(this);
                 sv.addView(tv);
-                new MaterialAlertDialogBuilder(this)
+                new DpDialog(this)
                         .setTitle("Diagnostics")
                         .setView(sv)
                         .setPositiveButton("Close", null)
