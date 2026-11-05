@@ -37,6 +37,10 @@ final class Prefs {
     boolean bridgeWanted() { return p.getBoolean("bridgeWanted", false); }
     void bridgeWanted(boolean v) { p.edit().putBoolean("bridgeWanted", v).apply(); }
 
+    /** Quick menu commands: name in Shortcut.device, the action/macro in steps. */
+    List<Shortcut> menuCommands() { return Shortcut.decodeAll(p.getString("menuCommands", "")); }
+    void menuCommands(List<Shortcut> list) { p.edit().putString("menuCommands", Shortcut.encodeAll(list)).apply(); }
+
     List<Shortcut> shortcuts() { return Shortcut.decodeAll(p.getString("shortcuts", "")); }
     String shortcutsSpec() { return p.getString("shortcuts", ""); }
     void shortcuts(List<Shortcut> list) { p.edit().putString("shortcuts", Shortcut.encodeAll(list)).apply(); }

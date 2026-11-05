@@ -41,6 +41,15 @@
         </activity>
 
         <activity
+            android:name=".QuickMenuActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="com.adonzin.dockpad.menu"
+            android:theme="@style/Theme.DockPad.Menu"
+            android:configChanges="orientation|screenSize|screenLayout|keyboard|keyboardHidden|navigation|smallestScreenSize|density|uiMode" />
+
+        <activity
             android:name=".TesterActivity"
             android:exported="false"
             android:excludeFromRecents="true"

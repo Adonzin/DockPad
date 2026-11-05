@@ -7,6 +7,15 @@
         <item name="materialAlertDialogTheme">@style/DockPad.Dialog</item>
     </style>
 
+    <!-- The quick menu: see-through, over whatever is running -->
+    <style name="Theme.DockPad.Menu" parent="Theme.DockPad">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:backgroundDimAmount">0.35</item>
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
+
     <!-- Every button gets a bright outline when selected with a controller -->
     <style name="DockPad.Button" parent="Widget.Material3.Button">
         <item name="strokeColor">@color/focus_stroke</item>

@@ -299,6 +299,41 @@ final class Bridge {
         Log.i(TAG, "Cursor mode " + (on ? "on" : "off"));
     }
 
+    /**
+     * Runs a command from the quick menu (one action, or a macro) after a short delay, so it
+     * reaches the game rather than the menu, which is closing.
+     */
+    void runCommand(String spec, int delayMs) {
+        Shortcut c = Shortcut.decode(spec);
+        if (c == null) return;
+        long t = Math.max(0, delayMs);
+        for (int[] step : c.steps) {
+            final int[] st = step;
+            timer.schedule(() -> {
+                for (int o : st) commandOutput(o, true, c.param);
+            }, t, TimeUnit.MILLISECONDS);
+            t += 60;
+            timer.schedule(() -> {
+                for (int o : st) commandOutput(o, false, c.param);
+            }, t, TimeUnit.MILLISECONDS);
+            t += 40;
+        }
+    }
+
+    private void commandOutput(int code, boolean down, String param) {
+        if (Codes.isAction(code)) {
+            if (down) Actions.run(code, param, null);
+        } else if (Codes.isKeyboardOutput(code)) {
+            extras.key(code - Codes.KB, down);
+        } else {
+            TargetEncoder enc;
+            synchronized (this) {
+                enc = slots.isEmpty() ? null : slots.get(0).encoder;
+            }
+            if (enc != null) enc.rawKey(code, down);
+        }
+    }
+
     /** "speed,pointerOnLeft" e.g. "1.0,false" */
     void setPcSettings(String spec) {
         try {

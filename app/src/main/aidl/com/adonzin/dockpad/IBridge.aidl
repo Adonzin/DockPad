@@ -18,4 +18,5 @@ interface IBridge {
     String identifyController(int timeoutMs) = 14;
     void setPcMode(boolean on) = 15;
     void setPcSettings(String spec) = 16;
+    void runCommand(String spec, int delayMs) = 17;
 }

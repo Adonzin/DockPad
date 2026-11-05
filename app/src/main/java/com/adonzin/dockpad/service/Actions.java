@@ -63,6 +63,13 @@ final class Actions {
             case Codes.ACTION_PREVIOUS_TRACK: key(x, 165, "KEYCODE_MEDIA_PREVIOUS"); break;
             case Codes.ACTION_MUTE: key(x, 113, "KEYCODE_VOLUME_MUTE"); break;
             case Codes.ACTION_MOONLIGHT_KEYBOARD: if (x != null) x.threeFingerTap(); break;
+            case Codes.ACTION_QUICK_MENU:
+                // a second press while it's open closes it (the menu handles that itself)
+                exec("am", "start", "-n", BuildConfig.APPLICATION_ID + "/" + BuildConfig.APPLICATION_ID
+                        + ".QuickMenuActivity", "--activity-no-animation");
+                break;
+            case Codes.ACTION_HOME: exec("input", "keyevent", "KEYCODE_HOME"); break;
+            case Codes.ACTION_BACK: exec("input", "keyevent", "KEYCODE_BACK"); break;
         }
     }
 

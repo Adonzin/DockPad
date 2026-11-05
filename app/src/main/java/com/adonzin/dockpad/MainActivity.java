@@ -140,6 +140,13 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         findViewById(R.id.open_diagnostics).setOnClickListener(v -> showDiagnostics());
         findViewById(R.id.open_reset).setOnClickListener(v -> showReset());
         setupPcCard();
+        findViewById(R.id.menu_combo).setOnClickListener(v -> editor.addNewWithAction(
+                com.adonzin.dockpad.core.Codes.ACTION_QUICK_MENU));
+        findViewById(R.id.menu_open).setOnClickListener(v ->
+                startActivity(new Intent(this, QuickMenuActivity.class)));
+        findViewById(R.id.add_command).setOnClickListener(v -> editor.addCommand());
+        commandsList = findViewById(R.id.commands_list);
+        renderCommands();
         ((TextView) findViewById(R.id.version)).setText("DockPad " + BuildConfig.VERSION_NAME);
 
         buildSettings();
@@ -221,8 +228,32 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         pushSettings();
     }
 
+    private LinearLayout commandsList;
+
+    private void renderCommands() {
+        commandsList.removeAllViews();
+        List<Shortcut> all = prefs.menuCommands();
+        if (all.isEmpty()) {
+            TextView none = new TextView(this);
+            none.setText("None yet. Example: \"Save state\" pressing F2, or a macro.");
+            none.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall);
+            none.setPadding(0, dp(4), 0, dp(4));
+            commandsList.addView(none);
+            return;
+        }
+        for (int i = 0; i < all.size(); i++) {
+            Shortcut c = all.get(i);
+            View row = addInfoRow(commandsList, R.drawable.ic_bolt, c.device, c.actionLabel());
+            row.setFocusable(true);
+            row.setClickable(true);
+            int index = i;
+            row.setOnClickListener(v -> editor.editCommand(index));
+        }
+    }
+
     @Override
     public void shortcutsChanged() {
+        renderCommands();
         renderShortcuts();
         pushSettings();
     }

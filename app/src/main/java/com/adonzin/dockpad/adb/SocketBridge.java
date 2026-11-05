@@ -157,4 +157,9 @@ public final class SocketBridge implements IBridge {
     public void setPcSettings(String spec) throws RemoteException {
         rc("setPcSettings", spec);
     }
+
+    @Override
+    public void runCommand(String spec, int delayMs) throws RemoteException {
+        rc("runCommand", spec, delayMs);
+    }
 }

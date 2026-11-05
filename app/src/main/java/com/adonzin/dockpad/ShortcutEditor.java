@@ -119,6 +119,87 @@ final class ShortcutEditor {
         });
     }
 
+    // ------------------------------------------------------------ quick menu commands
+
+    void addCommand() {
+        Shortcut c = new Shortcut();
+        c.device = "";
+        c.trigger = new int[]{0};
+        editCommand(c, -1);
+    }
+
+    void editCommand(int index) {
+        List<Shortcut> all = host.prefs().menuCommands();
+        if (index >= 0 && index < all.size()) editCommand(all.get(index).copy(), index);
+    }
+
+    private void editCommand(Shortcut c, int index) {
+        LinearLayout box = new LinearLayout(activity);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(24), dp(8), dp(24), 0);
+        com.google.android.material.textfield.TextInputLayout nameLayout =
+                new com.google.android.material.textfield.TextInputLayout(activity);
+        nameLayout.setHint("Name in the quick menu");
+        com.google.android.material.textfield.TextInputEditText name =
+                new com.google.android.material.textfield.TextInputEditText(nameLayout.getContext());
+        name.setSingleLine(true);
+        name.setText(c.device);
+        nameLayout.addView(name);
+        box.addView(nameLayout);
+        TextView action = new TextView(activity);
+        action.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleMedium);
+        action.setPadding(0, dp(16), 0, dp(8));
+        box.addView(action);
+        LinearLayout row = new LinearLayout(activity);
+        MaterialButton choose = new MaterialButton(activity);
+        choose.setText("Choose action");
+        MaterialButton macro = new MaterialButton(activity, null,
+                com.google.android.material.R.attr.materialButtonOutlinedStyle);
+        macro.setText("Build macro");
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.setMarginEnd(dp(8));
+        row.addView(choose, lp);
+        row.addView(macro);
+        box.addView(row);
+
+        Runnable refresh = () -> action.setText(c.steps.isEmpty() ? "No action yet" : c.actionLabel());
+        refresh.run();
+        choose.setOnClickListener(x -> pickOutputs(c, false, codes -> {
+            c.steps.clear();
+            if (codes.length > 0) c.steps.add(codes);
+            if (String.valueOf(name.getText()).trim().isEmpty() && codes.length > 0) name.setText(c.actionLabel());
+            refresh.run();
+        }));
+        macro.setOnClickListener(x -> buildMacro(c, steps -> {
+            c.steps.clear();
+            c.steps.addAll(steps);
+            refresh.run();
+        }));
+
+        DpDialog b = new DpDialog(activity);
+        b.setTitle(index < 0 ? "New quick menu command" : "Edit command")
+                .setView(box)
+                .setPositiveButton("Save", (d, w) -> {
+                    String n = String.valueOf(name.getText()).replace("\t", " ").trim();
+                    if (c.steps.isEmpty()) return;
+                    c.device = n.isEmpty() ? c.actionLabel() : n;
+                    List<Shortcut> all = host.prefs().menuCommands();
+                    if (index >= 0 && index < all.size()) all.set(index, c);
+                    else all.add(c);
+                    host.prefs().menuCommands(all);
+                    host.shortcutsChanged();
+                })
+                .setNegativeButton("Cancel", null);
+        if (index >= 0) b.setNeutralButton("Delete", (d, w) -> {
+            List<Shortcut> all = host.prefs().menuCommands();
+            if (index < all.size()) all.remove(index);
+            host.prefs().menuCommands(all);
+            host.shortcutsChanged();
+        });
+        b.show();
+    }
+
     // ------------------------------------------------------------ choosing outputs
 
     interface Codes1 {

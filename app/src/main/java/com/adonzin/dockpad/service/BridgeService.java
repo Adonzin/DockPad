@@ -104,4 +104,9 @@ public class BridgeService extends IBridge.Stub {
     public void setPcSettings(String spec) {
         bridge.setPcSettings(spec);
     }
+
+    @Override
+    public void runCommand(String spec, int delayMs) {
+        bridge.runCommand(spec, delayMs);
+    }
 }
