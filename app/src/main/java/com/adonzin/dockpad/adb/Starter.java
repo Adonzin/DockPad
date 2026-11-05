@@ -123,6 +123,9 @@ public final class Starter {
                         + "and tap Allow, then try again.", false);
             }
             String pkg = c.getPackageName();
+            // Keep Android's debugging service running even when Wi-Fi (and so Wireless debugging)
+            // drops during sleep: if it stops, it takes DockPad's service down with it.
+            run(m, "settings put global adb_enabled 1");
             // Lets DockPad switch wireless debugging on by itself after a restart.
             run(m, "pm grant " + pkg + " android.permission.WRITE_SECURE_SETTINGS");
             String apk = c.getApplicationInfo().sourceDir;

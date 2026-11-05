@@ -155,6 +155,8 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
     @Override
     protected void onResume() {
         super.onResume();
+        autoStartTried = false; // each visit may try once to bring DockPad back
+        Watchdog.schedule(this);
         refreshSetup();
         ui.post(poll);
     }
