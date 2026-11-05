@@ -18,6 +18,7 @@ final class Tiles {
     /** Current state, read from DockPad's own background service (built-in pairing). */
     static final class State {
         boolean serviceUp, running, cursor;
+        String problem = ""; // why the state couldn't be read, shown on the tile
         IBridge bridge; // whichever is running: DockPad's own service or the Shizuku one
     }
 
@@ -28,14 +29,19 @@ final class Tiles {
         SocketBridge own = Starter.bridge(t);
         if (own.version() >= 0) b = own;
         else b = ShizukuLink.bridge();
-        if (b == null) return st;
+        if (b == null) {
+            st.problem = "Service not running";
+            return st;
+        }
         st.bridge = b;
         st.serviceUp = true;
         try {
             JSONObject o = new JSONObject(b.statusJson());
             st.running = o.optBoolean("running");
             st.cursor = o.optBoolean("pcMode");
-        } catch (Exception ignored) {
+            if (!st.running) st.problem = "DockPad is off";
+        } catch (Exception e) {
+            st.problem = "Can't read state: " + e.getClass().getSimpleName();
         }
         return st;
     }
@@ -78,7 +84,7 @@ final class Tiles {
             bg(() -> {
                 State st = read(this);
                 ui(() -> set(this, st.running ? Tile.STATE_ACTIVE : Tile.STATE_INACTIVE,
-                        st.running ? "On" : "Off"));
+                        st.running ? "On" : st.problem.isEmpty() ? "Off" : st.problem));
             });
         }
 
@@ -128,7 +134,7 @@ final class Tiles {
                 State st = read(this);
                 ui(() -> {
                     // stays tappable when off (a tap opens DockPad); unavailable tiles ignore taps
-                    if (!st.running) set(this, Tile.STATE_INACTIVE, "DockPad is off");
+                    if (!st.running) set(this, Tile.STATE_INACTIVE, st.problem.isEmpty() ? "DockPad is off" : st.problem);
                     else set(this, st.cursor ? Tile.STATE_ACTIVE : Tile.STATE_INACTIVE, st.cursor ? "On" : "Off");
                 });
             });
