@@ -8,6 +8,7 @@ import android.content.Intent;
 public class KeyboardReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
-        KeyboardOverlay.show(context);
+        if (KeyboardOverlay.ACTION_CLOSE.equals(intent.getAction())) KeyboardOverlay.closeCurrent();
+        else KeyboardOverlay.show(context);
     }
 }

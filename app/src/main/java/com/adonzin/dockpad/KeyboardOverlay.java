@@ -21,6 +21,10 @@ import android.widget.Toast;
 final class KeyboardOverlay {
     private static KeyboardOverlay current;
 
+    static boolean isOpen() {
+        return current != null;
+    }
+
     /** Call on the main thread. */
     static void toggle(Context c) {
         if (current != null) current.close();
@@ -79,13 +83,27 @@ final class KeyboardOverlay {
         root.setBackgroundResource(R.drawable.keyboard_panel);
         root.setPadding(dp(10), dp(8), dp(10), dp(10));
 
+        LinearLayout top = new LinearLayout(ctx);
+        top.setOrientation(LinearLayout.HORIZONTAL);
+        top.setGravity(Gravity.CENTER_VERTICAL);
         TextView hint = new TextView(ctx);
         hint.setText("A type · B delete · X space · Y caps · L1/R1 move cursor · Start enter · Select close");
         hint.setTextColor(0xFFB8C0CC);
         hint.setTextSize(12);
         hint.setGravity(Gravity.CENTER);
-        hint.setPadding(0, 0, 0, dp(6));
-        root.addView(hint);
+        top.addView(hint, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        TextView x = new TextView(ctx);
+        x.setText("✕ Close");
+        x.setTextColor(0xFFFFFFFF);
+        x.setTextSize(15);
+        x.setTypeface(Typeface.DEFAULT_BOLD);
+        x.setGravity(Gravity.CENTER);
+        x.setBackgroundResource(R.drawable.key_bg);
+        x.setPadding(dp(14), dp(8), dp(14), dp(8));
+        x.setOnClickListener(v -> close());
+        top.addView(x);
+        top.setPadding(0, 0, 0, dp(6));
+        root.addView(top);
 
         keys = new TextView[ROWS.length][];
         for (int r = 0; r < ROWS.length; r++) {
@@ -130,6 +148,7 @@ final class KeyboardOverlay {
             return;
         }
         open = true;
+        showNotification();
         ShizukuLink.connect(() -> new Thread(this::pollLoop, "DockPad-keyboard").start());
     }
 
@@ -137,19 +156,26 @@ final class KeyboardOverlay {
         IBridge b = BridgeAccess.find(ctx);
         bridge = b;
         if (b == null) {
-            ui.post(this::close);
+            ui.post(() -> {
+                Toast.makeText(ctx, "DockPad's service isn't running, so the keyboard can't be used.",
+                        Toast.LENGTH_LONG).show();
+                close();
+            });
             return;
         }
         try {
             b.setKeyboardOpen(true);
         } catch (Exception ignored) {
         }
+        long lastOk = System.currentTimeMillis();
         while (open) {
             String events;
             try {
                 events = b.pollKeyboard();
+                lastOk = System.currentTimeMillis();
             } catch (Exception e) {
-                events = "closed";
+                // lost contact with the service for 3 s: close rather than get stuck
+                events = System.currentTimeMillis() - lastOk > 3000 ? "closed" : "";
             }
             if ("closed".equals(events)) {
                 ui.post(this::close);
@@ -242,8 +268,40 @@ final class KeyboardOverlay {
         }
     }
 
+    // ------------------------------------------------------------------ "Close keyboard" notification
+
+    private static final int NOTIFY_ID = 7;
+    static final String ACTION_CLOSE = "com.adonzin.dockpad.CLOSE_KEYBOARD";
+
+    private void showNotification() {
+        try {
+            android.app.PendingIntent pi = android.app.PendingIntent.getBroadcast(ctx, 3,
+                    new android.content.Intent(ctx, KeyboardCloseReceiver.class).setAction(ACTION_CLOSE),
+                    android.app.PendingIntent.FLAG_IMMUTABLE | android.app.PendingIntent.FLAG_UPDATE_CURRENT);
+            android.app.Notification n = Notifications.builder(ctx, "DockPad keyboard is open",
+                            "Tap to close it.")
+                    .setOngoing(true)
+                    .setContentIntent(pi)
+                    .addAction(new android.app.Notification.Action.Builder(
+                            android.graphics.drawable.Icon.createWithResource(ctx, R.drawable.ic_notification),
+                            "Close keyboard", pi).build())
+                    .build();
+            Notifications.show(ctx, NOTIFY_ID, n);
+        } catch (Exception ignored) {
+        }
+    }
+
+    /** Closes whatever keyboard is showing (from the notification, the quick menu or a shortcut). */
+    static void closeCurrent() {
+        if (current != null) current.close();
+    }
+
     void close() {
         if (current == this) current = null;
+        try {
+            ctx.getSystemService(android.app.NotificationManager.class).cancel(NOTIFY_ID);
+        } catch (Exception ignored) {
+        }
         if (!open && root == null) return;
         open = false;
         IBridge b = bridge;

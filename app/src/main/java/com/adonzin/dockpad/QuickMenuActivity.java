@@ -125,11 +125,11 @@ public class QuickMenuActivity extends AppCompatActivity {
         boolean anyTool = false;
         for (String t : tools) anyTool |= shown(t);
         if (anyTool) section("Tools");
-        if (shown("dpkeyboard")) row(R.drawable.ic_keyboard, "Keyboard",
+        if (shown("dpkeyboard")) row(R.drawable.ic_keyboard, KeyboardOverlay.isOpen() ? "Close keyboard" : "Keyboard",
                 "Type into whatever app is open", () -> {
                     finish();
                     Context app = getApplicationContext();
-                    ui.postDelayed(() -> KeyboardOverlay.show(app), 300);
+                    ui.postDelayed(() -> KeyboardOverlay.toggle(app), 300);
                 });
         if (shown("cursor")) row(R.drawable.ic_mouse, cursor ? "Turn Cursor mode off" : "Turn Cursor mode on",
                 "Controllers act as a mouse and keyboard", () -> withBridge(b -> b.setPcMode(!cursor)));
