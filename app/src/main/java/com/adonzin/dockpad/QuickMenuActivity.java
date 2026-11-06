@@ -123,17 +123,49 @@ public class QuickMenuActivity extends AppCompatActivity {
         super.onPause();
         ui.removeCallbacks(poll);
         if (arranging) saveArrangement();
-        if (!isFinishing()) finish(); // something else came to the front
+        if (!isFinishing()) { // something else came to the front
+            quickClose = true;
+            finish();
+        }
     }
 
     @Override
     protected void onDestroy() {
         releasePlayer();
+        stopMusic();
+        // let a closing sound finish before letting go of the sounds
+        android.media.SoundPool p = pool;
+        pool = null;
+        if (p != null) new Handler(Looper.getMainLooper()).postDelayed(p::release, 1500);
         super.onDestroy();
     }
 
+    private void back() {
+        play("back");
+        finish();
+    }
+
+    private boolean closing, quickClose;
+
+    /** Closes with the theme's closing animation and sound (or at once, if something else took over). */
     @Override
     public void finish() {
+        if (closing) return;
+        closing = true;
+        stopMusic();
+        View panel = currentPanel;
+        String anim = theme == null ? "none" : theme.fx.close;
+        if (quickClose || panel == null || anim.equals("none") || isDestroyed()) {
+            reallyFinish();
+            return;
+        }
+        play("close");
+        long ms = (long) (180 * theme.fx.speedFactor());
+        animatePanel(panel, anim, false, ms, this::reallyFinish);
+        root.animate().alpha(0f).setDuration(ms).start();
+    }
+
+    private void reallyFinish() {
         super.finish();
         overridePendingTransition(0, 0);
     }
@@ -423,9 +455,20 @@ public class QuickMenuActivity extends AppCompatActivity {
         root.addView(panel);
         applyStyle(panel);
         applyMedia(panel);
+        currentPanel = panel;
+        if (!opened) {
+            opened = true;
+            openEffects(panel);
+        }
         for (int i = 0; i < renderer.tiles.size(); i++) {
             int index = i;
             View t = renderer.tiles.get(i);
+            MenuRender.Item item = renderer.selectable.get(i);
+            if (!arranging || !theme.layout.equals("freeform")) t.setOnClickListener(v -> {
+                play("select");
+                haptic(true);
+                item.action.run();
+            });
             t.setOnFocusChangeListener((v, has) -> {
                 // ignore focus Android moves on its own while a style hides items (tabs, XMB)
                 if (has && !selecting) {
@@ -464,6 +507,38 @@ public class QuickMenuActivity extends AppCompatActivity {
     }
 
     private boolean selecting;
+
+    /** A move the player made: select, with sound, feedback and highlight motion. */
+    private void move(int index) {
+        boolean changed = index != selected;
+        select(index);
+        if (!changed) return;
+        play("move");
+        haptic(false);
+        View t = index >= 0 && index < renderer.tiles.size() ? renderer.tiles.get(index) : null;
+        if (t == null) return;
+        boolean scales = renderer instanceof MenuRender.CarouselRenderer || renderer instanceof MenuStyles.DockRenderer
+                || renderer instanceof MenuStyles.WheelRenderer || theme.style.highlight.equals("grow");
+        switch (theme.fx.highlight) {
+            case "bump":
+                if (scales) t.animate().translationYBy(0).setDuration(0).withEndAction(() -> bounceY(t)).start();
+                else t.animate().scaleX(1.08f).scaleY(1.08f).setDuration(70)
+                        .withEndAction(() -> t.animate().scaleX(1f).scaleY(1f).setDuration(110).start()).start();
+                break;
+            case "wiggle":
+                t.animate().rotation(-3f).setDuration(55).withEndAction(() -> t.animate().rotation(3f).setDuration(80)
+                        .withEndAction(() -> t.animate().rotation(0f).setDuration(55).start()).start()).start();
+                break;
+            default:
+        }
+    }
+
+    /** A small hop (for styles that already use scaling). */
+    private void bounceY(View t) {
+        float base = t.getTranslationY();
+        t.animate().translationY(base - dp(6)).setDuration(70)
+                .withEndAction(() -> t.animate().translationY(base).setDuration(110).start()).start();
+    }
 
     /** List, grid and freeform: a panel at the side, centre or full screen. */
     private View sidePanel() {
@@ -646,6 +721,171 @@ public class QuickMenuActivity extends AppCompatActivity {
             }
         }
         return String.join("  ·  ", parts);
+    }
+
+    // ------------------------------------------------------------------ animation, sound, feedback
+
+    private View currentPanel;
+    private boolean opened;
+    private android.media.SoundPool pool;
+    private final Map<String, Integer> soundIds = new HashMap<>();
+    private final java.util.Set<Integer> loadedSounds = new java.util.HashSet<>();
+    private android.media.MediaPlayer music;
+    private String pendingSound;
+
+    private void openEffects(View panel) {
+        loadSounds();
+        play("open");
+        startMusic();
+        MenuFx fx = theme.fx;
+        long ms = (long) (220 * fx.speedFactor());
+        if (!fx.open.equals("none")) {
+            root.setAlpha(0f);
+            root.animate().alpha(1f).setDuration(ms).start();
+            animatePanel(panel, fx.open, true, ms, null);
+        }
+        if (fx.items.equals("stagger")) {
+            boolean slides = renderer instanceof MenuRender.ListRenderer || renderer instanceof MenuRender.GridRenderer
+                    || renderer instanceof MenuStyles.TabsRenderer;
+            int n = renderer.tiles.size();
+            long step = Math.max(12, Math.min(40, (long) (300 * fx.speedFactor()) / Math.max(1, n)));
+            for (int i = 0; i < n; i++) {
+                View t = renderer.tiles.get(i);
+                float a = t.getAlpha();
+                t.setAlpha(0f);
+                if (slides) t.setTranslationY(dp(14));
+                android.view.ViewPropertyAnimator an = t.animate().alpha(a).setStartDelay(ms / 2 + i * step)
+                        .setDuration((long) (160 * fx.speedFactor()));
+                if (slides) an.translationY(0);
+                an.start();
+            }
+        }
+    }
+
+    /** Animates a panel in (or out, reversed). */
+    private void animatePanel(View p, String kind, boolean in, long ms, Runnable end) {
+        float w = Math.max(p.getWidth(), dp(320)), h = Math.max(p.getHeight(), dp(240));
+        float fromX = 0, fromY = 0, fromScale = 1, fromRot = 0, fromAlpha = 0;
+        switch (kind) {
+            case "slide": {
+                String frame = theme.frame();
+                if (frame.equals("band")) fromY = theme.band.equals("top") ? -h : h;
+                else if (frame.equals("side") || frame.equals("rail")) {
+                    fromX = theme.position.equals("right") ? w : theme.position.equals("left") ? -w : 0;
+                    if (fromX == 0) fromY = dp(80);
+                } else fromY = dp(80);
+                fromAlpha = 0.2f;
+                break;
+            }
+            case "pop": fromScale = 0.85f; break;
+            case "zoom": fromScale = 1.25f; break;
+            case "spin": fromScale = 0.6f; fromRot = -90; break;
+            default: // fade
+        }
+        android.view.ViewPropertyAnimator an = p.animate().setDuration(ms);
+        if (in) {
+            p.setTranslationX(fromX);
+            p.setTranslationY(fromY);
+            p.setScaleX(fromScale);
+            p.setScaleY(fromScale);
+            p.setRotation(fromRot);
+            p.setAlpha(fromAlpha);
+            an.translationX(0).translationY(0).scaleX(1).scaleY(1).rotation(0).alpha(1)
+                    .setInterpolator(new android.view.animation.DecelerateInterpolator());
+        } else {
+            an.translationX(fromX).translationY(fromY).scaleX(fromScale).scaleY(fromScale).rotation(fromRot).alpha(0)
+                    .setInterpolator(new android.view.animation.AccelerateInterpolator());
+        }
+        if (end != null) an.withEndAction(end);
+        an.start();
+    }
+
+    private void loadSounds() {
+        MenuFx fx = theme.fx;
+        boolean any = false;
+        for (String e : MenuFx.EVENTS) if (!fx.soundFor(e).isEmpty()) any = true;
+        if (!any) return;
+        pool = new android.media.SoundPool.Builder().setMaxStreams(4)
+                .setAudioAttributes(new android.media.AudioAttributes.Builder()
+                        .setUsage(android.media.AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+                .build();
+        pool.setOnLoadCompleteListener((sp, id, status) -> {
+            if (status != 0) return;
+            loadedSounds.add(id);
+            // the opening sound may have been asked for before it was ready
+            if (pendingSound != null && id == soundIds.getOrDefault(pendingSound, -1)) {
+                String ev = pendingSound;
+                pendingSound = null;
+                play(ev);
+            }
+        });
+        for (String e : MenuFx.EVENTS) {
+            String spec = fx.soundFor(e);
+            int id = 0;
+            if (spec.startsWith("pack:")) {
+                int res = MenuFx.packSound(spec.substring(5), e);
+                if (res != 0) id = pool.load(this, res, 1);
+            } else if (spec.startsWith("file:")) {
+                java.io.File f = new java.io.File(MenuMedia.dir(this), spec.substring(5));
+                if (f.isFile()) id = pool.load(f.getAbsolutePath(), 1);
+            }
+            if (id != 0) soundIds.put(e, id);
+        }
+    }
+
+    private void play(String event) {
+        if (pool == null) return;
+        Integer id = soundIds.get(event);
+        if (id == null) return;
+        if (!loadedSounds.contains(id)) {
+            pendingSound = event;
+            return;
+        }
+        float v = theme.fx.volume / 100f;
+        pool.play(id, v, v, 1, 0, 1f);
+    }
+
+    private void startMusic() {
+        String file = theme.fx.music;
+        if (file.isEmpty()) return;
+        java.io.File f = new java.io.File(MenuMedia.dir(this), file);
+        if (!f.isFile()) return;
+        try {
+            android.media.MediaPlayer mp = new android.media.MediaPlayer();
+            mp.setAudioAttributes(new android.media.AudioAttributes.Builder()
+                    .setUsage(android.media.AudioAttributes.USAGE_GAME)
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC).build());
+            mp.setDataSource(f.getAbsolutePath());
+            mp.setLooping(true);
+            float v = theme.fx.musicVolume / 100f;
+            mp.setVolume(v, v);
+            mp.setOnPreparedListener(android.media.MediaPlayer::start);
+            mp.prepareAsync();
+            music = mp;
+        } catch (Exception e) {
+            android.util.Log.w("DockPad", "menu music", e);
+        }
+    }
+
+    private void stopMusic() {
+        if (music != null) {
+            try {
+                music.release();
+            } catch (Exception ignored) {
+            }
+            music = null;
+        }
+    }
+
+    /** A short buzz of the handheld (kept under 40 ms, so rumble pass-through ignores it). */
+    private void haptic(boolean select) {
+        String mode = theme.fx.haptics;
+        if (mode.equals("off") || (!select && !mode.equals("all"))) return;
+        android.os.Vibrator v = getSystemService(android.os.Vibrator.class);
+        if (v == null || !v.hasVibrator()) return;
+        int amp = Math.max(1, Math.min(255, Math.round(theme.fx.hapticStrength * 2.55f)));
+        v.vibrate(android.os.VibrationEffect.createOneShot(select ? 28 : 14, amp));
     }
 
     // ------------------------------------------------------------------ pictures, GIFs, video
@@ -1022,7 +1262,7 @@ public class QuickMenuActivity extends AppCompatActivity {
                 ((MenuRender.FreeRenderer) renderer).nudge(selected, 0, 0, grow ? 1.1f : 0.9f);
             } else if (fresh && !arranging && renderer != null) {
                 int i = renderer.shoulder(selected, grow ? 1 : -1);
-                if (i >= 0) select(i);
+                if (i >= 0) move(i);
             }
             return true;
         }
@@ -1040,7 +1280,7 @@ public class QuickMenuActivity extends AppCompatActivity {
             return true;
         }
         if (DpDialog.Controller.isFromController(e)
-                && DpDialog.Controller.handle(e, getWindow().getDecorView(), this::finish)) {
+                && DpDialog.Controller.handle(e, getWindow().getDecorView(), this::back)) {
             return true;
         }
         return super.dispatchKeyEvent(e);
@@ -1066,7 +1306,7 @@ public class QuickMenuActivity extends AppCompatActivity {
             return;
         }
         int next = renderer.move(selected, dir, fresh);
-        if (next >= 0) select(next);
+        if (next >= 0) move(next);
     }
 
     private float hatX, hatY;
@@ -1115,7 +1355,7 @@ public class QuickMenuActivity extends AppCompatActivity {
                 readHat(e);
                 if (!arranging && mag > 0.55f) {
                     int i = renderer.aim(x, y, selected);
-                    if (i >= 0 && i != selected) select(i);
+                    if (i >= 0 && i != selected) move(i);
                 }
                 return true; // the stick doesn't also move the highlight like a D-pad
             }

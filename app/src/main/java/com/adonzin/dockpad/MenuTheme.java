@@ -45,6 +45,8 @@ final class MenuTheme {
     MenuStyle style = new MenuStyle();
     /** Background picture/GIF/video. */
     MenuMedia.Background background = new MenuMedia.Background();
+    /** Animation, sound and feedback. */
+    MenuFx fx = new MenuFx();
     /** Images placed around the screen. */
     List<MenuMedia.Decoration> decorations = new ArrayList<>();
 
@@ -63,6 +65,7 @@ final class MenuTheme {
             t.raw = o;
             t.name = o.optString("name", t.name);
             t.style = MenuStyle.parse(o.optJSONObject("style"));
+            t.fx = MenuFx.parse(o.optJSONObject("fx"));
             JSONObject media = o.optJSONObject("media");
             if (media != null) {
                 t.background = MenuMedia.parseBackground(media.optJSONObject("background"));
@@ -125,6 +128,7 @@ final class MenuTheme {
             media.put("background", MenuMedia.encode(background));
             media.put("decorations", MenuMedia.encode(decorations));
             o.put("media", media);
+            o.put("fx", fx.toJson());
             return o.toString();
         } catch (Exception e) {
             return "{}";

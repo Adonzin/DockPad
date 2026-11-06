@@ -167,6 +167,14 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         organiser = new MenuOrganizer(this, findViewById(R.id.organiser_list), this::pickMedia);
         findViewById(R.id.media_background).setOnClickListener(v -> MediaDialog.background(this, this::pickMedia));
         findViewById(R.id.media_decorations).setOnClickListener(v -> MediaDialog.decorations(this, this::pickMedia));
+        findViewById(R.id.menu_fx).setOnClickListener(v -> MenuFxDialog.show(this, done -> {
+            mediaDone = done;
+            try {
+                pickMediaFile.launch(new String[]{"audio/*"});
+            } catch (Exception e) {
+                Toast.makeText(this, "No file picker available", Toast.LENGTH_SHORT).show();
+            }
+        }));
         findViewById(R.id.new_section).setOnClickListener(v -> organiser.newSection());
         findViewById(R.id.reset_sections).setOnClickListener(v -> organiser.resetAll());
         commandsList = findViewById(R.id.commands_list);

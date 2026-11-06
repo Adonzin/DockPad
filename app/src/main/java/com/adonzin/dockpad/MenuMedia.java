@@ -166,6 +166,10 @@ final class MenuMedia {
         return n.endsWith(".mp4") || n.endsWith(".webm") || n.endsWith(".mkv") || n.endsWith(".3gp");
     }
 
+    static boolean isAudio(String name) {
+        return name.toLowerCase().matches(".*\\.(mp3|ogg|oga|opus|wav|m4a|aac|flac)$");
+    }
+
     static boolean exists(Context c, String name) {
         return !name.isEmpty() && new File(dir(c), name).isFile();
     }
@@ -182,14 +186,15 @@ final class MenuMedia {
         if (!name.contains(".") && mime != null) {
             if (mime.endsWith("gif")) name += ".gif";
             else if (mime.startsWith("video")) name += ".mp4";
+            else if (mime.startsWith("audio")) name += ".mp3";
             else name += ".png";
         }
         if (name.length() > 70) name = name.substring(name.length() - 70);
         String lower = name.toLowerCase();
-        boolean video = isVideo(lower);
+        boolean video = isVideo(lower), audio = isAudio(lower);
         boolean image = lower.matches(".*\\.(png|jpe?g|gif|webp|bmp|heic)$");
-        if (!video && !image) throw new Exception("pick a picture (PNG, JPG, GIF, WebP) or a video (MP4, WebM)");
-        long max = video ? 150_000_000L : 25_000_000L;
+        if (!video && !image && !audio) throw new Exception("pick a picture (PNG, JPG, GIF, WebP), a video (MP4, WebM) or a sound (MP3, OGG, WAV, M4A)");
+        long max = video ? 150_000_000L : audio ? 40_000_000L : 25_000_000L;
         // never overwrite a different file with the same name
         File out = new File(dir(c), name);
         for (int i = 2; out.exists(); i++) {
@@ -211,7 +216,7 @@ final class MenuMedia {
             out.delete();
             throw e;
         }
-        if (!video && load(c, out.getName(), 256) == null) {
+        if (image && load(c, out.getName(), 256) == null) {
             //noinspection ResultOfMethodCallIgnored
             out.delete();
             throw new Exception("Android can't read that picture");
@@ -223,7 +228,16 @@ final class MenuMedia {
         String[] all = dir(c).list();
         if (all == null) return new String[0];
         List<String> out = new ArrayList<>();
-        for (String n : all) if (videosToo || !isVideo(n)) out.add(n);
+        for (String n : all) if (!isAudio(n) && (videosToo || !isVideo(n))) out.add(n);
+        out.sort(String.CASE_INSENSITIVE_ORDER);
+        return out.toArray(new String[0]);
+    }
+
+    static String[] listAudio(Context c) {
+        String[] all = dir(c).list();
+        if (all == null) return new String[0];
+        List<String> out = new ArrayList<>();
+        for (String n : all) if (isAudio(n)) out.add(n);
         out.sort(String.CASE_INSENSITIVE_ORDER);
         return out.toArray(new String[0]);
     }
@@ -238,7 +252,7 @@ final class MenuMedia {
      * {@code maxPx}. Null if it can't be read.
      */
     static Drawable load(Context c, String name, int maxPx) {
-        if (safeName(name).isEmpty() || isVideo(name)) return null;
+        if (safeName(name).isEmpty() || isVideo(name) || isAudio(name)) return null;
         File f = new File(dir(c), name);
         if (!f.isFile()) return null;
         try {

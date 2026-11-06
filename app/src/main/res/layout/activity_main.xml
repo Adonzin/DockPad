@@ -469,14 +469,14 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Pictures &amp; decorations"
+                    android:text="Pictures, animation &amp; sound"
                     android:textAppearance="?attr/textAppearanceTitleMedium" />
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:text="A picture, GIF or video behind the menu, and images placed anywhere on screen."
+                    android:text="A picture, GIF or video behind the menu, images placed anywhere on screen, and how it moves and sounds."
                     android:textAppearance="?attr/textAppearanceBodySmall"
                     android:textColor="?attr/colorOnSurfaceVariant" />
 
@@ -501,6 +501,15 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
                         android:text="Decorations…" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/menu_fx"
+                        style="?attr/materialButtonOutlinedStyle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:layout_marginStart="8dp"
+                        android:text="Animation &amp; sound…" />
                 </LinearLayout>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
