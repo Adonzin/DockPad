@@ -118,7 +118,8 @@ public class QuickMenuActivity extends AppCompatActivity {
             {"home", "Home"}, {"back", "Back"}, {"cursor", "Cursor mode on/off"},
             {"turbo", "Rapid fire on/off"}, {"turboedit", "Rapid fire buttons (edit)"}, {"nintendo", "Nintendo layout (swap A/B and X/Y)"}, {"swapab", "Swap A/B"}, {"swapxy", "Swap X/Y"},
             {"dpkeyboard", "Keyboard (DockPad)"}, {"keyboard", "Show keyboard (Moonlight)"}, {"screenshot", "Screenshot"},
-            {"forceclose", "Force close the game"}, {"controllers", "Controllers list"}, {"pair", "Pair a new controller"},
+            {"forceclose", "Force close the game"}, {"controllers", "Controllers list"}, {"builtinctrl", "Built-in controls in the controllers list"},
+            {"pair", "Pair a new controller"},
             {"power", "Turn DockPad on/off"}, {"openapp", "Open DockPad"}};
 
     private java.util.Set<String> hidden;
@@ -226,8 +227,9 @@ public class QuickMenuActivity extends AppCompatActivity {
         if (ctrls != null) for (int i = 0; i < ctrls.length(); i++) {
             JSONObject c = ctrls.optJSONObject(i);
             if (c == null || c.optBoolean("touchpad")) continue;
-            any = true;
             boolean builtIn = c.optBoolean("builtIn");
+            if (builtIn && !shown("builtinctrl")) continue;
+            any = true;
             String name = c.optString("name");
             int pl = c.optInt("player", 1);
             String badge = pl == 0 ? "Press A to join" : "P" + pl;

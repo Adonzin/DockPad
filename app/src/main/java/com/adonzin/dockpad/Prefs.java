@@ -43,7 +43,13 @@ final class Prefs {
 
     /** Built-in quick menu items the user has hidden (ids from QuickMenuActivity.ITEMS). */
     java.util.Set<String> menuHidden() {
-        return new java.util.HashSet<>(java.util.Arrays.asList(p.getString("menuHidden", "").split(",")));
+        java.util.Set<String> h = new java.util.HashSet<>(java.util.Arrays.asList(p.getString("menuHidden", "").split(",")));
+        if (!p.getBoolean("builtInHiddenByDefault", false)) {
+            // the built-in controls start hidden in the controllers list (nobody disconnects them)
+            h.add("builtinctrl");
+            p.edit().putString("menuHidden", String.join(",", h)).putBoolean("builtInHiddenByDefault", true).apply();
+        }
+        return h;
     }
     void menuHidden(java.util.Set<String> ids) { p.edit().putString("menuHidden", String.join(",", ids)).apply(); }
 
