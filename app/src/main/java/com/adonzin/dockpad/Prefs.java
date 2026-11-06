@@ -76,6 +76,12 @@ final class Prefs {
     boolean paired() { return p.getBoolean("paired", false); }
     void paired(boolean v) { p.edit().putBoolean("paired", v).apply(); }
 
+    boolean autoUpdateCheck() { return p.getBoolean("autoUpdateCheck", true); }
+    void autoUpdateCheck(boolean v) { p.edit().putBoolean("autoUpdateCheck", v).apply(); }
+    long lastUpdateCheck() { return p.getLong("lastUpdateCheck", 0); }
+    void lastUpdateCheck(long v) { p.edit().putLong("lastUpdateCheck", v).apply(); }
+    int dismissedBuild() { return p.getInt("dismissedBuild", 0); }
+    void dismissedBuild(int v) { p.edit().putInt("dismissedBuild", v).apply(); }
     boolean autoStart() { return p.getBoolean("autoStart", true); }
     void autoStart(boolean v) { p.edit().putBoolean("autoStart", v).apply(); }
 

@@ -152,4 +152,18 @@ public class BridgeService extends IBridge.Stub {
             return "Couldn't disconnect: " + t;
         }
     }
+
+    /** Shizuku: install, then reopen the app (which restarts this service at the new version). */
+    @Override
+    public void installUpdate(String url, int version) {
+        new Thread(() -> {
+            String err = Updater.downloadAndInstall(url);
+            if (err != null) {
+                Actions.toast("DockPad update: " + err);
+                return;
+            }
+            String pkg = com.adonzin.dockpad.BuildConfig.APPLICATION_ID;
+            Actions.exec("sh", "-c", "(sleep 3; am start -n " + pkg + "/" + pkg + ".MainActivity) >/dev/null 2>&1 &");
+        }, "DockPad-update").start();
+    }
 }

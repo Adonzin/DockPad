@@ -26,4 +26,5 @@ interface IBridge {
     String recordAllInput(int ms) = 22;
     void setJoinByPress(boolean on) = 23;
     String disconnectController(String name) = 24;
+    void installUpdate(String url, int version) = 25;
 }

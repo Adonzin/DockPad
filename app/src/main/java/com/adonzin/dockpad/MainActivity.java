@@ -162,6 +162,8 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         commandsList = findViewById(R.id.commands_list);
         renderCommands();
         ((TextView) findViewById(R.id.version)).setText("DockPad " + BuildConfig.VERSION_NAME);
+        ((TextView) findViewById(R.id.update_status)).setText("You have build " + BuildConfig.VERSION_CODE + ".");
+        findViewById(R.id.check_updates).setOnClickListener(v -> checkUpdates(true));
 
         buildSettings();
         renderShortcuts();
@@ -179,6 +181,9 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         autoStartTried = false; // each visit may try once to bring DockPad back
         Watchdog.schedule(this);
         refreshSetup();
+        if (prefs.autoUpdateCheck() && System.currentTimeMillis() - prefs.lastUpdateCheck() > 6 * 3600_000L) {
+            checkUpdates(false);
+        }
         ui.post(poll);
     }
 
@@ -912,6 +917,11 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
     private void buildSettings() {
         controllerSettings.removeAllViews();
         appSettings.removeAllViews();
+        LinearLayout updateSettings = findViewById(R.id.update_settings_list);
+        updateSettings.removeAllViews();
+        addSwitch(updateSettings, "Check when DockPad opens",
+                "At most every few hours. Nothing is downloaded until you choose to update.",
+                prefs.autoUpdateCheck(), prefs::autoUpdateCheck);
         addSwitch(controllerSettings, "Multiplayer",
                 "Player 1 is the built-in controls plus your first external controller. Each further controller becomes the next player (\"DockPad Controller 2\", \"3\", \"4\"). When off, every controller is player 1.",
                 prefs.multiplayer(), v -> {
@@ -972,6 +982,87 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
     }
 
     // ------------------------------------------------------------------ reset
+
+    // ------------------------------------------------------------------ updates
+
+    private boolean checkingUpdates;
+
+    private void checkUpdates(boolean manual) {
+        if (checkingUpdates) return;
+        checkingUpdates = true;
+        TextView status = findViewById(R.id.update_status);
+        if (manual) status.setText("Checking…");
+        bg.execute(() -> {
+            Updates.Release r = null;
+            String err = null;
+            try {
+                r = Updates.latest();
+                prefs.lastUpdateCheck(System.currentTimeMillis());
+            } catch (Exception e) {
+                err = e.getMessage();
+            }
+            Updates.Release rel = r;
+            String error = err;
+            ui.post(() -> {
+                checkingUpdates = false;
+                if (isFinishing()) return;
+                if (rel == null) {
+                    status.setText("You have build " + BuildConfig.VERSION_CODE + ". Couldn't check: "
+                            + (error == null ? "no connection" : error));
+                    return;
+                }
+                if (!rel.isNewer()) {
+                    status.setText("You have build " + BuildConfig.VERSION_CODE + ", the newest.");
+                    if (manual) Toast.makeText(this, "DockPad is up to date", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                status.setText("You have build " + BuildConfig.VERSION_CODE + ". Build " + rel.build + " is available.");
+                if (manual || rel.build != prefs.dismissedBuild()) showUpdate(rel);
+            });
+        });
+    }
+
+    private void showUpdate(Updates.Release rel) {
+        StringBuilder msg = new StringBuilder("You have build ").append(BuildConfig.VERSION_CODE).append('.');
+        if (!rel.changes.isEmpty()) {
+            msg.append("\n\nWhat's new:");
+            for (String c : rel.changes) msg.append("\n• ").append(c);
+        }
+        boolean canInstall = bridge != null && rel.apkUrl != null && !rel.apkUrl.isEmpty();
+        msg.append(canInstall
+                ? "\n\nDockPad downloads and installs it by itself, then reopens. Your settings stay."
+                : "\n\nTurn DockPad on to install updates by itself, or download it and install it yourself.");
+        DpDialog d = new DpDialog(this);
+        d.setTitle("Build " + rel.build + " is available").setMessage(msg.toString())
+                .setNegativeButton("Later", (x, w) -> prefs.dismissedBuild(rel.build));
+        if (canInstall) {
+            d.setPositiveButton("Update now", (x, w) -> {
+                IBridge b = bridge;
+                Toast.makeText(this, "Downloading build " + rel.build + "… DockPad reopens when it's done",
+                        Toast.LENGTH_LONG).show();
+                bg.execute(() -> {
+                    try {
+                        b.installUpdate(rel.apkUrl, rel.build);
+                    } catch (Exception e) {
+                        ui.post(() -> Toast.makeText(this, "Couldn't start the update: " + e.getMessage(),
+                                Toast.LENGTH_LONG).show());
+                    }
+                });
+            });
+            d.setNeutralButton("Download", (x, w) -> openUrl(rel.pageUrl));
+        } else {
+            d.setPositiveButton("Download", (x, w) -> openUrl(rel.pageUrl));
+        }
+        d.show();
+    }
+
+    private void openUrl(String url) {
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)));
+        } catch (Exception e) {
+            Toast.makeText(this, url, Toast.LENGTH_LONG).show();
+        }
+    }
 
     private void showReset() {
         String[] options = {

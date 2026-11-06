@@ -23,6 +23,35 @@ import java.nio.charset.StandardCharsets;
  */
 public final class ShellMain {
     public static final int PORT = 47321;
+    private static volatile ServerSocket serverSocket;
+
+    /** Installs an update, then starts the new version's service in place of this one and reopens the app. */
+    private static void update(BridgeService svc, String url, int newVersion, String token) {
+        new Thread(() -> {
+            String err = Updater.downloadAndInstall(url);
+            if (err != null) {
+                Log.w("DockPad", err);
+                Actions.toast("DockPad update: " + err);
+                return;
+            }
+            String pkg = com.adonzin.dockpad.BuildConfig.APPLICATION_ID;
+            String apk = Actions.exec("pm", "path", pkg).trim();
+            if (apk.startsWith("package:")) apk = apk.substring(8).split("\n")[0].trim();
+            Log.i("DockPad", "Updated to build " + newVersion + ", restarting from " + apk);
+            try {
+                svc.stop();
+            } catch (Throwable ignored) {
+            }
+            try {
+                if (serverSocket != null) serverSocket.close();
+            } catch (Exception ignored) {
+            }
+            Actions.exec("sh", "-c", "(sleep 1; CLASSPATH=" + apk + " nohup setsid app_process /system/bin "
+                    + ShellMain.class.getName() + " " + token + " " + newVersion + ") >/dev/null 2>&1 &");
+            Actions.exec("sh", "-c", "(sleep 4; am start -n " + pkg + "/" + pkg + ".MainActivity) >/dev/null 2>&1 &");
+            System.exit(0);
+        }, "DockPad-update").start();
+    }
 
     public static void main(String[] args) {
         String token = args.length > 0 ? args[0] : "";
@@ -31,14 +60,24 @@ public final class ShellMain {
             Looper.prepareMainLooper();
         } catch (Throwable ignored) {
         }
-        ServerSocket server;
-        try {
-            server = new ServerSocket(PORT, 8, InetAddress.getByName("127.0.0.1"));
-        } catch (Exception e) {
-            System.err.println("DockPad service already running or port busy: " + e);
-            System.exit(1);
-            return;
+        ServerSocket server = null;
+        // after an update the old service is still letting go of the port: wait for it a little
+        for (int attempt = 0; attempt < 20 && server == null; attempt++) {
+            try {
+                server = new ServerSocket(PORT, 8, InetAddress.getByName("127.0.0.1"));
+            } catch (Exception e) {
+                if (attempt == 19) {
+                    System.err.println("DockPad service already running or port busy: " + e);
+                    System.exit(1);
+                    return;
+                }
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException ignored) {
+                }
+            }
         }
+        serverSocket = server;
         BridgeService svc = new BridgeService();
         Log.i("DockPad", "Standalone service started, version " + version);
         while (true) {
@@ -70,6 +109,7 @@ public final class ShellMain {
                 Object r = JSONObject.NULL;
                 switch (m) {
                     case "version": r = version; break;
+                    case "installUpdate": update(svc, a.optString(0), a.optInt(1), token); break;
                     case "start": r = svc.start(a.optBoolean(0, true)); break;
                     case "stop": svc.stop(); break;
                     case "status": r = svc.status(); break;

@@ -200,4 +200,9 @@ public final class SocketBridge implements IBridge {
         Object r = rc("disconnectController", name);
         return r == null ? "" : r.toString();
     }
+
+    @Override
+    public void installUpdate(String url, int version) throws RemoteException {
+        rc("installUpdate", url, version);
+    }
 }
