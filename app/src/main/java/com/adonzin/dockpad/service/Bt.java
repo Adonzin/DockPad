@@ -14,7 +14,7 @@ import java.util.Set;
 
 /** Bluetooth from the shell process (which may connect/disconnect paired devices). */
 @android.annotation.TargetApi(33)
-@android.annotation.SuppressLint({"MissingPermission", "NewApi"})
+@android.annotation.SuppressLint({"MissingPermission", "NewApi", "BlockedPrivateApi", "DiscouragedPrivateApi", "SoonBlockedPrivateApi"})
 final class Bt {
     private static final String TAG = "DockPad";
 
@@ -24,7 +24,13 @@ final class Bt {
     private static BluetoothAdapter adapter() throws Exception {
         AttributionSource src = new AttributionSource.Builder(android.os.Process.myUid())
                 .setPackageName("com.android.shell").build();
-        Method m = BluetoothAdapter.class.getDeclaredMethod("createAdapter", AttributionSource.class);
+        Method m;
+        try {
+            m = BluetoothAdapter.class.getDeclaredMethod("createAdapter", AttributionSource.class);
+        } catch (NoSuchMethodException e) {
+            m = org.lsposed.hiddenapibypass.HiddenApiBypass.getDeclaredMethod(BluetoothAdapter.class,
+                    "createAdapter", AttributionSource.class);
+        }
         m.setAccessible(true);
         return (BluetoothAdapter) m.invoke(null, src);
     }
