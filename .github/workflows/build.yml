@@ -34,7 +34,8 @@ jobs:
           grep -E "error:|ERROR:|e: |What went wrong|AAPT|Execution failed" -A2 build.log | head -60 | while IFS= read -r line; do
             [ -n "$line" ] && echo "::error::${line}"
           done
-          find app/build -name "lint*vital*.txt" -o -name "lint-results-releaseVital*.txt" 2>/dev/null | head -3 | while read f; do
+          grep -E ": (Error|Fatal|Warning): " build.log | head -10 | while IFS= read -r line; do echo "::error::lint: ${line}"; done
+          find app/build -path "*lint*" -name "*.txt" 2>/dev/null | head -5 | while read f; do
             grep -E "Error|Fatal|\.java:" "$f" | head -20 | while IFS= read -r line; do echo "::error::lint: ${line}"; done
           done
 
