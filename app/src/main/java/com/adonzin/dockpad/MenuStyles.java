@@ -131,6 +131,7 @@ final class MenuStyles {
             for (MenuRender.Item it : items) {
                 if (it.action == null) continue;
                 View r = row(c, it, canvas);
+                r.setBackground(theme.style.tile(c, false, true));
                 canvas.addView(r);
                 selectable(r, it);
             }
@@ -392,10 +393,7 @@ final class MenuStyles {
         void build(List<MenuRender.Item> items) {
             canvas = new ArcCanvas(c);
             disc = new View(c);
-            GradientDrawable bg = new GradientDrawable();
-            bg.setShape(GradientDrawable.OVAL);
-            bg.setColor(0xE6121519);
-            disc.setBackground(bg);
+            disc.setBackground(theme.style.panel(c, null));
             canvas.addView(disc);
             List<MenuRender.Item> sel = new ArrayList<>();
             for (MenuRender.Item it : items) if (it.action != null) sel.add(it);
@@ -756,20 +754,14 @@ final class MenuStyles {
             scroll.setVerticalScrollBarEnabled(false);
             scroll.setFocusable(false);
             scroll.addView(column);
-            GradientDrawable bg = new GradientDrawable();
-            bg.setColor(0xE6121519);
-            float r = dp(20);
-            bg.setCornerRadii(right() ? new float[]{r, r, 0, 0, 0, 0, r, r} : new float[]{0, 0, r, r, r, r, 0, 0});
-            scroll.setBackground(bg);
+            scroll.setBackground(theme.style.panel(c, right() ? new float[]{20, 20, 0, 0, 0, 0, 20, 20}
+                    : new float[]{0, 0, 20, 20, 20, 20, 0, 0}));
             holder = new FrameLayout(c);
             holder.setClipChildren(false);
             bubble = new LinearLayout(c);
             bubble.setOrientation(LinearLayout.VERTICAL);
             bubble.setPadding(dp(14), dp(8), dp(14), dp(8));
-            GradientDrawable bb = new GradientDrawable();
-            bb.setCornerRadius(dp(14));
-            bb.setColor(0xF0121519);
-            bubble.setBackground(bb);
+            bubble.setBackground(theme.style.panel(c, new float[]{14, 14, 14, 14, 14, 14, 14, 14}));
             bubbleTitle = new TextView(c);
             bubbleTitle.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleSmall);
             bubbleSub = new TextView(c);

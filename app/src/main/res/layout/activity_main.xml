@@ -427,6 +427,12 @@
                         android:layout_marginTop="8dp"
                         android:layout_marginEnd="8dp"
                         android:text="Preview" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/menu_look"
@@ -435,7 +441,16 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
                         android:layout_marginEnd="8dp"
-                        android:text="Look &amp; layout…" />
+                        android:text="Layout…" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/menu_style"
+                        style="?attr/materialButtonOutlinedStyle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:layout_marginEnd="8dp"
+                        android:text="Colours, shapes &amp; text…" />
                 </LinearLayout>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>

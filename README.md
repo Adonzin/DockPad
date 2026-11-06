@@ -43,6 +43,13 @@ Docked play on a handheld usually means setting up every emulator again for an e
 - **Organise it your way** in its own Quick menu tab: show or hide items, put them in order, move any item or command to another section, rename sections and items (e.g. "Tools" → "Utilities"), give them icons from a built-in library, and make your own sections.
 - Volume, brightness and media commands keep the menu open, so you can press them again and again.
 - Covers the whole screen, hiding the status and navigation bars while it's open.
+- **Its own look:**
+  - palettes (Midnight, Ocean, Sunset, Neon, Retro terminal, Candy and more), or your own colours, including linear, radial and sweep gradients
+  - transparency, and how dark the game behind it gets
+  - corner roundness, borders and a glowing edge
+  - text size and font
+  - highlight style (filled, outline, glow, grow or underline)
+  - an optional clock and handheld battery in the header
 - **Twelve styles:**
   - list
   - compact list

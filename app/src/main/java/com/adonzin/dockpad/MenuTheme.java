@@ -41,6 +41,8 @@ final class MenuTheme {
     int columns = 3;
     /** Freeform: item id -> {x, y, w, h} as fractions of the panel. */
     final Map<String, float[]> free = new HashMap<>();
+    /** Colours, shapes, text, highlight, header. */
+    MenuStyle style = new MenuStyle();
 
     private JSONObject raw = new JSONObject(); // everything, including fields this version doesn't know
 
@@ -56,6 +58,7 @@ final class MenuTheme {
             JSONObject o = new JSONObject(json);
             t.raw = o;
             t.name = o.optString("name", t.name);
+            t.style = MenuStyle.parse(o.optJSONObject("style"));
             JSONObject l = o.optJSONObject("layout");
             if (l != null) {
                 String type = l.optString("type", t.layout);
@@ -108,6 +111,7 @@ final class MenuTheme {
             }
             l.put("free", f);
             o.put("layout", l);
+            o.put("style", style.toJson());
             return o.toString();
         } catch (Exception e) {
             return "{}";

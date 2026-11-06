@@ -409,6 +409,8 @@ public class QuickMenuActivity extends AppCompatActivity {
                 panel = sidePanel();
         }
         root.addView(panel);
+        applyStyle(panel);
+        if (theme.style.dim >= 0) root.setBackgroundColor(android.graphics.Color.argb(Math.round(theme.style.dim * 2.55f), 0, 0, 0));
         for (int i = 0; i < renderer.tiles.size(); i++) {
             int index = i;
             View t = renderer.tiles.get(i);
@@ -461,9 +463,10 @@ public class QuickMenuActivity extends AppCompatActivity {
         TextView title = new TextView(this);
         title.setText("DockPad");
         title.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleLarge);
+        title.setVisibility(theme.style.showTitle ? View.VISIBLE : View.GONE);
         panel.addView(title);
         status = new TextView(this);
-        status.setText(statusText);
+        status.setText(headerText());
         status.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall);
         status.setPadding(0, 0, 0, dp(8));
         panel.addView(status);
@@ -488,25 +491,26 @@ public class QuickMenuActivity extends AppCompatActivity {
         panel.addView(hint);
         updateHint();
 
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(0xE6121519);
-        float r = dp(24);
+        MenuStyle st = theme.style;
+        GradientDrawable bg;
+        float r = 24;
         FrameLayout.LayoutParams lp;
         switch (theme.position) {
             case "right":
-                bg.setCornerRadii(new float[]{r, r, 0, 0, 0, 0, r, r});
+                bg = st.panel(this, new float[]{r, r, 0, 0, 0, 0, r, r});
                 lp = new FrameLayout.LayoutParams(dp(theme.width), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.END);
                 break;
             case "center":
-                bg.setCornerRadius(r);
+                bg = st.panel(this, new float[]{r, r, r, r, r, r, r, r});
                 lp = new FrameLayout.LayoutParams(dp(theme.width), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.CENTER);
                 lp.topMargin = lp.bottomMargin = dp(24);
                 break;
             case "full":
+                bg = st.panel(this, new float[8]);
                 lp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
                 break;
             default:
-                bg.setCornerRadii(new float[]{0, 0, r, r, r, r, 0, 0});
+                bg = st.panel(this, new float[]{0, 0, r, r, r, r, 0, 0});
                 lp = new FrameLayout.LayoutParams(dp(theme.width), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.START);
         }
         panel.setBackground(bg);
@@ -521,10 +525,7 @@ public class QuickMenuActivity extends AppCompatActivity {
         int avail = Math.min(getResources().getDisplayMetrics().widthPixels,
                 getResources().getDisplayMetrics().heightPixels) - dp(40); // leave room for the hint
         int size = (int) (avail * theme.sizeFraction());
-        GradientDrawable bg = new GradientDrawable();
-        bg.setShape(GradientDrawable.OVAL);
-        bg.setColor(0xE6121519);
-        holder.setBackground(bg);
+        holder.setBackground(theme.style.panel(this, null));
         holder.setClickable(true);
         holder.addView(renderer.view, new FrameLayout.LayoutParams(size, size, Gravity.CENTER));
         status = null;
@@ -552,7 +553,7 @@ public class QuickMenuActivity extends AppCompatActivity {
         f.addView(renderer.view, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
         status = new TextView(this);
-        status.setText("DockPad · " + statusText);
+        status.setText(headerText());
         status.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_LabelMedium);
         status.setPadding(dp(20), dp(14), dp(20), 0);
         f.addView(status, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -597,7 +598,7 @@ public class QuickMenuActivity extends AppCompatActivity {
         band.setClipChildren(false);
         band.setClipToPadding(false);
         status = new TextView(this);
-        status.setText("DockPad · " + statusText);
+        status.setText(headerText());
         status.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_LabelMedium);
         status.setPadding(dp(20), 0, 0, dp(4));
         band.addView(status);
@@ -608,13 +609,68 @@ public class QuickMenuActivity extends AppCompatActivity {
         hint.setPadding(0, dp(6), 0, 0);
         band.addView(hint);
         updateHint();
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(0xE6121519);
-        band.setBackground(bg);
+        band.setBackground(theme.style.panel(this, new float[8]));
         int g = theme.band.equals("top") ? Gravity.TOP : theme.band.equals("middle") ? Gravity.CENTER_VERTICAL : Gravity.BOTTOM;
         band.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT, g));
         return band;
+    }
+
+    /** The header line: title (for strips), status, clock and battery, as the look asks. */
+    private String headerText() {
+        MenuStyle st = theme.style;
+        List<String> parts = new ArrayList<>();
+        boolean side = theme.frame().equals("side");
+        if (!side && st.showTitle) parts.add("DockPad");
+        if (st.showStatus && !statusText.isEmpty()) parts.add(statusText);
+        if (st.showClock) parts.add(android.text.format.DateFormat.getTimeFormat(this).format(new java.util.Date()));
+        if (st.showBattery) {
+            android.os.BatteryManager bm = getSystemService(android.os.BatteryManager.class);
+            if (bm != null) {
+                int pct = bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY);
+                if (pct > 0) parts.add("🔋 " + pct + "%" + (bm.isCharging() ? " ⚡" : ""));
+            }
+        }
+        return String.join("  ·  ", parts);
+    }
+
+    /** Applies the look's text, icon and highlight settings to everything drawn. */
+    private void applyStyle(View v) {
+        MenuStyle st = theme.style;
+        int text = st.text(this), accent = st.accent(this);
+        float scale = st.textSize / 100f;
+        styleTree(v, st, text, accent, scale);
+        for (View t : renderer.tiles) {
+            if (!st.ring()) t.setForeground(null);
+            android.animation.StateListAnimator anim = st.growAnimator();
+            if (anim != null) t.setStateListAnimator(anim);
+        }
+        if (hint != null) hint.setTextColor(arranging ? 0xFFFFD54F : (text & 0x00FFFFFF) | 0xB3000000);
+    }
+
+    private void styleTree(View v, MenuStyle st, int text, int accent, float scale) {
+        if (v instanceof TextView && !"badge".equals(v.getTag()) && !(v instanceof android.widget.Button)) {
+            TextView t = (TextView) v;
+            boolean sub = t.getId() == R.id.row_subtitle;
+            t.setTextColor(sub ? (text & 0x00FFFFFF) | 0xB3000000 : text);
+            boolean bold = t.getTypeface() != null && t.getTypeface().isBold();
+            t.setTypeface(st.typeface(bold));
+            if (scale != 1f) {
+                if (t.getAutoSizeTextType() == TextView.AUTO_SIZE_TEXT_TYPE_UNIFORM) {
+                    t.setAutoSizeTextTypeUniformWithConfiguration(Math.round(8 * scale), Math.round(16 * scale), 1,
+                            android.util.TypedValue.COMPLEX_UNIT_SP);
+                } else {
+                    t.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, t.getTextSize() * scale);
+                }
+            }
+        } else if (v instanceof android.widget.ImageView) {
+            android.widget.ImageView iv = (android.widget.ImageView) v;
+            if (iv.getImageTintList() != null) iv.setImageTintList(android.content.res.ColorStateList.valueOf(accent));
+        }
+        if (v instanceof ViewGroup) {
+            ViewGroup g = (ViewGroup) v;
+            for (int i = 0; i < g.getChildCount(); i++) styleTree(g.getChildAt(i), st, text, accent, scale);
+        }
     }
 
     private void updateHint() {
@@ -637,7 +693,7 @@ public class QuickMenuActivity extends AppCompatActivity {
                 default: h = "Y: arrange items · B: close";
             }
             hint.setText(h);
-            hint.setTextColor(0xB3FFFFFF);
+            hint.setTextColor((theme.style.text(this) & 0x00FFFFFF) | 0xB3000000);
         }
     }
 
@@ -921,7 +977,7 @@ public class QuickMenuActivity extends AppCompatActivity {
                 swapAB = ab;
                 swapXY = xy;
                 statusText = (running ? "On" : "Off") + (cursor ? " · Cursor mode on" : "");
-                if (status != null) status.setText(statusText);
+                if (status != null) status.setText(headerText());
                 if (showControllers(o.optJSONArray("controllers")) || changed) rebuild();
             });
         }));

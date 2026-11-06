@@ -218,6 +218,7 @@ final class MenuRender {
             t.addView(icon, new android.widget.FrameLayout.LayoutParams(s, s, Gravity.CENTER));
             if (it.badge != null) {
                 TextView b = new TextView(c);
+                b.setTag("badge");
                 b.setText(it.badge);
                 b.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_LabelSmall);
                 b.setBackgroundResource(R.drawable.badge_bg);
@@ -229,22 +230,7 @@ final class MenuRender {
         }
 
         android.graphics.drawable.Drawable tileBackground(boolean round) {
-            GradientDrawable normal = new GradientDrawable();
-            normal.setColor(0x22FFFFFF);
-            GradientDrawable focused = new GradientDrawable();
-            focused.setColor(color(com.google.android.material.R.attr.colorPrimaryContainer));
-            if (round) {
-                normal.setShape(GradientDrawable.OVAL);
-                focused.setShape(GradientDrawable.OVAL);
-                focused.setStroke(dp(3), color(androidx.appcompat.R.attr.colorPrimary));
-            } else {
-                normal.setCornerRadius(dp(16));
-                focused.setCornerRadius(dp(16));
-            }
-            StateListDrawable s = new StateListDrawable();
-            s.addState(new int[]{android.R.attr.state_focused}, focused);
-            s.addState(new int[]{}, normal);
-            return s;
+            return theme.style.tile(c, round, false);
         }
     }
 
@@ -282,6 +268,7 @@ final class MenuRender {
                     b.setVisibility(View.VISIBLE);
                     b.setText(it.badge);
                 }
+                r.setBackground(theme.style.tile(c, false, true));
                 if (compact) {
                     r.setMinimumHeight(dp(40));
                     r.setPadding(dp(6), dp(3), dp(6), dp(3));
@@ -693,6 +680,7 @@ final class MenuRender {
             title.setAutoSizeTextTypeUniformWithConfiguration(8, 16, 1, TypedValue.COMPLEX_UNIT_SP);
             addView(title);
             badge = new TextView(c);
+            badge.setTag("badge");
             if (it.badge != null) {
                 badge.setText(it.badge);
                 badge.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_LabelSmall);
