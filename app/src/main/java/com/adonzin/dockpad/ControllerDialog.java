@@ -126,6 +126,22 @@ final class ControllerDialog {
                     .show();
         });
 
+        TextView tuneTitle = text("Sticks and triggers", false);
+        tuneTitle.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleSmall);
+        tuneTitle.setPadding(0, dp(16), 0, dp(4));
+        box.addView(tuneTitle);
+        TextView tuneSummary = text("", true);
+        box.addView(tuneSummary);
+        MaterialButton tune = new MaterialButton(activity, null,
+                com.google.android.material.R.attr.materialButtonOutlinedStyle);
+        tune.setText("Fine-tune…");
+        box.addView(tune);
+        Runnable tuneRefresh = () -> tuneSummary.setText(layout.tuning.isDefault()
+                ? "Standard: dead zone, stick response and trigger press point as the controller sends them."
+                : layout.tuning.summary().substring(0, 1).toUpperCase() + layout.tuning.summary().substring(1) + ".");
+        tuneRefresh.run();
+        tune.setOnClickListener(v -> showTuning(layout, tuneRefresh));
+
         TextView customTitle = text("Changed buttons", false);
         customTitle.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleSmall);
         customTitle.setPadding(0, dp(16), 0, dp(4));
@@ -196,6 +212,120 @@ final class ControllerDialog {
                     Toast.makeText(activity, "Back to the standard layout", Toast.LENGTH_SHORT).show();
                 })
                 .show();
+    }
+
+    // ------------------------------------------------------------------ fine-tuning
+
+    private final Runnable[] pendingSave = new Runnable[1];
+
+    /** Saves after the slider settles, so dragging doesn't flood DockPad with updates. */
+    private void saveSoon(ControllerLayout l) {
+        if (pendingSave[0] != null) ui.removeCallbacks(pendingSave[0]);
+        pendingSave[0] = () -> save(l);
+        ui.postDelayed(pendingSave[0], 250);
+    }
+
+    private void showTuning(ControllerLayout layout, Runnable onChange) {
+        com.adonzin.dockpad.core.Tuning t = layout.tuning;
+        LinearLayout box = new LinearLayout(activity);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(24), dp(8), dp(24), 0);
+        box.addView(text("Changes apply right away, so you can try them in a game or in Test controllers.", true));
+
+        TextView dzLabel = text("", false);
+        box.addView(dzLabel);
+        com.google.android.material.slider.Slider dz = slider(0, 40, 1, t.deadZone);
+        box.addView(dz);
+        box.addView(text("Ignores small stick movements. Raise it if a character or camera drifts on its own.", true));
+
+        TextView respLabel = text("", false);
+        box.addView(respLabel);
+        int ri = 0;
+        for (int i = 0; i < com.adonzin.dockpad.core.Tuning.RESPONSES.length; i++) {
+            if (com.adonzin.dockpad.core.Tuning.RESPONSES[i] == t.response) ri = i;
+        }
+        com.google.android.material.slider.Slider resp = slider(0, com.adonzin.dockpad.core.Tuning.RESPONSES.length - 1, 1, ri);
+        box.addView(resp);
+        box.addView(text("Quick: small tilts already move a lot. Precise: more control for small, careful movements "
+                + "(aiming, camera).", true));
+
+        TextView tpLabel = text("", false);
+        box.addView(tpLabel);
+        com.google.android.material.slider.Slider tp = slider(5, 95, 5, Math.round(t.triggerPoint / 5f) * 5);
+        box.addView(tp);
+        box.addView(text("How far L2/R2 must be pulled to count as a press. Lower is a hair trigger. Only for "
+                + "controllers with analog triggers; the analog pull itself is unchanged.", true));
+
+        Runnable labels = () -> {
+            dzLabel.setText("Stick dead zone: " + (t.deadZone == 0 ? "controller's own" : t.deadZone + "%"));
+            respLabel.setText("Stick response: " + com.adonzin.dockpad.core.Tuning.responseLabel(t.response));
+            tpLabel.setText("Trigger press point: " + t.triggerPoint + "%" + (t.triggerPoint == 50 ? " (standard)" : ""));
+        };
+        labels.run();
+        Runnable changed = () -> {
+            labels.run();
+            onChange.run();
+            saveSoon(layout);
+        };
+        dz.addOnChangeListener((sl, v, user) -> {
+            if (!user) return;
+            t.deadZone = Math.round(v);
+            changed.run();
+        });
+        resp.addOnChangeListener((sl, v, user) -> {
+            if (!user) return;
+            t.response = com.adonzin.dockpad.core.Tuning.RESPONSES[Math.round(v)];
+            changed.run();
+        });
+        tp.addOnChangeListener((sl, v, user) -> {
+            if (!user) return;
+            t.triggerPoint = Math.round(v);
+            changed.run();
+        });
+
+        MaterialSwitch swap = toggle(box, "Swap left and right sticks", t.swapSticks);
+        MaterialSwitch invL = toggle(box, "Invert left stick up/down", t.invertLeftY);
+        MaterialSwitch invR = toggle(box, "Invert right stick up/down", t.invertRightY);
+        MaterialSwitch dpad = toggle(box, "Left stick works as the D-pad", t.leftStickDpad);
+        box.addView(text("Handy for retro games and menus that only read the D-pad. The left stick stops acting as a "
+                + "stick while this is on.", true));
+        swap.setOnCheckedChangeListener((b, c) -> { t.swapSticks = c; changed.run(); });
+        invL.setOnCheckedChangeListener((b, c) -> { t.invertLeftY = c; changed.run(); });
+        invR.setOnCheckedChangeListener((b, c) -> { t.invertRightY = c; changed.run(); });
+        dpad.setOnCheckedChangeListener((b, c) -> { t.leftStickDpad = c; changed.run(); });
+
+        android.widget.ScrollView sv = new android.widget.ScrollView(activity);
+        sv.addView(box);
+        new DpDialog(activity)
+                .setTitle("Fine-tune " + layout.device)
+                .setView(sv)
+                .setPositiveButton("Done", null)
+                .setNeutralButton("Reset sticks and triggers", (d, w) -> {
+                    t.reset();
+                    onChange.run();
+                    save(layout);
+                })
+                .show();
+    }
+
+    private com.google.android.material.slider.Slider slider(float from, float to, float step, float value) {
+        com.google.android.material.slider.Slider s = new com.google.android.material.slider.Slider(activity);
+        s.setValueFrom(from);
+        s.setValueTo(to);
+        s.setStepSize(step);
+        s.setValue(Math.max(from, Math.min(to, value)));
+        s.setLabelBehavior(com.google.android.material.slider.LabelFormatter.LABEL_GONE);
+        return s;
+    }
+
+    private MaterialSwitch toggle(LinearLayout box, String label, boolean value) {
+        MaterialSwitch sw = new MaterialSwitch(activity);
+        sw.setForeground(activity.getDrawable(R.drawable.focus_ring));
+        sw.setPadding(dp(6), dp(10), dp(6), dp(10));
+        sw.setText(label);
+        sw.setChecked(value);
+        box.addView(sw);
+        return sw;
     }
 
     private void save(ControllerLayout l) {

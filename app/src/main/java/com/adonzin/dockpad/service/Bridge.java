@@ -143,9 +143,21 @@ final class Bridge {
             m.put(l.device, l.table());
             if (!l.turbo.isEmpty()) t.put(l.device, l);
         }
+        Map<String, com.adonzin.dockpad.core.Tuning> tu = new java.util.HashMap<>();
+        for (ControllerLayout l : ControllerLayout.decodeAll(spec).values()) {
+            if (!l.tuning.isDefault()) tu.put(l.device, l.tuning);
+        }
         layouts = m;
         turbos = t;
+        tunings = tu;
+        List<Source> list;
+        synchronized (this) {
+            list = new ArrayList<>(sources.values());
+        }
+        for (Source s : list) s.applyTuning();
     }
+
+    private volatile Map<String, com.adonzin.dockpad.core.Tuning> tunings = new java.util.HashMap<>();
 
     // ---------------------------------------------------------------- rapid fire
 
@@ -984,6 +996,7 @@ final class Bridge {
                 }
                 synchronized (this) {
                     mapper = new Mapper(dev, sink);
+                    if (!builtIn && !touchpad) mapper.setTuning(tunings.get(dev.name));
                     pcMapper = new Mapper(dev, pc.sink());
                     kbMapper = new Mapper(dev, keyboardInput.sink());
                     buildEngine();
@@ -1089,6 +1102,14 @@ final class Bridge {
                 }
             }
             turboTasks.clear();
+        }
+
+        synchronized void applyTuning() {
+            if (mapper == null || builtIn || touchpad) return;
+            try {
+                mapper.setTuning(tunings.get(dev.name));
+            } catch (Throwable ignored) {
+            }
         }
 
         synchronized void modeChanged() {

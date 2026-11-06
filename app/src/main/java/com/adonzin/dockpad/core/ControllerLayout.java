@@ -20,6 +20,8 @@ public final class ControllerLayout {
     /** Rapid fire: these buttons (as the game sees them) repeat while held, turboRate presses a second. */
     public final java.util.LinkedHashSet<Integer> turbo = new java.util.LinkedHashSet<>();
     public int turboRate = 10;
+    /** Stick and trigger fine-tuning. */
+    public Tuning tuning = new Tuning();
 
     /**
      * Controllers labelled the Nintendo way (B at the bottom, A on the right), so their labels
@@ -44,10 +46,11 @@ public final class ControllerLayout {
         custom.clear();
         turbo.clear();
         turboRate = 10;
+        tuning.reset();
     }
 
     public boolean isEmpty() {
-        return !swapAB && !swapXY && custom.isEmpty() && turbo.isEmpty();
+        return !swapAB && !swapXY && custom.isEmpty() && turbo.isEmpty() && tuning.isDefault();
     }
 
     /** The final raw -> new button table. */
@@ -76,6 +79,7 @@ public final class ControllerLayout {
             for (int c : turbo) t.append(i++ == 0 ? "" : ", ").append(targetLabel(c));
             parts.add(t.toString());
         }
+        if (!tuning.isDefault()) parts.add(tuning.summary());
         return parts.isEmpty() ? "Standard layout" : String.join(", ", parts);
     }
 
@@ -90,12 +94,12 @@ public final class ControllerLayout {
         int i = 0;
         for (int code : turbo) t.append(i++ == 0 ? "" : ",").append(code);
         return device + "\t" + (swapAB ? "A" : "") + (swapXY ? "X" : "") + "-\t" + (c.length() == 0 ? "-" : c)
-                + "\t" + t;
+                + "\t" + t + (tuning.isDefault() ? "" : "\t" + tuning.encode());
     }
 
     public static ControllerLayout decode(String line) {
         String[] f = line.split("\t");
-        if (f.length != 3 && f.length != 4) return null;
+        if (f.length < 3 || f.length > 5) return null;
         ControllerLayout l = new ControllerLayout();
         l.device = f[0];
         l.swapAB = f[1].contains("A");
@@ -109,7 +113,8 @@ public final class ControllerLayout {
                 }
             }
         }
-        if (f.length == 4) {
+        if (f.length == 5) l.tuning = Tuning.decode(f[4]);
+        if (f.length >= 4) {
             String[] t = f[3].split(":", 2);
             try {
                 l.turboRate = Math.max(2, Math.min(30, Integer.parseInt(t[0])));

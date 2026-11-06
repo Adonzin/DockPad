@@ -76,6 +76,25 @@ public final class Mapper {
 
     public final String layoutDescription;
 
+    /** Fine-tuning for this controller (null = none). */
+    private volatile Tuning tuning;
+    private float[] lastOut;
+
+    public void setTuning(Tuning t) {
+        tuning = t == null || t.isDefault() ? null : t.copy();
+        dirty = true;
+        // let go of trigger presses decided under the old press point
+        if (info[LT] != null) setKey(KEYCODE_BUTTON_L2, false);
+        if (info[RT] != null) setKey(KEYCODE_BUTTON_R2, false);
+        flush();
+    }
+
+    /** DockPad decides L2/R2 presses from the analog trigger (instead of the controller's own button). */
+    private boolean ownTrigger(int logical) {
+        Tuning t = tuning;
+        return info[logical] != null && t != null && t.customTriggerPoint();
+    }
+
     public Mapper(EvdevDevice dev, Sink sink) {
         this.sink = sink;
         for (int code : dev.keys) {
@@ -167,6 +186,7 @@ public final class Mapper {
                 if (pressed ? heldRaw.add(code) : heldRaw.remove(code)) sink.rawKey(code, pressed);
                 return;
             }
+            if ((kc == KEYCODE_BUTTON_L2 && ownTrigger(LT)) || (kc == KEYCODE_BUTTON_R2 && ownTrigger(RT))) return;
             setKey(kc, pressed);
             if (kc == KEYCODE_BUTTON_L2 && synthLtAxis) setAxis(LT, pressed ? 1f : 0f);
             if (kc == KEYCODE_BUTTON_R2 && synthRtAxis) setAxis(RT, pressed ? 1f : 0f);
@@ -183,8 +203,8 @@ public final class Mapper {
             if (l == null) return;
             float v = normalize(info[l], kind(l), value);
             setAxis(l, v);
-            if (l == LT && synthL2Key) triggerKey(KEYCODE_BUTTON_L2, v);
-            if (l == RT && synthR2Key) triggerKey(KEYCODE_BUTTON_R2, v);
+            if (l == LT && (synthL2Key || ownTrigger(LT))) triggerKey(KEYCODE_BUTTON_L2, v);
+            if (l == RT && (synthR2Key || ownTrigger(RT))) triggerKey(KEYCODE_BUTTON_R2, v);
             if (synthDpadKeys && (l == HX || l == HY)) {
                 if (l == HX) {
                     setKey(KEYCODE_DPAD_LEFT, v < 0);
@@ -200,8 +220,10 @@ public final class Mapper {
     }
 
     private void triggerKey(int kc, float v) {
-        if (v > 0.5f) setKey(kc, true);
-        else if (v < 0.4f) setKey(kc, false);
+        Tuning t = tuning;
+        float on = t == null ? 0.5f : t.pressAt(), off = t == null ? 0.4f : t.releaseAt();
+        if (v >= on) setKey(kc, true);
+        else if (v < off) setKey(kc, false);
     }
 
     private void setAxis(int l, float v) {
@@ -222,7 +244,10 @@ public final class Mapper {
     public void flush() {
         if (dirty) {
             dirty = false;
-            sink.axes(axes.clone());
+            Tuning t = tuning;
+            float[] out = t == null ? axes.clone() : t.apply(axes, lastOut);
+            lastOut = out;
+            sink.axes(out.clone());
         }
     }
 
