@@ -41,7 +41,7 @@ Docked play on a handheld usually means setting up every emulator again for an e
 - Opens over any game with a button combo, and is fully navigable with a controller.
 - Has Home, Back, Cursor mode, an on-screen keyboard, rapid fire, face-button swaps, screenshot, force close, your own commands, live controllers list (with battery and disconnect), and pairing.
 - You choose which items it shows.
-- **Organise it your way** in its own Quick menu tab: show or hide items, put them in order, move any item or command to another section, rename sections and items (e.g. "Tools" → "Utilities"), give them icons from a built-in library, and make your own sections.
+- **Organise it your way** in its own Quick menu tab: show or hide items, put them in order, move any item or command to another section, rename sections and items (e.g. "Tools" → "Utilities"), give them icons from a built-in library or your own images, and make your own sections.
 - Volume, brightness and media commands keep the menu open, so you can press them again and again.
 - Covers the whole screen, hiding the status and navigation bars while it's open.
 - **Its own look:**
@@ -51,6 +51,10 @@ Docked play on a handheld usually means setting up every emulator again for an e
   - text size and font, including your own imported `.ttf` / `.otf` fonts
   - highlight style (filled, outline, glow, grow or underline)
   - an optional clock and handheld battery in the header
+- **Pictures and video:**
+  - a background picture, animated GIF or looping video, either behind the whole menu or inside its panel, with fill/fit, blur and darken
+  - your own images as icons
+  - **decorations:** PNGs and GIFs placed anywhere (corners, edges, centre), sized, nudged, mirrored, behind or in front of the menu, or repeated along an edge
 - **Twelve styles:**
   - list
   - compact list

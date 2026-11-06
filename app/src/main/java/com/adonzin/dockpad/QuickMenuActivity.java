@@ -127,6 +127,12 @@ public class QuickMenuActivity extends AppCompatActivity {
     }
 
     @Override
+    protected void onDestroy() {
+        releasePlayer();
+        super.onDestroy();
+    }
+
+    @Override
     public void finish() {
         super.finish();
         overridePendingTransition(0, 0);
@@ -240,7 +246,9 @@ public class QuickMenuActivity extends AppCompatActivity {
             if (!sectionRank.containsKey(shown)) sectionRank.put(shown, Math.max(0, keys.indexOf(key)));
             String title = it.group.equals("controllers") ? it.title : mc.titleOf(it.id, it.title);
             int icon = it.group.equals("controllers") ? it.icon : mc.iconOf(it.id, it.icon);
-            out.add(new MenuRender.Item(it.id, it.group, shown, icon, title, it.subtitle, it.badge, it.action));
+            MenuRender.Item item = new MenuRender.Item(it.id, it.group, shown, icon, title, it.subtitle, it.badge, it.action);
+            if (!it.group.equals("controllers")) item.iconFile = mc.iconFileOf(it.id);
+            out.add(item);
             int sIcon = IconLibrary.resolve(mc.sectionIcon.get(key));
             if (sIcon != 0) MenuRender.sectionIcons.put(shown, sIcon);
         }
@@ -414,6 +422,7 @@ public class QuickMenuActivity extends AppCompatActivity {
         root.setBackgroundColor(theme.style.backdrop(theme.style.dim >= 0 ? theme.style.dim : defaultDim));
         root.addView(panel);
         applyStyle(panel);
+        applyMedia(panel);
         for (int i = 0; i < renderer.tiles.size(); i++) {
             int index = i;
             View t = renderer.tiles.get(i);
@@ -637,6 +646,204 @@ public class QuickMenuActivity extends AppCompatActivity {
             }
         }
         return String.join("  ·  ", parts);
+    }
+
+    // ------------------------------------------------------------------ pictures, GIFs, video
+
+    private android.media.MediaPlayer player;
+
+    private void releasePlayer() {
+        if (player != null) {
+            try {
+                player.release();
+            } catch (Exception ignored) {
+            }
+            player = null;
+        }
+    }
+
+    /** Background (screen or panel) and decorations, from the theme. */
+    private void applyMedia(View panel) {
+        releasePlayer();
+        MenuMedia.Background bg = theme.background;
+        if (bg.isSet() && MenuMedia.exists(this, bg.file)) {
+            boolean video = MenuMedia.isVideo(bg.file);
+            if (bg.target.equals("panel") && !video) underPanels(root, bg);
+            else root.addView(screenBackground(bg, video), 0);
+        }
+        int behindAt = root.indexOfChild(panel);
+        for (MenuMedia.Decoration d : theme.decorations) {
+            View v = decoration(d);
+            if (v == null) continue;
+            if (d.front) root.addView(v);
+            else root.addView(v, behindAt++);
+        }
+    }
+
+    private int screenW() {
+        return getWindowManager().getCurrentWindowMetrics().getBounds().width();
+    }
+
+    private int screenH() {
+        return getWindowManager().getCurrentWindowMetrics().getBounds().height();
+    }
+
+    /** Puts the picture under every panel the style drew (keeping their shape and colours on top). */
+    private void underPanels(View v, MenuMedia.Background bg) {
+        if (v.getBackground() instanceof MenuStyle.PanelDrawable) {
+            MenuStyle.PanelDrawable p = (MenuStyle.PanelDrawable) v.getBackground();
+            android.graphics.drawable.Drawable img = MenuMedia.load(this, bg.file, Math.max(screenW(), screenH()));
+            if (img != null) {
+                img = MenuMedia.blurred(this, img, bg.blur);
+                MenuMedia.Cover cover = new MenuMedia.Cover(img, bg.scale.equals("fit"), p.radiiPx, p.oval, bg.dim);
+                v.setBackground(new android.graphics.drawable.LayerDrawable(
+                        new android.graphics.drawable.Drawable[]{cover, p}));
+            }
+        }
+        if (v instanceof ViewGroup) {
+            ViewGroup g = (ViewGroup) v;
+            for (int i = 0; i < g.getChildCount(); i++) underPanels(g.getChildAt(i), bg);
+        }
+    }
+
+    /** A picture, GIF or looping video over the whole screen, behind the menu. */
+    private View screenBackground(MenuMedia.Background bg, boolean video) {
+        FrameLayout holder = new FrameLayout(this);
+        noHighlight(holder);
+        View content;
+        if (video) {
+            android.view.TextureView tv = new android.view.TextureView(this);
+            java.io.File file = new java.io.File(MenuMedia.dir(this), bg.file);
+            tv.setSurfaceTextureListener(new android.view.TextureView.SurfaceTextureListener() {
+                @Override
+                public void onSurfaceTextureAvailable(android.graphics.SurfaceTexture st, int w, int h) {
+                    try {
+                        android.media.MediaPlayer mp = new android.media.MediaPlayer();
+                        mp.setDataSource(file.getAbsolutePath());
+                        mp.setSurface(new android.view.Surface(st));
+                        mp.setLooping(true);
+                        mp.setVolume(0, 0);
+                        mp.setOnPreparedListener(m -> {
+                            // fill or fit the screen without stretching
+                            float vw = m.getVideoWidth(), vh = m.getVideoHeight();
+                            if (vw > 0 && vh > 0) {
+                                float k = bg.scale.equals("fit") ? Math.min(w / vw, h / vh) : Math.max(w / vw, h / vh);
+                                android.graphics.Matrix mx = new android.graphics.Matrix();
+                                mx.setScale(vw * k / w, vh * k / h, w / 2f, h / 2f);
+                                tv.setTransform(mx);
+                            }
+                            m.start();
+                        });
+                        mp.prepareAsync();
+                        player = mp;
+                    } catch (Exception e) {
+                        android.util.Log.w("DockPad", "background video", e);
+                    }
+                }
+
+                @Override
+                public void onSurfaceTextureSizeChanged(android.graphics.SurfaceTexture st, int w, int h) {
+                }
+
+                @Override
+                public boolean onSurfaceTextureDestroyed(android.graphics.SurfaceTexture st) {
+                    releasePlayer();
+                    return true;
+                }
+
+                @Override
+                public void onSurfaceTextureUpdated(android.graphics.SurfaceTexture st) {
+                }
+            });
+            content = tv;
+        } else {
+            android.graphics.drawable.Drawable img = MenuMedia.load(this, bg.file, Math.max(screenW(), screenH()));
+            View iv = new View(this);
+            if (img != null) {
+                boolean animated = img instanceof android.graphics.drawable.AnimatedImageDrawable;
+                if (!animated) img = MenuMedia.blurred(this, img, bg.blur);
+                iv.setBackground(new MenuMedia.Cover(img, bg.scale.equals("fit"), null, false, 0));
+            }
+            content = iv;
+        }
+        // GIFs and video blur on the fly
+        if (bg.blur > 0 && (video || content.getBackground() instanceof MenuMedia.Cover
+                && ((MenuMedia.Cover) content.getBackground()).inner instanceof android.graphics.drawable.AnimatedImageDrawable)) {
+            float r = bg.blur * 2f;
+            content.setRenderEffect(android.graphics.RenderEffect.createBlurEffect(r, r, android.graphics.Shader.TileMode.CLAMP));
+        }
+        holder.addView(content, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+        if (bg.dim > 0) {
+            View dim = new View(this);
+            dim.setBackgroundColor(Math.round(bg.dim * 2.55f) << 24);
+            holder.addView(dim, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT));
+        }
+        holder.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+        return holder;
+    }
+
+    /** One decoration: a picture or GIF at a spot on screen, maybe repeated along an edge. */
+    private View decoration(MenuMedia.Decoration d) {
+        if (!MenuMedia.exists(this, d.file)) return null;
+        int W = screenW(), H = screenH();
+        int h = Math.max(4, Math.round(H * d.size / 100f));
+        android.graphics.drawable.Drawable first = MenuMedia.load(this, d.file, Math.max(h * 2, 64));
+        if (first == null) return null;
+        float aspect = first.getIntrinsicWidth() / (float) Math.max(1, first.getIntrinsicHeight());
+        int w = Math.max(4, Math.round(h * aspect));
+        int g = gravity(d.anchor);
+        View v;
+        if (d.repeat.equals("none")) {
+            v = decorationImage(first, d);
+            v.setLayoutParams(new FrameLayout.LayoutParams(w, h, g));
+        } else {
+            boolean across = d.repeat.equals("across");
+            LinearLayout strip = new LinearLayout(this);
+            strip.setOrientation(across ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
+            int n = Math.min(40, (across ? W / Math.max(1, w) : H / Math.max(1, h)) + 2);
+            for (int i = 0; i < n; i++) {
+                // each copy needs its own picture, so GIFs animate in all of them
+                android.graphics.drawable.Drawable img = i == 0 ? first : MenuMedia.load(this, d.file, Math.max(h * 2, 64));
+                if (img == null) break;
+                strip.addView(decorationImage(img, d), new LinearLayout.LayoutParams(w, h));
+            }
+            int stripG = across ? (g & Gravity.VERTICAL_GRAVITY_MASK) | Gravity.LEFT : (g & Gravity.HORIZONTAL_GRAVITY_MASK) | Gravity.TOP;
+            strip.setLayoutParams(new FrameLayout.LayoutParams(across ? ViewGroup.LayoutParams.WRAP_CONTENT : w,
+                    across ? h : ViewGroup.LayoutParams.WRAP_CONTENT, stripG));
+            v = strip;
+        }
+        v.setTranslationX(W * d.x / 100f);
+        v.setTranslationY(H * d.y / 100f);
+        v.setAlpha(d.opacity / 100f);
+        noHighlight(v);
+        v.setClickable(false);
+        return v;
+    }
+
+    private View decorationImage(android.graphics.drawable.Drawable img, MenuMedia.Decoration d) {
+        android.widget.ImageView iv = new android.widget.ImageView(this);
+        iv.setImageDrawable(img);
+        iv.setScaleType(android.widget.ImageView.ScaleType.FIT_XY);
+        if (d.mirror) iv.setScaleX(-1f);
+        noHighlight(iv);
+        return iv;
+    }
+
+    private static int gravity(String anchor) {
+        switch (anchor) {
+            case "top-left": return Gravity.TOP | Gravity.LEFT;
+            case "top": return Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+            case "top-right": return Gravity.TOP | Gravity.RIGHT;
+            case "left": return Gravity.CENTER_VERTICAL | Gravity.LEFT;
+            case "center": return Gravity.CENTER;
+            case "right": return Gravity.CENTER_VERTICAL | Gravity.RIGHT;
+            case "bottom-left": return Gravity.BOTTOM | Gravity.LEFT;
+            case "bottom": return Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+            default: return Gravity.BOTTOM | Gravity.RIGHT;
+        }
     }
 
     /** Applies the look's text, icon and highlight settings to everything drawn. */

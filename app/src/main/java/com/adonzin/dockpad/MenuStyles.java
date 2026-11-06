@@ -49,7 +49,7 @@ final class MenuStyles {
 
     static View row(Context c, MenuRender.Item it, ViewGroup parent) {
         View r = LayoutInflater.from(c).inflate(R.layout.item_row, parent, false);
-        ((ImageView) r.findViewById(R.id.row_icon)).setImageResource(it.icon);
+        MenuRender.setIcon(r.findViewById(R.id.row_icon), it);
         ((TextView) r.findViewById(R.id.row_title)).setText(it.title);
         TextView sub = r.findViewById(R.id.row_subtitle);
         if (it.subtitle == null) sub.setVisibility(View.GONE);

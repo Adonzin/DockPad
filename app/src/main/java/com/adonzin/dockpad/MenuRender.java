@@ -35,6 +35,8 @@ final class MenuRender {
         final int icon;
         final String title, subtitle, badge;
         final Runnable action;
+        /** An image of the user's (media file) instead of {@link #icon}. */
+        String iconFile;
 
         Item(String id, String group, String section, int icon, String title, String subtitle, String badge,
              Runnable action) {
@@ -47,6 +49,19 @@ final class MenuRender {
             this.badge = badge;
             this.action = action;
         }
+    }
+
+    /** Shows an item's icon: the user's own image if it has one, else the built-in icon (tinted). */
+    static void setIcon(ImageView v, Item it) {
+        if (it.iconFile != null) {
+            android.graphics.drawable.Drawable d = MenuMedia.load(v.getContext(), it.iconFile, 320);
+            if (d != null) {
+                v.setImageTintList(null); // keep the picture's own colours
+                v.setImageDrawable(d);
+                return;
+            }
+        }
+        if (it.icon != 0) v.setImageResource(it.icon);
     }
 
     /** A drawn menu: its view, and the selectable tiles in order. */
@@ -212,8 +227,8 @@ final class MenuRender {
             t.setBackground(tileBackground(false));
             t.setForeground(c.getDrawable(R.drawable.focus_ring));
             ImageView icon = new ImageView(c);
-            if (it.icon != 0) icon.setImageResource(it.icon);
             icon.setImageTintList(ColorStateList.valueOf(color(androidx.appcompat.R.attr.colorPrimary)));
+            setIcon(icon, it);
             int s = (int) (size * 0.55f);
             t.addView(icon, new android.widget.FrameLayout.LayoutParams(s, s, Gravity.CENTER));
             if (it.badge != null) {
@@ -258,7 +273,7 @@ final class MenuRender {
                     continue;
                 }
                 View r = inf.inflate(R.layout.item_row, list, false);
-                ((ImageView) r.findViewById(R.id.row_icon)).setImageResource(it.icon);
+                setIcon(r.findViewById(R.id.row_icon), it);
                 ((TextView) r.findViewById(R.id.row_title)).setText(it.title);
                 TextView sub = r.findViewById(R.id.row_subtitle);
                 if (it.subtitle == null || compact) sub.setVisibility(View.GONE);
@@ -666,8 +681,8 @@ final class MenuRender {
             setBackground(bg);
             setForeground(c.getDrawable(R.drawable.focus_ring));
             icon = new ImageView(c);
-            if (it.icon != 0) icon.setImageResource(it.icon);
             icon.setImageTintList(ColorStateList.valueOf(tint));
+            setIcon(icon, it);
             addView(icon);
             title = new TextView(c);
             title.setText(it.title);

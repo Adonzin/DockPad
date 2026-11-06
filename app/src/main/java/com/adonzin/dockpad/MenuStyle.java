@@ -224,8 +224,14 @@ final class MenuStyle {
     }
 
     /** The panel's background. {@code shape}: corner radii in dp at the theme's default 24 (scaled), or null for an oval. */
+    /** A panel background (so a picture can be put under it later). */
+    static final class PanelDrawable extends GradientDrawable {
+        boolean oval;
+        float[] radiiPx;
+    }
+
     GradientDrawable panel(Context c, float[] radiiAt24) {
-        GradientDrawable d = new GradientDrawable();
+        PanelDrawable d = new PanelDrawable();
         int[] cols = panelColors(accent(c));
         if (cols.length == 1) d.setColor(cols[0]);
         else {
@@ -243,12 +249,15 @@ final class MenuStyle {
                     d.setOrientation(orientation(angle));
             }
         }
-        if (radiiAt24 == null) d.setShape(GradientDrawable.OVAL);
-        else {
+        if (radiiAt24 == null) {
+            d.setShape(GradientDrawable.OVAL);
+            d.oval = true;
+        } else {
             float k = corners / 24f;
             float[] r = new float[8];
             for (int i = 0; i < 8; i++) r[i] = dp(c, radiiAt24[i] * k);
             d.setCornerRadii(r);
+            d.radiiPx = r;
         }
         if (border > 0) d.setStroke(dp(c, border), edge(parse(borderColor, accent(c)), 255));
         else if (glow) d.setStroke(dp(c, 3), edge(accent(c), 150));

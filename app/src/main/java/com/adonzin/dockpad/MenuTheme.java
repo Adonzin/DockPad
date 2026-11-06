@@ -43,6 +43,10 @@ final class MenuTheme {
     final Map<String, float[]> free = new HashMap<>();
     /** Colours, shapes, text, highlight, header. */
     MenuStyle style = new MenuStyle();
+    /** Background picture/GIF/video. */
+    MenuMedia.Background background = new MenuMedia.Background();
+    /** Images placed around the screen. */
+    List<MenuMedia.Decoration> decorations = new ArrayList<>();
 
     private JSONObject raw = new JSONObject(); // everything, including fields this version doesn't know
 
@@ -59,6 +63,11 @@ final class MenuTheme {
             t.raw = o;
             t.name = o.optString("name", t.name);
             t.style = MenuStyle.parse(o.optJSONObject("style"));
+            JSONObject media = o.optJSONObject("media");
+            if (media != null) {
+                t.background = MenuMedia.parseBackground(media.optJSONObject("background"));
+                t.decorations = MenuMedia.parseDecorations(media.optJSONArray("decorations"));
+            }
             JSONObject l = o.optJSONObject("layout");
             if (l != null) {
                 String type = l.optString("type", t.layout);
@@ -112,6 +121,10 @@ final class MenuTheme {
             l.put("free", f);
             o.put("layout", l);
             o.put("style", style.toJson());
+            JSONObject media = new JSONObject();
+            media.put("background", MenuMedia.encode(background));
+            media.put("decorations", MenuMedia.encode(decorations));
+            o.put("media", media);
             return o.toString();
         } catch (Exception e) {
             return "{}";

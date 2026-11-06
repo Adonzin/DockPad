@@ -125,6 +125,12 @@ final class MenuCustom {
         return t;
     }
 
+    /** The user's own image for an item ("file:<name>"), or null. */
+    String iconFileOf(String id) {
+        String v = itemIcon.get(id);
+        return v != null && v.startsWith("file:") ? v.substring(5) : null;
+    }
+
     int iconOf(String id, int original) {
         int r = IconLibrary.resolve(itemIcon.get(id));
         return r != 0 ? r : original;

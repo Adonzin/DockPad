@@ -28,11 +28,13 @@ import java.util.Set;
 final class MenuOrganizer {
     private final Activity a;
     private final LinearLayout list;
+    private final MediaDialog.Importer importer;
     private String focusTag;
 
-    MenuOrganizer(Activity a, LinearLayout list) {
+    MenuOrganizer(Activity a, LinearLayout list, MediaDialog.Importer importer) {
         this.a = a;
         this.list = list;
+        this.importer = importer;
     }
 
     /** id, original name. */
@@ -176,14 +178,23 @@ final class MenuOrganizer {
         });
         row.addView(show);
         if (!id.equals("controllers")) {
-            row.addView(iconButton(mc.iconOf(id, QuickMenuActivity.defaultIcon(id)), false, "item:" + id + ":icon",
+            View ib = iconButton(mc.iconOf(id, QuickMenuActivity.defaultIcon(id)), false, "item:" + id + ":icon",
                     () -> pickIcon("Icon for “" + mc.titleOf(id, it[1]) + "”", mc.itemIcon.get(id), name -> {
                         MenuCustom m = MenuCustom.load(a);
                         if (name == null) m.itemIcon.remove(id);
                         else m.itemIcon.put(id, name);
                         m.save(a);
                         render();
-                    })));
+                    }));
+            String file = mc.iconFileOf(id);
+            if (file != null && ib instanceof android.widget.ImageView) {
+                android.graphics.drawable.Drawable d = MenuMedia.load(a, file, dp(80));
+                if (d != null) {
+                    ((android.widget.ImageView) ib).setImageTintList(null);
+                    ((android.widget.ImageView) ib).setImageDrawable(d);
+                }
+            }
+            row.addView(ib);
         }
         TextView title = new TextView(a);
         String t = mc.titleOf(id, it[1]);
@@ -289,6 +300,26 @@ final class MenuOrganizer {
             });
             if (name.equals(current)) first = c;
         }
+        // the user's own images
+        for (String file : MenuMedia.list(a, false)) {
+            android.widget.ImageView v = new android.widget.ImageView(a);
+            v.setImageDrawable(MenuMedia.load(a, file, dp(96)));
+            v.setPadding(dp(6), dp(6), dp(6), dp(6));
+            v.setContentDescription(file);
+            View c = cell(grid, v, ("file:" + file).equals(current), () -> {
+                dialog[0].dismiss();
+                done.icon("file:" + file);
+            });
+            if (("file:" + file).equals(current)) first = c;
+        }
+        TextView mine = new TextView(a);
+        mine.setText("Your image…");
+        mine.setGravity(Gravity.CENTER);
+        mine.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_LabelSmall);
+        cell(grid, mine, false, () -> {
+            dialog[0].dismiss();
+            importer.pick(false, name -> done.icon("file:" + name));
+        });
         android.widget.ScrollView sv = new android.widget.ScrollView(a);
         sv.addView(grid);
         dialog[0] = new DpDialog(a).setTitle(title).setView(sv).setNegativeButton("Cancel", null).show();

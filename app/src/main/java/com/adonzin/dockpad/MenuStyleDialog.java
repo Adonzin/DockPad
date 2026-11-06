@@ -262,11 +262,14 @@ final class MenuStyleDialog {
     }
 
     private void slider(String name, int from, int to, int step, int value, IntSet on, IntLabel fmt) {
+        LinearLayout row = new LinearLayout(a);
+        row.setOrientation(LinearLayout.VERTICAL);
+        row.setPadding(dp(6), dp(4), dp(6), dp(2));
         TextView t = new TextView(a);
         t.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyMedium);
         t.setText(name + ": " + fmt.label(value));
-        t.setPadding(0, dp(6), 0, 0);
-        box.addView(t);
+        t.setPadding(0, dp(4), 0, 0);
+        row.addView(t);
         Slider s = new Slider(a);
         s.setValueFrom(from);
         s.setValueTo(to);
@@ -279,7 +282,30 @@ final class MenuStyleDialog {
             on.set(iv);
             custom();
         });
-        box.addView(s);
+        row.addView(s);
+        focusRow(a, row, s, t);
+        box.addView(row);
+    }
+
+    /** Makes it obvious which slider the D-pad is moving: its whole row lights up. */
+    static void focusRow(Activity a, View row, View control, TextView label) {
+        android.util.TypedValue tv = new android.util.TypedValue();
+        a.getTheme().resolveAttribute(androidx.appcompat.R.attr.colorPrimary, tv, true);
+        int accent = tv.data;
+        float d = a.getResources().getDisplayMetrics().density;
+        control.setOnFocusChangeListener((v, has) -> {
+            if (has) {
+                GradientDrawable g = new GradientDrawable();
+                g.setCornerRadius(12 * d);
+                g.setColor((accent & 0x00FFFFFF) | 0x2E000000);
+                g.setStroke((int) (2 * d), accent);
+                row.setBackground(g);
+                if (label != null) label.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            } else {
+                row.setBackground(null);
+                if (label != null) label.setTypeface(android.graphics.Typeface.DEFAULT);
+            }
+        });
     }
 
     private void toggle(String name, boolean value, BoolSet on) {
@@ -429,11 +455,18 @@ final class MenuStyleDialog {
         String[] names = {"Hue", "Saturation", "Brightness", "Opacity"};
         Runnable[] refresh = new Runnable[1];
         for (int i = 0; i < 4; i++) {
+            LinearLayout mixRow = new LinearLayout(a);
+            mixRow.setOrientation(LinearLayout.VERTICAL);
+            mixRow.setPadding(dp(6), dp(4), dp(6), dp(8));
+            LinearLayout.LayoutParams ml = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT);
+            ml.topMargin = dp(6);
+            col.addView(mixRow, ml);
             TextView t = new TextView(a);
             t.setText(names[i]);
             t.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyMedium);
-            t.setPadding(0, dp(10), 0, 0);
-            col.addView(t);
+            t.setPadding(0, dp(4), 0, 0);
+            mixRow.addView(t);
             Slider sl = new Slider(a);
             sl.setValueFrom(0);
             sl.setValueTo(i == 0 ? 360 : 100);
@@ -450,11 +483,12 @@ final class MenuStyleDialog {
                 else alpha[0] = Math.round(val * 2.55f);
                 refresh[0].run();
             });
-            col.addView(sl);
+            mixRow.addView(sl);
             View bar = new View(a);
             LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(8));
             bl.setMargins(dp(14), 0, dp(14), 0);
-            col.addView(bar, bl);
+            mixRow.addView(bar, bl);
+            focusRow(a, mixRow, sl, t);
             bars[i] = bar;
             sliders[i] = sl;
         }

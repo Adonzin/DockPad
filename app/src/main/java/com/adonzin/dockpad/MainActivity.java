@@ -164,7 +164,9 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         findViewById(R.id.add_command).setOnClickListener(v -> editor.addCommand());
         findViewById(R.id.menu_preview).setOnClickListener(v ->
                 startActivity(new Intent(this, QuickMenuActivity.class)));
-        organiser = new MenuOrganizer(this, findViewById(R.id.organiser_list));
+        organiser = new MenuOrganizer(this, findViewById(R.id.organiser_list), this::pickMedia);
+        findViewById(R.id.media_background).setOnClickListener(v -> MediaDialog.background(this, this::pickMedia));
+        findViewById(R.id.media_decorations).setOnClickListener(v -> MediaDialog.decorations(this, this::pickMedia));
         findViewById(R.id.new_section).setOnClickListener(v -> organiser.newSection());
         findViewById(R.id.reset_sections).setOnClickListener(v -> organiser.resetAll());
         commandsList = findViewById(R.id.commands_list);
@@ -996,6 +998,37 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
     }
 
     // ------------------------------------------------------------------ reset
+
+    // ------------------------------------------------------------------ pictures and videos for the quick menu
+
+    private java.util.function.Consumer<String> mediaDone;
+
+    private final androidx.activity.result.ActivityResultLauncher<String[]> pickMediaFile =
+            registerForActivityResult(new androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+                    uri -> {
+                        if (uri == null || mediaDone == null) return;
+                        java.util.function.Consumer<String> done = mediaDone;
+                        Toast.makeText(this, "Adding…", Toast.LENGTH_SHORT).show();
+                        bg.execute(() -> {
+                            try {
+                                String name = MenuMedia.importFile(this, uri);
+                                ui.post(() -> done.accept(name));
+                            } catch (Exception e) {
+                                ui.post(() -> Toast.makeText(this, "Couldn't add it: " + e.getMessage(),
+                                        Toast.LENGTH_LONG).show());
+                            }
+                        });
+                    });
+
+    /** Picks a picture/GIF (or video too) with Android's picker and copies it into DockPad. */
+    void pickMedia(boolean videoToo, java.util.function.Consumer<String> done) {
+        mediaDone = done;
+        try {
+            pickMediaFile.launch(videoToo ? new String[]{"image/*", "video/*"} : new String[]{"image/*"});
+        } catch (Exception e) {
+            Toast.makeText(this, "No file picker available", Toast.LENGTH_SHORT).show();
+        }
+    }
 
     // ------------------------------------------------------------------ fonts for the quick menu
 

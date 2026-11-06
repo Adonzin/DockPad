@@ -50,6 +50,7 @@ final class MenuLookDialog {
         size.setStepSize(5);
         size.setValue(Math.max(40, Math.min(100, Math.round(t.size / 5f) * 5)));
         box.addView(size);
+        MenuStyleDialog.focusRow(a, size, size, sizeLabel);
 
         TextView widthLabel = label(a, "");
         box.addView(widthLabel);
@@ -59,6 +60,7 @@ final class MenuLookDialog {
         width.setStepSize(20);
         width.setValue(Math.max(240, Math.min(900, Math.round(t.width / 20f) * 20)));
         box.addView(width);
+        MenuStyleDialog.focusRow(a, width, width, widthLabel);
 
         TextView colsLabel = label(a, "");
         box.addView(colsLabel);
@@ -68,6 +70,7 @@ final class MenuLookDialog {
         cols.setStepSize(1);
         cols.setValue(Math.max(2, Math.min(6, t.columns)));
         box.addView(cols);
+        MenuStyleDialog.focusRow(a, cols, cols, colsLabel);
 
         MaterialSwitch sections = new MaterialSwitch(a);
         sections.setText("Group items into sections");
