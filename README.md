@@ -54,6 +54,7 @@ Docked play on a handheld usually means setting up every emulator again for an e
 - Quick Settings tiles for DockPad and Cursor mode.
 - The whole app can be used with a controller (L1/R1 switch tabs).
 - Updates itself from inside the app.
+- **Backup & sharing:** save your whole setup (shortcuts, quick menu, controller layouts, settings) to one file, restore it later, or share it with friends.
 - Built-in diagnostics, button checker and rumble test.
 
 ## Install

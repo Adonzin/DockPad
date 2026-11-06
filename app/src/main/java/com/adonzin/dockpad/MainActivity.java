@@ -166,6 +166,14 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         ((TextView) findViewById(R.id.version)).setText("DockPad " + BuildConfig.VERSION_NAME);
         ((TextView) findViewById(R.id.update_status)).setText("You have build " + BuildConfig.VERSION_CODE + ".");
         findViewById(R.id.check_updates).setOnClickListener(v -> checkUpdates(true));
+        findViewById(R.id.backup_save).setOnClickListener(v -> saveBackup());
+        findViewById(R.id.backup_restore).setOnClickListener(v -> {
+            try {
+                pickBackup.launch(new String[]{"application/json", "application/octet-stream", "text/plain", "*/*"});
+            } catch (Exception e) {
+                Toast.makeText(this, "No file picker available", Toast.LENGTH_SHORT).show();
+            }
+        });
 
         buildSettings();
         renderShortcuts();
@@ -990,6 +998,95 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
     }
 
     // ------------------------------------------------------------------ reset
+
+    // ------------------------------------------------------------------ backup & sharing
+
+    private final androidx.activity.result.ActivityResultLauncher<String[]> pickBackup =
+            registerForActivityResult(new androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+                    uri -> {
+                        if (uri != null) restoreBackup(uri);
+                    });
+
+    private void saveBackup() {
+        bg.execute(() -> {
+            try {
+                android.net.Uri uri = Backup.save(this);
+                String name = Backup.fileName(this, uri);
+                ui.post(() -> new DpDialog(this)
+                        .setTitle("Backup saved")
+                        .setMessage("Saved as " + name + " in Download/DockPad.\n\nTo restore it later, use "
+                                + "\"Restore or import a backup\" and pick that file.")
+                        .setPositiveButton("Done", null)
+                        .setNeutralButton("Share", (d, w) -> {
+                            Intent send = new Intent(Intent.ACTION_SEND)
+                                    .setType("application/json")
+                                    .putExtra(Intent.EXTRA_STREAM, uri)
+                                    .putExtra(Intent.EXTRA_SUBJECT, "My DockPad setup")
+                                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                            startActivity(Intent.createChooser(send, "Share DockPad backup"));
+                        })
+                        .show());
+            } catch (Exception e) {
+                ui.post(() -> Toast.makeText(this, "Couldn't save: " + e.getMessage(), Toast.LENGTH_LONG).show());
+            }
+        });
+    }
+
+    private void restoreBackup(android.net.Uri uri) {
+        bg.execute(() -> {
+            Backup.Contents b;
+            try {
+                b = Backup.read(this, uri);
+            } catch (Exception e) {
+                ui.post(() -> new DpDialog(this).setTitle("Can't use this file")
+                        .setMessage(e.getMessage()).setPositiveButton("OK", null).show());
+                return;
+            }
+            ui.post(() -> {
+                String[] labels = new String[b.present.size()];
+                boolean[] checked = new boolean[labels.length];
+                for (int i = 0; i < labels.length; i++) {
+                    int sec = b.present.get(i);
+                    String d = b.describe(sec);
+                    labels[i] = Backup.SECTION_LABELS[sec] + (d.isEmpty() ? "" : " · " + d);
+                    checked[i] = true;
+                }
+                new DpDialog(this)
+                        .setTitle("Restore from backup" + (b.created.isEmpty() ? "" : " (" + b.created + ")"))
+                        .setMultiChoiceItems(labels, checked, (d, w, on) -> checked[w] = on)
+                        .setPositiveButton("Restore", (d, w) -> {
+                            java.util.List<Integer> chosen = new java.util.ArrayList<>();
+                            for (int i = 0; i < labels.length; i++) if (checked[i]) chosen.add(b.present.get(i));
+                            if (chosen.isEmpty()) return;
+                            new DpDialog(this)
+                                    .setTitle("Replace your current setup?")
+                                    .setMessage("The chosen parts replace what you have now. Pairing and the "
+                                            + "connection to this device stay as they are.")
+                                    .setPositiveButton("Replace", (d2, w2) -> {
+                                        Backup.restore(this, b, chosen);
+                                        afterRestore();
+                                    })
+                                    .setNegativeButton("Cancel", null)
+                                    .show();
+                        })
+                        .setNegativeButton("Cancel", null)
+                        .show();
+            });
+        });
+    }
+
+    private void afterRestore() {
+        prefs = new Prefs(this);
+        buildSettings();
+        renderShortcuts();
+        renderCommands();
+        lastControllersJson = "";
+        ((com.google.android.material.slider.Slider) findViewById(R.id.pc_speed))
+                .setValue(Math.max(0.25f, Math.min(3f, Math.round(prefs.pcSpeed() * 4) / 4f)));
+        ((MaterialSwitch) findViewById(R.id.pc_left)).setChecked(prefs.pcPointerLeft());
+        pushSettings();
+        Toast.makeText(this, "Backup restored", Toast.LENGTH_SHORT).show();
+    }
 
     // ------------------------------------------------------------------ updates
 
