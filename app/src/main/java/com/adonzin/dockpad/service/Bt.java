@@ -14,6 +14,7 @@ import java.util.Set;
 
 /** Bluetooth from the shell process (which may connect/disconnect paired devices). */
 @android.annotation.TargetApi(33)
+@android.annotation.SuppressLint({"MissingPermission", "NewApi"})
 final class Bt {
     private static final String TAG = "DockPad";
 
