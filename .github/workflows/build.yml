@@ -13,6 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history, for the release's change list
 
       - uses: actions/setup-java@v4
         with:
@@ -38,13 +40,30 @@ jobs:
             [ -n "$line" ] && echo "::error::${line}"
           done
 
-      - name: Publish as "latest" release
+      - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          N=${{ github.run_number }}
           cp app/build/outputs/apk/release/app-release.apk DockPad.apk
+          PREV=$(git tag --list 'build-*' --sort=-v:refname | head -1)
+          {
+            echo "Download **DockPad.apk** below on your device and install it, or update from inside DockPad (Settings → Updates)."
+            echo
+            echo "### What's new"
+            if [ -n "$PREV" ]; then
+              git log --no-merges --pretty='- %s' "$PREV..$GITHUB_SHA" | grep -vE '^- (CI|Fix variable)' || echo "- Small fixes"
+            else
+              git log --no-merges --pretty='- %s' -15 "$GITHUB_SHA" | grep -vE '^- (CI|Fix variable)'
+            fi
+            echo
+            echo "Built from ${GITHUB_SHA::7}."
+          } > notes.md
+          # every build is kept as its own release
+          gh release create "build-$N" DockPad.apk --target "$GITHUB_SHA" --latest \
+            --title "DockPad build #$N" --notes-file notes.md
+          # old update channel, for DockPad build 61 and older (hidden as a pre-release)
           gh release delete latest --yes --cleanup-tag || true
-          gh release create latest DockPad.apk \
-            --target "$GITHUB_SHA" \
-            --title "DockPad build #${{ github.run_number }}" \
-            --notes "Download **DockPad.apk** below on your device and install it. Built from ${GITHUB_SHA::7}."
+          gh release create latest DockPad.apk --target "$GITHUB_SHA" --prerelease \
+            --title "DockPad build #$N (update channel for builds 61 and older)" \
+            --notes "Older DockPad versions look for updates here. Get the current release from the Releases page."

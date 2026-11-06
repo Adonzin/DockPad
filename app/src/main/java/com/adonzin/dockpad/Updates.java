@@ -32,7 +32,7 @@ final class Updates {
 
     /** The latest release, with what changed since this build. */
     static Release latest() throws Exception {
-        JSONObject r = new JSONObject(get(API + "/releases/tags/latest"));
+        JSONObject r = new JSONObject(get(API + "/releases/latest")); // newest kept release (build-N)
         Release rel = new Release();
         Matcher m = Pattern.compile("#(\\d+)").matcher(r.optString("name"));
         rel.build = m.find() ? Integer.parseInt(m.group(1)) : 0;

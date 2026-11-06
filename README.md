@@ -99,7 +99,7 @@ DockPad uses Android's own developer tools (Wireless debugging), the same access
 
 ## Building
 
-Every push to `main` is built by GitHub Actions and published as the `latest` release. To build locally with JDK 17 and the Android SDK, run:
+Every push to `main` is built by GitHub Actions and published as its own release (`build-N`), with the changes since the previous build listed. Older releases stay available on the [Releases page](../../releases). To build locally with JDK 17 and the Android SDK, run:
 
 ```
 gradle :app:assembleRelease
