@@ -39,7 +39,7 @@ Docked play on a handheld usually means setting up every emulator again for an e
 
 **Quick menu overlay**
 - Opens over any game with a button combo, and is fully navigable with a controller.
-- Has Home, Back, Cursor mode, an on-screen keyboard, rapid fire, face-button swaps, screenshot, force close, your own commands, live controllers list (with battery and disconnect), and pairing.
+- Has Home, Back, Cursor mode, an on-screen keyboard, rapid fire, face-button swaps, screenshot, force close, your own commands, live controllers list (with battery and disconnect), and pairing. Disconnect your last controller and the menu closes by itself, since you're back to handheld play (can be turned off).
 - You choose which items it shows.
 - **Organise it your way** in its own Quick menu tab: show or hide items, put them in order, move any item or command to another section, rename sections and items (e.g. "Tools" → "Utilities"), give them icons from a built-in library or your own images, and make your own sections.
 - Volume, brightness and media commands keep the menu open, so you can press them again and again.

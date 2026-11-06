@@ -32,7 +32,7 @@ final class Backup {
             {"menuCommands", "menuHidden", "menuTheme", "menuOrder", "menuCustom"},
             {"layouts", "controllerNames"},
             {"multiplayer", "joinByPress", "touchpadAsButton", "rumble", "includeBuiltIn", "autoStart", "turnOffWD",
-                    "pcSpeed", "pcPointerLeft", "autoUpdateCheck"},
+                    "pcSpeed", "pcPointerLeft", "autoUpdateCheck", "closeMenuWithoutControllers"},
     };
     private static final String FLOATS = "pcSpeed";
 

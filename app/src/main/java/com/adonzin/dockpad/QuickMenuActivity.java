@@ -344,6 +344,7 @@ public class QuickMenuActivity extends AppCompatActivity {
     }
 
     private JSONArray lastControllers;
+    private boolean hadExternals;
     private String controllersKey = "";
 
     /** Remembers the controllers; returns true if what the menu shows for them changed. */
@@ -353,6 +354,16 @@ public class QuickMenuActivity extends AppCompatActivity {
             JSONObject c = ctrls.optJSONObject(i);
             if (c != null && !c.optBoolean("touchpad") && !c.optBoolean("builtIn")
                     && !externals.contains(c.optString("name"))) externals.add(c.optString("name"));
+        }
+        // the last external controller went: back to handheld play, so the menu closes by itself
+        if (ctrls != null && running) {
+            if (!externals.isEmpty()) hadExternals = true;
+            else if (hadExternals && !closing && new Prefs(this).closeMenuWithoutControllers()) {
+                hadExternals = false;
+                android.widget.Toast.makeText(getApplicationContext(), "No controllers left: quick menu closed",
+                        android.widget.Toast.LENGTH_SHORT).show();
+                ui.postDelayed(this::finish, 400);
+            }
         }
         StringBuilder key = new StringBuilder(running ? "on" : "off");
         if (ctrls != null) for (int i = 0; i < ctrls.length(); i++) {

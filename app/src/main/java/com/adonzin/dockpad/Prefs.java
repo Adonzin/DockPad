@@ -108,6 +108,9 @@ final class Prefs {
     boolean paired() { return p.getBoolean("paired", false); }
     void paired(boolean v) { p.edit().putBoolean("paired", v).apply(); }
 
+    /** Close the quick menu by itself when the last external controller goes (back to handheld play). */
+    boolean closeMenuWithoutControllers() { return p.getBoolean("closeMenuWithoutControllers", true); }
+    void closeMenuWithoutControllers(boolean v) { p.edit().putBoolean("closeMenuWithoutControllers", v).apply(); }
     boolean autoUpdateCheck() { return p.getBoolean("autoUpdateCheck", true); }
     void autoUpdateCheck(boolean v) { p.edit().putBoolean("autoUpdateCheck", v).apply(); }
     long lastUpdateCheck() { return p.getLong("lastUpdateCheck", 0); }

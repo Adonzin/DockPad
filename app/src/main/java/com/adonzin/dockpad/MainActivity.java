@@ -972,6 +972,9 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
                     prefs.joinByPress(v);
                     pushSettings();
                 });
+        addSwitch(controllerSettings, "Close the quick menu when the last controller goes",
+                "If you disconnect your last external controller (from the quick menu or by switching it off) while the quick menu is open, it closes by itself, since you're back to playing on the handheld.",
+                prefs.closeMenuWithoutControllers(), prefs::closeMenuWithoutControllers);
         addSwitch(appSettings, "Start automatically after a restart",
                 "After pairing, DockPad turns itself back on when the device restarts (needs Wi-Fi).",
                 prefs.autoStart(), prefs::autoStart);
