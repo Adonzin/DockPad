@@ -664,8 +664,8 @@ final class Bridge {
                         .append("); ");
             }
             b.append("Bluetooth connected: ").append(bt.length() == 0 ? "none found" : bt).append('\n');
-        } catch (Throwable t) {
-            b.append("Bluetooth: ").append(t).append('\n');
+        } catch (Throwable btErr) {
+            b.append("Bluetooth: ").append(btErr).append('\n');
         }
         b.append("Multiplayer: ").append(multiplayer ? "on" : "off (everything is player 1)").append('\n');
         if (slots.isEmpty()) b.append("Virtual controller: not created\n");
