@@ -19,6 +19,7 @@ import android.widget.TextView;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.adonzin.dockpad.core.Codes;
+import com.adonzin.dockpad.core.ControllerLayout;
 import com.adonzin.dockpad.core.Shortcut;
 import com.google.android.material.color.DynamicColors;
 
@@ -111,7 +112,7 @@ public class QuickMenuActivity extends AppCompatActivity {
     /** Built-in items the user can show or hide: id, label (for the settings checklist). */
     static final String[][] ITEMS = {
             {"home", "Home"}, {"back", "Back"}, {"cursor", "Cursor mode on/off"},
-            {"turbo", "Rapid fire on/off"}, {"nintendo", "Nintendo layout (swap A/B and X/Y)"}, {"swapab", "Swap A/B"}, {"swapxy", "Swap X/Y"},
+            {"turbo", "Rapid fire on/off"}, {"turboedit", "Rapid fire buttons (edit)"}, {"nintendo", "Nintendo layout (swap A/B and X/Y)"}, {"swapab", "Swap A/B"}, {"swapxy", "Swap X/Y"},
             {"dpkeyboard", "Keyboard (DockPad)"}, {"keyboard", "Show keyboard (Moonlight)"}, {"screenshot", "Screenshot"},
             {"forceclose", "Force close the game"}, {"controllers", "Controllers list"},
             {"power", "Turn DockPad on/off"}, {"openapp", "Open DockPad"}};
@@ -132,7 +133,7 @@ public class QuickMenuActivity extends AppCompatActivity {
         if (shown("home")) row(R.drawable.ic_home, "Home", null, () -> command(Codes.ACTION_HOME));
         if (shown("back")) row(R.drawable.ic_back, "Back", null, () -> command(Codes.ACTION_BACK));
 
-        String[] tools = {"dpkeyboard", "cursor", "turbo", "nintendo", "swapab", "swapxy", "keyboard", "screenshot", "forceclose"};
+        String[] tools = {"dpkeyboard", "cursor", "turbo", "turboedit", "nintendo", "swapab", "swapxy", "keyboard", "screenshot", "forceclose"};
         boolean anyTool = false;
         for (String t : tools) anyTool |= shown(t);
         if (anyTool) section("Tools");
@@ -148,6 +149,8 @@ public class QuickMenuActivity extends AppCompatActivity {
                 turboConfigured ? "For the buttons set in each controller's settings"
                         : "No rapid-fire buttons set yet (DockPad → controller settings)",
                 () -> withBridge(b -> b.runCommand(oneAction(Codes.ACTION_TOGGLE_TURBO), 0)));
+        if (shown("turboedit")) row(R.drawable.ic_bolt, "Rapid fire buttons…",
+                "Choose which buttons repeat, and how fast", this::editTurbo);
         if (shown("nintendo")) row(R.drawable.ic_gamepad, "Nintendo layout: " + (swapAB && swapXY ? "on" : "off"),
                 "Swaps A/B and X/Y on external controllers", () -> withBridge(b -> b.runCommand(
                         oneAction(Codes.ACTION_SWAP_FACE), 0)));
@@ -292,7 +295,75 @@ public class QuickMenuActivity extends AppCompatActivity {
         }));
     }
 
+    /** External controllers from the last status, for the rapid-fire editor. */
+    private final java.util.List<String> externals = new java.util.ArrayList<>();
+
+    private void editTurbo() {
+        if (externals.isEmpty()) {
+            android.widget.Toast.makeText(this, running ? "Connect a controller first" : "Turn DockPad on first",
+                    android.widget.Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (externals.size() == 1) {
+            editTurboFor(externals.get(0));
+            return;
+        }
+        String[] names = externals.toArray(new String[0]);
+        new DpDialog(this).setTitle("Which controller?")
+                .setItems(names, (d, w) -> editTurboFor(names[w]))
+                .setNegativeButton("Cancel", null).show();
+    }
+
+    private static final String[] SPEED_LABELS = {"Slow (6 a second)", "Normal (10 a second)",
+            "Fast (15 a second)", "Very fast (20 a second)"};
+    private static final int[] SPEEDS = {6, 10, 15, 20};
+
+    private void editTurboFor(String name) {
+        Prefs prefs = new Prefs(this);
+        ControllerLayout l = prefs.layout(name);
+        String[] labels = ControllerLayout.TURBO_LABELS;
+        boolean[] checked = new boolean[labels.length];
+        for (int i = 0; i < labels.length; i++) checked[i] = l.turbo.contains(ControllerLayout.TURBO_CODES[i]);
+        new DpDialog(this).setTitle("Rapid fire: " + name)
+                .setMultiChoiceItems(labels, checked, (d, w, on) -> checked[w] = on)
+                .setPositiveButton("Next", (d, w) -> {
+                    l.turbo.clear();
+                    for (int i = 0; i < labels.length; i++) if (checked[i]) l.turbo.add(ControllerLayout.TURBO_CODES[i]);
+                    if (l.turbo.isEmpty()) saveTurbo(prefs, l);
+                    else pickSpeed(prefs, l);
+                })
+                .setNegativeButton("Cancel", null).show();
+    }
+
+    private void pickSpeed(Prefs prefs, ControllerLayout l) {
+        int sel = 0;
+        for (int i = 0; i < SPEEDS.length; i++) {
+            if (Math.abs(SPEEDS[i] - l.turboRate) < Math.abs(SPEEDS[sel] - l.turboRate)) sel = i;
+        }
+        new DpDialog(this).setTitle("How fast?")
+                .setSingleChoiceItems(SPEED_LABELS, sel, (d, w) -> {
+                    l.turboRate = SPEEDS[w];
+                    d.dismiss();
+                    saveTurbo(prefs, l);
+                })
+                .setNegativeButton("Cancel", null).show();
+    }
+
+    private void saveTurbo(Prefs prefs, ControllerLayout l) {
+        prefs.saveLayout(l);
+        String spec = prefs.layoutsSpec();
+        android.widget.Toast.makeText(this, l.turbo.isEmpty() ? "Rapid fire cleared"
+                : "Rapid fire saved", android.widget.Toast.LENGTH_SHORT).show();
+        withBridge(b -> b.setLayouts(spec));
+    }
+
     private void showControllers(JSONArray ctrls) {
+        externals.clear();
+        if (ctrls != null) for (int i = 0; i < ctrls.length(); i++) {
+            JSONObject c = ctrls.optJSONObject(i);
+            if (c != null && !c.optBoolean("touchpad") && !c.optBoolean("builtIn")
+                    && !externals.contains(c.optString("name"))) externals.add(c.optString("name"));
+        }
         if (controllersAnchor == null) return;
         controllersAnchor.removeAllViews();
         boolean any = false;

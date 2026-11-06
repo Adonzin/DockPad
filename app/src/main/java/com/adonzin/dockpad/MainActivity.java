@@ -54,7 +54,10 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
     private ControllerDialog controllerDialog;
 
     private MaterialCardView setupCard;
-    private LinearLayout setupSteps, controllersList, shortcutsList, settingsList;
+    private LinearLayout setupSteps, controllersList, shortcutsList, controllerSettings, appSettings;
+    private com.google.android.material.bottomnavigation.BottomNavigationView tabs;
+    private final int[] pages = {R.id.page_home, R.id.page_controllers, R.id.page_shortcuts, R.id.page_settings};
+    private final int[] tabIds = {R.id.tab_home, R.id.tab_controllers, R.id.tab_shortcuts, R.id.tab_settings};
     private TextView bridgeTitle, bridgeSubtitle;
     private MaterialButton bridgeButton;
 
@@ -126,7 +129,18 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         setupSteps = findViewById(R.id.setup_steps);
         controllersList = findViewById(R.id.controllers_list);
         shortcutsList = findViewById(R.id.shortcuts_list);
-        settingsList = findViewById(R.id.settings_list);
+        controllerSettings = findViewById(R.id.controller_settings_list);
+        appSettings = findViewById(R.id.app_settings_list);
+        tabs = findViewById(R.id.tabs);
+        tabs.setOnItemSelectedListener(item -> {
+            showPage(item.getItemId());
+            return true;
+        });
+        if (savedInstanceState != null) {
+            int t = savedInstanceState.getInt("tab", R.id.tab_home);
+            tabs.setSelectedItemId(t);
+            showPage(t);
+        }
         bridgeTitle = findViewById(R.id.bridge_title);
         bridgeSubtitle = findViewById(R.id.bridge_subtitle);
         bridgeButton = findViewById(R.id.bridge_button);
@@ -190,10 +204,42 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         super.onDestroy();
     }
 
+    // ------------------------------------------------------------------ tabs
+
+    private void showPage(int tabId) {
+        for (int i = 0; i < tabIds.length; i++) {
+            View page = findViewById(pages[i]);
+            page.setVisibility(tabIds[i] == tabId ? View.VISIBLE : View.GONE);
+            if (tabIds[i] == tabId && !page.isInTouchMode()) page.requestFocus();
+        }
+        findViewById(R.id.scroll).scrollTo(0, 0);
+    }
+
+    /** L1/R1 move between tabs. */
+    private void stepTab(int dir) {
+        int cur = tabs.getSelectedItemId(), idx = 0;
+        for (int i = 0; i < tabIds.length; i++) if (tabIds[i] == cur) idx = i;
+        int next = Math.max(0, Math.min(tabIds.length - 1, idx + dir));
+        if (next != idx) tabs.setSelectedItemId(tabIds[next]);
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle out) {
+        super.onSaveInstanceState(out);
+        out.putInt("tab", tabs.getSelectedItemId());
+    }
+
     // ------------------------------------------------------------------ controller navigation
 
     @Override
     public boolean dispatchKeyEvent(android.view.KeyEvent e) {
+        int kc = e.getKeyCode();
+        if (kc == android.view.KeyEvent.KEYCODE_BUTTON_L1 || kc == android.view.KeyEvent.KEYCODE_BUTTON_R1) {
+            if (e.getAction() == android.view.KeyEvent.ACTION_DOWN && e.getRepeatCount() == 0) {
+                stepTab(kc == android.view.KeyEvent.KEYCODE_BUTTON_L1 ? -1 : 1);
+            }
+            return true;
+        }
         if (DpDialog.Controller.isFromController(e)
                 && DpDialog.Controller.handle(e, getWindow().getDecorView(), this::finish)) {
             return true;
@@ -861,20 +907,21 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
     // ------------------------------------------------------------------ settings
 
     private void buildSettings() {
-        settingsList.removeAllViews();
-        addSwitch("Multiplayer",
+        controllerSettings.removeAllViews();
+        appSettings.removeAllViews();
+        addSwitch(controllerSettings, "Multiplayer",
                 "Player 1 is the built-in controls plus your first external controller. Each further controller becomes the next player (\"DockPad Controller 2\", \"3\", \"4\"). When off, every controller is player 1.",
                 prefs.multiplayer(), v -> {
                     prefs.multiplayer(v);
                     pushSettings();
                 });
-        addSwitch("Start automatically after a restart",
+        addSwitch(appSettings, "Start automatically after a restart",
                 "After pairing, DockPad turns itself back on when the device restarts (needs Wi-Fi).",
                 prefs.autoStart(), prefs::autoStart);
-        addSwitch("Turn off Wireless debugging once started",
+        addSwitch(appSettings, "Turn off Wireless debugging once started",
                 "DockPad only needs Wireless debugging for a moment while starting. Turning it off afterwards is safer.",
                 prefs.turnOffWirelessDebugging(), prefs::turnOffWirelessDebugging);
-        View resetRow = getLayoutInflater().inflate(R.layout.item_row, settingsList, false);
+        View resetRow = getLayoutInflater().inflate(R.layout.item_row, controllerSettings, false);
         ((ImageView) resetRow.findViewById(R.id.row_icon)).setImageResource(R.drawable.ic_gamepad);
         ((TextView) resetRow.findViewById(R.id.row_title)).setText("Reset all controller layouts");
         ((TextView) resetRow.findViewById(R.id.row_subtitle)).setText(
@@ -891,8 +938,8 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
                 })
                 .setNegativeButton("Cancel", null)
                 .show());
-        settingsList.addView(resetRow);
-        addSwitch("Touchpad as a button",
+        controllerSettings.addView(resetRow);
+        addSwitch(controllerSettings, "Touchpad as a button",
                 "On controllers with a touchpad (DualShock 4, DualSense), pressing the pad becomes a button you can use in shortcuts instead of a mouse.",
                 prefs.touchpadAsButton(), v -> {
                     prefs.touchpadAsButton(v);
@@ -904,15 +951,15 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         void set(boolean v);
     }
 
-    private void addSwitch(String title, String subtitle, boolean value, BoolSetter onChange) {
-        View row = getLayoutInflater().inflate(R.layout.item_switch, settingsList, false);
+    private void addSwitch(LinearLayout parent, String title, String subtitle, boolean value, BoolSetter onChange) {
+        View row = getLayoutInflater().inflate(R.layout.item_switch, parent, false);
         ((TextView) row.findViewById(R.id.switch_title)).setText(title);
         ((TextView) row.findViewById(R.id.switch_subtitle)).setText(subtitle);
         MaterialSwitch sw = row.findViewById(R.id.switch_toggle);
         sw.setChecked(value);
         sw.setOnCheckedChangeListener((b, checked) -> onChange.set(checked));
         row.setOnClickListener(v -> sw.toggle());
-        settingsList.addView(row);
+        parent.addView(row);
     }
 
     // ------------------------------------------------------------------ reset
