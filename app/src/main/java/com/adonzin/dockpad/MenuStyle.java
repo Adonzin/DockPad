@@ -195,12 +195,20 @@ final class MenuStyle {
         return Color.argb(a, Color.red(color), Color.green(color), Color.blue(color));
     }
 
-    int[] panelColors() {
+    int[] panelColors(int accentColor) {
         int p1 = parse(panel1, 0xFF121519);
         if (gradient.equals("none")) return new int[]{withOpacity(p1)};
-        int p2 = parse(panel2, p1);
+        // no second colour chosen: blend the first toward the accent, so the gradient always shows
+        int p2 = panel2.isEmpty() ? blend(p1, accentColor, 0.45f) : parse(panel2, p1);
         if (!panel3.isEmpty()) return new int[]{withOpacity(p1), withOpacity(p2), withOpacity(parse(panel3, p2))};
         return new int[]{withOpacity(p1), withOpacity(p2)};
+    }
+
+    static int blend(int a, int b, float t) {
+        return Color.argb(Color.alpha(a),
+                Math.round(Color.red(a) + (Color.red(b) - Color.red(a)) * t),
+                Math.round(Color.green(a) + (Color.green(b) - Color.green(a)) * t),
+                Math.round(Color.blue(a) + (Color.blue(b) - Color.blue(a)) * t));
     }
 
     // ------------------------------------------------------------------ drawables
@@ -212,7 +220,7 @@ final class MenuStyle {
     /** The panel's background. {@code shape}: corner radii in dp at the theme's default 24 (scaled), or null for an oval. */
     GradientDrawable panel(Context c, float[] radiiAt24) {
         GradientDrawable d = new GradientDrawable();
-        int[] cols = panelColors();
+        int[] cols = panelColors(accent(c));
         if (cols.length == 1) d.setColor(cols[0]);
         else {
             d.setColors(cols);

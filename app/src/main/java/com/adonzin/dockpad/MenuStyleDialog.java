@@ -91,7 +91,7 @@ final class MenuStyleDialog {
         });
         colorRow("Colour" + (st.gradient.equals("none") ? "" : " 1"), st.panel1, "#121519", c -> st.panel1 = c);
         if (!st.gradient.equals("none")) {
-            colorRow("Colour 2", st.panel2, st.panel1.isEmpty() ? "#121519" : st.panel1, c -> st.panel2 = c);
+            colorRow("Colour 2", st.panel2, "", c -> st.panel2 = c);
             colorRow("Colour 3 (optional)", st.panel3, "", c -> st.panel3 = c);
             if (st.gradient.equals("linear")) slider("Direction", 0, 315, 45, st.angle, v -> st.angle = v, v -> v + "°");
         }

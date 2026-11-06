@@ -398,7 +398,7 @@ public class QuickMenuActivity extends AppCompatActivity {
                 panel = carouselPanel();
                 break;
             case "screen":
-                root.setBackgroundColor(theme.layout.equals("xmb") ? 0xCC0B0D10 : 0x44000000);
+                root.setBackgroundColor(theme.layout.equals("xmb") ? 0x66000000 : 0x44000000);
                 panel = screenPanel();
                 break;
             case "rail":
@@ -550,6 +550,8 @@ public class QuickMenuActivity extends AppCompatActivity {
     private View screenPanel() {
         FrameLayout f = new FrameLayout(this);
         noHighlight(f);
+        // XMB fills the screen: the look's panel colours and gradient are its backdrop
+        if (theme.layout.equals("xmb")) f.setBackground(theme.style.panel(this, new float[8]));
         f.setClickable(!theme.layout.equals("arc")); // arc: taps away from it close the menu
         f.addView(renderer.view, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
