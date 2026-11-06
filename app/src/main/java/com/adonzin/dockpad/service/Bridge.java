@@ -706,6 +706,24 @@ final class Bridge {
                         .append(d.ff.contains(0x50) ? "rumble" : "effects " + d.ff).append("; ");
             }
             if (n == 0) b.append("no device accepts rumble");
+            b.append("\nRumble devices (all): ");
+            for (EvdevDevice d : EvdevDevice.parse(run("getevent", "-i"))) {
+                b.append(d.path.replace("/dev/input/", "")).append(' ').append(d.name).append(" [").append(d.id())
+                        .append(d.ff.isEmpty() ? "" : ", FF").append(d.isGamepad() ? ", pad" : "").append("]; ");
+            }
+            b.append("\nRumble (Android): ");
+            for (int id : InputDevice.getDeviceIds()) {
+                InputDevice d = InputDevice.getDevice(id);
+                if (d == null) continue;
+                int motors = 0;
+                try {
+                    if (android.os.Build.VERSION.SDK_INT >= 31) motors = d.getVibratorManager().getVibratorIds().length;
+                } catch (Throwable ignored) {
+                }
+                b.append(d.getName()).append(String.format(" [%04x:%04x", d.getVendorId(), d.getProductId()))
+                        .append(d.isEnabled() ? "" : ", disabled").append(motors > 0 ? ", " + motors + " motors" : "")
+                        .append("]; ");
+            }
         } catch (Throwable t) {
             b.append(t);
         }
