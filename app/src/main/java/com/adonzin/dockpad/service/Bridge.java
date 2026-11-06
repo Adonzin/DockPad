@@ -646,6 +646,33 @@ final class Bridge {
         return o.toString();
     }
 
+    /** Which input devices the kernel says can rumble (for working out rumble pass-through). */
+    static String rumbleReport() {
+        StringBuilder b = new StringBuilder("Rumble (kernel): ");
+        try {
+            int n = 0;
+            for (EvdevDevice d : EvdevDevice.parse(run("getevent", "-i"))) {
+                if (d.ff.isEmpty()) continue;
+                n++;
+                b.append(d.name).append(" [").append(d.id()).append(", ").append(d.path).append("] ")
+                        .append(d.ff.contains(0x50) ? "rumble" : "effects " + d.ff).append("; ");
+            }
+            if (n == 0) b.append("no device accepts rumble");
+        } catch (Throwable t) {
+            b.append(t);
+        }
+        b.append('\n');
+        try {
+            String v = Actions.exec("dumpsys", "vibrator_manager");
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?i)vibratorIds:?\\s*\\[?([0-9, ]*)").matcher(v);
+            b.append("Handheld vibrator: ").append(v.trim().isEmpty() ? "no report"
+                    : m.find() ? "ids " + m.group(1).trim() : "present").append('\n');
+        } catch (Throwable t) {
+            b.append("Handheld vibrator: ").append(t).append('\n');
+        }
+        return b.toString();
+    }
+
     synchronized String status() {
         StringBuilder b = new StringBuilder();
         b.append("Bridge: ").append(running ? "RUNNING" : "stopped").append('\n');
@@ -669,6 +696,7 @@ final class Bridge {
             }
             b.append("Bluetooth connected: ").append(bt.length() == 0 ? "none found" : bt).append('\n');
             b.append(Battery.describe()).append('\n');
+            b.append(rumbleReport());
         } catch (Throwable btErr) {
             b.append("Bluetooth: ").append(btErr).append('\n');
         }

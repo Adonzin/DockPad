@@ -31,6 +31,8 @@ public final class EvdevDevice {
     public int bus, vendor, product;
     public final Set<Integer> keys = new HashSet<>();
     public final Map<Integer, AbsInfo> abs = new HashMap<>();
+    /** Force-feedback (rumble) effect types the device accepts (EV_FF codes). */
+    public final Set<Integer> ff = new HashSet<>();
 
     public boolean hasKey(int code) {
         return keys.contains(code);
@@ -123,6 +125,9 @@ public final class EvdevDevice {
             if (section == Codes.EV_KEY) {
                 Matcher h = HEX4.matcher(body);
                 while (h.find()) cur.keys.add(Integer.parseInt(h.group(1), 16));
+            } else if (section == 0x15) { // EV_FF
+                Matcher h = HEX4.matcher(body);
+                while (h.find()) cur.ff.add(Integer.parseInt(h.group(1), 16));
             } else if (section == Codes.EV_ABS) {
                 Matcher a = ABSLINE.matcher(body);
                 if (a.find()) {
