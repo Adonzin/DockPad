@@ -50,6 +50,8 @@ final class MenuTheme {
     MenuFx fx = new MenuFx();
     /** Images placed around the screen. */
     List<MenuMedia.Decoration> decorations = new ArrayList<>();
+    /** Picture buttons, per-item pictures and the pointer (kept in "art"; edited in the PC theme editor). */
+    MenuArt art = new MenuArt();
 
     private JSONObject raw = new JSONObject(); // everything, including fields this version doesn't know
 
@@ -69,6 +71,7 @@ final class MenuTheme {
             t.description = o.optString("description", "");
             t.style = MenuStyle.parse(o.optJSONObject("style"));
             t.fx = MenuFx.parse(o.optJSONObject("fx"));
+            t.art = MenuArt.parse(o.optJSONObject("art"));
             JSONObject media = o.optJSONObject("media");
             if (media != null) {
                 t.background = MenuMedia.parseBackground(media.optJSONObject("background"));

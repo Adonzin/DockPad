@@ -101,6 +101,12 @@ kbd{background:var(--bg3);border:1px solid var(--line);border-radius:4px;padding
 .pv-deco img{display:block;height:100%;width:auto}
 .edit-deco .pv-deco{pointer-events:auto;cursor:move}
 .pv-deco.sel{outline:2px dashed #ffd54f;outline-offset:2px}
+.pv-tile,.pv-row{isolation:isolate}
+.pv-btn{position:absolute;inset:0;z-index:-1;pointer-events:none;background-repeat:no-repeat;background-position:center;background-size:100% 100%;border-radius:inherit}
+.pv-rot{position:absolute;left:50%;top:-26px;width:14px;height:14px;margin-left:-7px;border-radius:50%;background:#ffd54f;cursor:grab}
+.pv-rot:after{content:"";position:absolute;left:6px;top:14px;width:2px;height:12px;background:#ffd54f}
+.pv-cursor{position:absolute;pointer-events:none;z-index:6;transition:left .11s,top .11s}
+.pv-cursor img{width:100%;height:100%;object-fit:contain;display:block}
 .pv-grip{position:absolute;right:-4px;bottom:-4px;width:12px;height:12px;background:#ffd54f;border-radius:3px;cursor:nwse-resize}
 .free-edit .pv-tile{cursor:move}
 .hl-ring:after{content:"";position:absolute;inset:-1px;border:2px solid #fff;border-radius:inherit;pointer-events:none}
@@ -187,6 +193,12 @@ const PACKS = [["off","Off"],["soft","Soft"],["retro","Retro"],["glass","Glass"]
 const EVENTS = [["open","Opening"],["close","Closing"],["move","Moving"],["select","Selecting"],["back","Back"]];
 const HAPTICS = [["off","Off"],["select","When selecting"],["all","When moving and selecting"]];
 const ANCHORS = [["top-left","Top left"],["top","Top"],["top-right","Top right"],["left","Left"],["center","Centre"],["right","Right"],["bottom-left","Bottom left"],["bottom","Bottom"],["bottom-right","Bottom right"]];
+const DMOTIONS = [["none","Still"],["float","Float"],["sway","Sway"],["spin","Spin"],["pulse","Pulse"],["blink","Blink"],["drift","Drift across"]];
+const DSPEEDS = [["slow","Slow"],["normal","Normal"],["fast","Fast"]];
+const SIDES = [["left","Left of it"],["right","Right of it"],["top","Above it"],["bottom","Below it"]];
+const CMOTIONS = [["none","Still"],["bob","Bob"],["pulse","Pulse"],["spin","Spin"]];
+// every item DockPad can show (their ids), for per-item pictures
+const ITEM_IDS = [["home","Home"],["back","Back"],["cursor","Cursor mode"],["turbo","Rapid fire"],["turboedit","Rapid fire buttons (edit)"],["nintendo","Nintendo layout"],["swapab","Swap A/B"],["swapxy","Swap X/Y"],["dpkeyboard","Keyboard (DockPad)"],["keyboard","Show keyboard (Moonlight)"],["screenshot","Screenshot"],["forceclose","Force close the game"],["controllers","Every controller entry"],["pair","Pair a new controller"],["theme","Switch theme"],["power","Turn DockPad on/off"],["openapp","Open DockPad"],["commands","Every one of your own commands"]];
 const REPEATS = [["none","Once"],["across","Repeat across"],["down","Repeat down"]];
 // name, panel1, panel2, gradient, angle, accent, text, tile  (same as DockPad)
 const PALETTES = [
@@ -212,7 +224,8 @@ function defaults() {
       textSize: 100, font: "default", highlight: "filled", showTitle: true, showStatus: true, showClock: false, showBattery: false},
     media: {background: {file: "", target: "screen", scale: "fill", blur: 0, dim: 0}, decorations: []},
     fx: {open: "none", close: "none", speed: "normal", intensity: 100, items: "none", highlight: "none", pack: "off", sounds: {},
-      volume: 70, music: "", musicVolume: 40, haptics: "off", hapticStrength: 50}
+      volume: 70, music: "", musicVolume: 40, haptics: "off", hapticStrength: 50},
+    art: {button: "", buttonOn: "", slice: 0, labels: true, items: {}, cursor: {file: "", side: "left", size: 70, motion: "bob"}}
   };
 }
 const ids = a => a.map(x => x[0]);
@@ -248,7 +261,8 @@ function sanitize(src) {
   t.media.decorations = (Array.isArray(M.decorations) ? M.decorations : []).slice(0, 30).map(x => ({
     file: safeName(x && x.file), anchor: one(x && x.anchor, ANCHORS, "bottom-right"), x: num(x && x.x, -100, 100, 0), y: num(x && x.y, -100, 100, 0),
     size: num(x && x.size, 2, 100, 25), opacity: num(x && x.opacity, 5, 100, 100), front: !!(x && x.front), repeat: one(x && x.repeat, REPEATS, "none"),
-    mirror: !!(x && x.mirror)})).filter(x => x.file);
+    mirror: !!(x && x.mirror), rotation: num(x && x.rotation, -180, 180, 0), flip: !!(x && x.flip),
+    motion: one(x && x.motion, DMOTIONS, "none"), motionSpeed: one(x && x.motionSpeed, DSPEEDS, "normal")})).filter(x => x.file);
   const f = t.fx;
   f.open = one(F.open, OPENS, "none"); f.close = one(F.close, OPENS, "none"); f.speed = one(F.speed, SPEEDS, "normal");
   f.intensity = num(F.intensity, 10, 200, 100); f.items = one(F.items, ITEMSFX, "none"); f.highlight = one(F.highlight, MOTIONS, "none");
@@ -259,6 +273,16 @@ function sanitize(src) {
   }
   f.volume = num(F.volume, 0, 100, 70); f.music = safeName(F.music); f.musicVolume = num(F.musicVolume, 0, 100, 40);
   f.haptics = one(F.haptics, HAPTICS, "off"); f.hapticStrength = num(F.hapticStrength, 5, 100, 50);
+  const A = o.art || {}, a = t.art, C = A.cursor || {};
+  a.button = safeName(A.button); a.buttonOn = safeName(A.buttonOn); a.slice = num(A.slice, 0, 45, 0); a.labels = A.labels !== false;
+  a.items = {};
+  if (A.items && typeof A.items === "object") for (const [id, x] of Object.entries(A.items).slice(0, 200)) {
+    if (!x || typeof x !== "object" || id.length > 120) continue;
+    const e = {button: safeName(x.button), buttonOn: safeName(x.buttonOn), icon: safeName(x.icon), iconOn: safeName(x.iconOn)};
+    if (typeof x.labels === "boolean") e.labels = x.labels;
+    if (e.button || e.buttonOn || e.icon || e.iconOn || "labels" in e) a.items[id] = e;
+  }
+  a.cursor = {file: safeName(C.file), side: one(C.side, SIDES, "left"), size: num(C.size, 20, 200, 70), motion: one(C.motion, CMOTIONS, "bob")};
   return t;
 }
 
@@ -333,7 +357,8 @@ async function addFile(blob, name, quiet) {
     name = name.slice(0, dot) + "-" + i + name.slice(dot);
   }
   if (media.has(name)) URL.revokeObjectURL(media.get(name).url);
-  media.set(name, {blob, url: URL.createObjectURL(blob), kind, size: blob.size});
+  media.set(name, {blob, url: URL.createObjectURL(blob), kind, size: blob.size, w: 0, h: 0});
+  if (kind === "image") { try { const b = await createImageBitmap(blob); media.get(name).w = b.width; media.get(name).h = b.height; b.close(); } catch (e) {} }
   if (kind === "font") {
     try { const ff = new FontFace(fontFamily(name), await blob.arrayBuffer()); await ff.load(); document.fonts.add(ff); }
     catch (e) { media.delete(name); toast("That font can't be read: " + name); return null; }
@@ -376,6 +401,9 @@ function used() {
   for (const d of T.media.decorations) s.add(d.file);
   if (T.fx.music) s.add(T.fx.music);
   for (const v of Object.values(T.fx.sounds)) if (v.startsWith("file:")) s.add(v.slice(5));
+  const a = T.art;
+  for (const n of [a.button, a.buttonOn, a.cursor.file]) if (n) s.add(n);
+  for (const e of Object.values(a.items)) for (const n of [e.button, e.buttonOn, e.icon, e.iconOn]) if (n) s.add(n);
   return s;
 }
 function filesOf(kinds) { return [...media.entries()].filter(([, m]) => kinds.includes(m.kind)).map(([n]) => n); }
@@ -503,6 +531,7 @@ function render() {
   applyText(menu);
   startLoopMotion();
   fit();
+  requestAnimationFrame(() => { placeCursor(); decoMotions(decos); });
 }
 
 function corners(radii) { const k = T.style.corners / 24; return radii.map(r => r * k + "px").join(" "); }
@@ -546,6 +575,67 @@ function tileBg(round, row, on) {
   return st;
 }
 const visible = () => SAMPLE;
+/* ---- theme pictures for items (DockPad's "art") ---- */
+const artKey = it => it.id.startsWith("cmd:") ? "commands" : it.id;
+let artSel = "home";
+function artOf(it) {
+  const a = T.art, e = a.items[artKey(it)] || {};
+  let b = a.button, bOn = a.buttonOn;
+  if (e.button) { b = e.button; bOn = e.buttonOn || ""; } else if (e.buttonOn) bOn = e.buttonOn;
+  return {b, bOn, icon: e.icon || "", iconOn: e.iconOn || "", labels: "labels" in e ? e.labels : a.labels};
+}
+const showLabels = it => artOf(it).labels;
+/** The item's picture button (normal or highlighted), like DockPad draws it. */
+function applyButton(node, it, on) {
+  const r = artOf(it), m = media.get(r.b);
+  if (!r.b || !m || m.kind !== "image") return false;
+  const own = on && r.bOn && media.get(r.bOn), pick = own ? media.get(r.bOn) : m;
+  node.style.background = "transparent"; node.style.boxShadow = "none"; node.classList.remove("hl-ring");
+  const bt = el("div", {class: "pv-btn"});
+  const sl = T.art.slice;
+  if (sl > 0 && pick.w && !/\.gif$/i.test(own ? r.bOn : r.b)) {
+    requestAnimationFrame(() => {
+      const w = node.offsetWidth, h = node.offsetHeight, k = Math.min(h / pick.h, w / pick.w);
+      const dy = Math.min(pick.h * sl / 100 * k, h / 2), dx = Math.min(pick.w * sl / 100 * k, w / 2);
+      Object.assign(bt.style, {borderStyle: "solid", borderWidth: `${dy}px ${dx}px`, borderImage: `url(${pick.url}) ${sl}% fill stretch`, borderRadius: 0});
+    });
+  } else bt.style.backgroundImage = `url(${pick.url})`;
+  if (on && !own) bt.style.filter = "brightness(1.22)";
+  node.prepend(bt);
+  return true;
+}
+/** The item's icon: the theme's picture (highlighted version when selected) or the built-in symbol. */
+function iconNode(it, size, col, on) {
+  const r = artOf(it), f = on && r.iconOn && media.get(r.iconOn) ? r.iconOn : r.icon, m = media.get(f);
+  if (f && m && m.kind === "image") { const im = el("img", {src: m.url, draggable: "false"}); Object.assign(im.style, {width: size + "px", height: size + "px", objectFit: "contain", flex: "none"}); im.dataset.art = "1"; return im; }
+  return svg(it.i, size, col);
+}
+function pickItem(i) {
+  hl = i; if (tab === "buttons") { artSel = artKey(SAMPLE[i]); buildPanel(); }
+  render(); $("#screen").focus();
+}
+/** The pointer picture beside the highlighted item. */
+function placeCursor() {
+  const c = T.art.cursor, m = media.get(c.file), n = items[hl];
+  if (!c.file || !m || !n || !n.isConnected) return;
+  const sr = $("#screen").getBoundingClientRect(), r = n.getBoundingClientRect();
+  const x = (r.left - sr.left) / scale, y = (r.top - sr.top) / scale, tw = r.width / scale, th = r.height / scale;
+  const h = Math.max(12, Math.min(th, 140) * c.size / 100), w = Math.max(8, h * (m.w && m.h ? m.w / m.h : 1)), gap = 4;
+  let cx, cy;
+  if (c.side === "right") { cx = x + tw + gap; cy = y + th / 2 - h / 2; }
+  else if (c.side === "top") { cx = x + tw / 2 - w / 2; cy = y - h - gap; }
+  else if (c.side === "bottom") { cx = x + tw / 2 - w / 2; cy = y + th + gap; }
+  else { cx = x - w - gap; cy = y + th / 2 - h / 2; }
+  cx = clamp(cx, 0, W - w); cy = clamp(cy, 0, H - h);
+  const img = el("img", {src: m.url, draggable: "false"});
+  if (c.side === "right") img.style.transform = "scaleX(-1)";
+  const box = el("div", {class: "pv-cursor", style: {left: cx + "px", top: cy + "px", width: w + "px", height: h + "px"}}, img);
+  $("#screen").append(box);
+  const k = c.side === "left" || c.side === "top" ? -5 : 5, side = c.side === "left" || c.side === "right";
+  if (c.motion === "bob") box.animate([{translate: "0 0"}, {translate: side ? `${k}px 0` : `0 ${k}px`}], {duration: 450, direction: "alternate", iterations: Infinity, easing: "ease-in-out"});
+  if (c.motion === "pulse") box.animate([{scale: "1"}, {scale: "1.12"}], {duration: 600, direction: "alternate", iterations: Infinity, easing: "ease-in-out"});
+  if (c.motion === "spin") box.animate([{rotate: "0deg"}, {rotate: "360deg"}], {duration: 2400, iterations: Infinity});
+}
 function drawMenu() {
   const t = T.layout.type, f = frame();
   const host = el("div", {class: "layer"});
@@ -586,13 +676,14 @@ function listInto(body, compact) {
   let sec = null; const inner = el("div", {}); body.append(inner);
   visible().forEach((it, i) => {
     if (T.layout.sections && it.s !== sec) { inner.append(el("div", {class: "pv-sec", style: {color: css(accent())}}, it.s)); sec = it.s; }
-    const on = i === hl;
-    const row = el("div", {class: "pv-row" + (on && T.style.highlight === "filled" ? " hl-ring" : "")},
-      svg(it.i, compact ? 18 : 22, css(accent())),
-      el("div", {}, el("div", {class: "tt"}, it.t), !compact && it.st ? el("div", {class: "st"}, it.st) : null),
+    const on = i === hl, lab = showLabels(it);
+    const row = el("div", {class: "pv-row" + (on && T.style.highlight === "filled" ? " hl-ring" : ""), onpointerdown: () => pickItem(i)},
+      iconNode(it, compact ? 18 : 22, css(accent()), on),
+      lab ? el("div", {}, el("div", {class: "tt"}, it.t), !compact && it.st ? el("div", {class: "st"}, it.st) : null) : null,
       it.b ? el("span", {class: "pv-badge"}, it.b) : null);
     Object.assign(row.style, tileBg(false, true, on));
     if (compact) row.style.padding = "3px 8px";
+    applyButton(row, it, on);
     inner.append(row); items.push(row);
   });
   scrollTo(body, inner);
@@ -605,16 +696,18 @@ function scrollTo(body, inner) {
   });
 }
 function tile(it, i, w, h, round) {
-  const on = i === hl, small = round || w < 88 || h < 84;
+  const on = i === hl, small = round || w < 88 || h < 84, lab = showLabels(it);
   const t = el("div", {class: "pv-tile" + (on && T.style.highlight === "filled" && !round ? " hl-ring" : "")});
+  if (T.layout.type !== "freeform") t.addEventListener("pointerdown", () => pickItem(i));
   Object.assign(t.style, {width: w + "px", height: h + "px"}, tileBg(round, false, on));
   if (small) {
-    const ic = svg(it.i, Math.min(w, h) * .72, css(accent(), .22)); ic.style.position = "absolute"; t.append(ic);
-    t.append(el("div", {class: "tt", style: {fontSize: clamp(Math.min(w, h) / 6, 8, 16) + "px", position: "relative"}}, it.t));
+    const ic = iconNode(it, Math.min(w, h) * (lab ? .72 : .6), css(accent(), lab ? .22 : 1), on); ic.style.position = "absolute"; t.append(ic);
+    if (lab) t.append(el("div", {class: "tt", style: {fontSize: clamp(Math.min(w, h) / 6, 8, 16) + "px", position: "relative"}}, it.t));
   } else {
-    t.append(svg(it.i, Math.min(36, h / 3), css(accent())));
-    t.append(el("div", {class: "tt", style: {fontSize: "13px", marginTop: "6px"}}, it.t));
+    t.append(iconNode(it, Math.min(36, h / 3), css(accent()), on));
+    if (lab) t.append(el("div", {class: "tt", style: {fontSize: "13px", marginTop: "6px"}}, it.t));
   }
+  applyButton(t, it, on);
   if (it.b) t.append(el("span", {class: "pv-badge", style: {position: "absolute", bottom: "3px", marginLeft: 0}}, it.b));
   items[i] = t; return t;
 }
@@ -653,11 +746,12 @@ function wheelInto(body) {
   SAMPLE.forEach((it, i) => {
     let d = i - hl; if (d > n / 2) d -= n; if (d < -n / 2) d += n;
     const th = d * step, cos = Math.cos(th), show = Math.abs(th) < 80 * Math.PI / 180;
-    const row = el("div", {class: "pv-row" + (d === 0 && T.style.highlight === "filled" ? " hl-ring" : "")}, svg(it.i, 22, css(accent())),
-      el("div", {}, el("div", {class: "tt"}, it.t), it.st ? el("div", {class: "st"}, it.st) : null));
+    const row = el("div", {class: "pv-row" + (d === 0 && T.style.highlight === "filled" ? " hl-ring" : ""), onpointerdown: () => pickItem(i)}, iconNode(it, 22, css(accent()), d === 0),
+      showLabels(it) ? el("div", {}, el("div", {class: "tt"}, it.t), it.st ? el("div", {class: "st"}, it.st) : null) : null);
     Object.assign(row.style, tileBg(false, false, d === 0), {position: "absolute", left: 0, right: 0, top: "50%",
       transform: `translateY(calc(-50% + ${R * Math.sin(th)}px)) scale(${d === 0 ? 1.04 : .9 + .08 * cos}, ${show ? Math.max(.2, cos) : .2})`,
       opacity: show ? (d === 0 ? 1 : .25 + .55 * cos) : 0, zIndex: d === 0 ? 2 : 1});
+    applyButton(row, it, d === 0);
     body.append(row); items[i] = row;
   });
 }
@@ -726,8 +820,8 @@ function bandPanel(t) {
     c.insertBefore(el("div", {style: {textAlign: "center", fontSize: "13px"}}, it.t), area);
     SAMPLE.forEach((it2, i) => {
       const w = base * scs[i];
-      const t2 = el("div", {class: "pv-tile"}); Object.assign(t2.style, tileBg(false, false, i === hl), {width: w + "px", height: w + "px", left: x + "px", bottom: "6px"});
-      t2.append(svg(it2.i, w * .55, css(accent()))); area.append(t2); items[i] = t2; x += w + 8;
+      const t2 = el("div", {class: "pv-tile", onpointerdown: () => pickItem(i)}); Object.assign(t2.style, tileBg(false, false, i === hl), {width: w + "px", height: w + "px", left: x + "px", bottom: "6px"});
+      t2.append(iconNode(it2, w * .55, css(accent()), i === hl)); applyButton(t2, it2, i === hl); area.append(t2); items[i] = t2; x += w + 8;
     });
   }
   return p;
@@ -762,8 +856,8 @@ function railPanel() {
   items = [];
   SAMPLE.forEach((it, i) => {
     if (i > 6) return;
-    const t = el("div", {class: "pv-tile"}); Object.assign(t.style, tileBg(false, false, i === hl), {position: "relative", width: sz + "px", height: sz + "px", margin: "4px 0"});
-    t.append(svg(it.i, sz * .55, css(accent()))); c.append(t); items[i] = t;
+    const t = el("div", {class: "pv-tile", onpointerdown: () => pickItem(i)}); Object.assign(t.style, tileBg(false, false, i === hl), {position: "relative", width: sz + "px", height: sz + "px", margin: "4px 0"});
+    t.append(iconNode(it, sz * .55, css(accent()), i === hl)); applyButton(t, it, i === hl); c.append(t); items[i] = t;
   });
   const wrapH = el("div", {class: "layer"}); wrapH.append(p);
   const it = SAMPLE[Math.min(hl, 6)];
@@ -788,9 +882,10 @@ function xmbPanel() {
   const mine = SAMPLE.filter(x => x.s === cur);
   mine.forEach((it, j) => {
     const i = SAMPLE.indexOf(it), on = i === hl;
-    const row = el("div", {class: "pv-row" + (on && T.style.highlight === "filled" ? " hl-ring" : "")}, svg(it.i, 22, css(accent())),
-      el("div", {}, el("div", {class: "tt"}, it.t), it.st ? el("div", {class: "st"}, it.st) : null));
+    const row = el("div", {class: "pv-row" + (on && T.style.highlight === "filled" ? " hl-ring" : ""), onpointerdown: () => pickItem(i)}, iconNode(it, 22, css(accent()), on),
+      showLabels(it) ? el("div", {}, el("div", {class: "tt"}, it.t), it.st ? el("div", {class: "st"}, it.st) : null) : null);
     Object.assign(row.style, tileBg(false, true, on), {position: "absolute", left: ax - hs + "px", width: W * .55 + "px", top: top + hs + 34 + j * 52 + "px"});
+    applyButton(row, it, on);
     c.append(row); items[i] = row;
   });
   return p;
@@ -832,8 +927,8 @@ function decoration(d, i) {
   const m = media.get(d.file); if (!m || m.kind !== "image") return null;
   const h = H * d.size / 100;
   const node = el("div", {class: "pv-deco" + (i === selDeco ? " sel" : "")});
-  node.style.opacity = d.opacity / 100; node.style.zIndex = d.front ? 5 : 1;
-  const img = () => { const im = el("img", {src: m.url, draggable: "false"}); im.style.height = h + "px"; if (d.mirror) im.style.transform = "scaleX(-1)"; return im; };
+  node.style.opacity = d.opacity / 100; node.style.zIndex = d.front ? 5 : "auto";
+  const img = () => { const im = el("img", {src: m.url, draggable: "false"}); im.style.height = h + "px"; if (d.mirror || d.flip) im.style.transform = `scale(${d.mirror ? -1 : 1}, ${d.flip ? -1 : 1})`; return im; };
   const [vy, vx] = d.anchor === "center" ? ["center", "center"] : (d.anchor.includes("-") ? d.anchor.split("-") : (["top", "bottom"].includes(d.anchor) ? [d.anchor, "center"] : ["center", d.anchor]));
   if (d.repeat === "none") {
     node.append(img()); node.style.height = h + "px";
@@ -849,7 +944,32 @@ function decoration(d, i) {
     if (vx === "left") node.style.left = 0; else if (vx === "right") node.style.right = 0; else node.style.left = "50%";
   }
   const cx = (vx === "center" && d.repeat !== "across") ? "translateX(-50%) " : "", cy = (vy === "center" && d.repeat !== "down") ? "translateY(-50%) " : "";
-  node.style.transform = `${cx}${cy}translate(${W * d.x / 100}px, ${H * d.y / 100}px)`;
+  node.style.transform = `${cx}${cy}translate(${W * d.x / 100}px, ${H * d.y / 100}px) rotate(${d.rotation}deg)`;
+  const editing = tab === "media" && i === selDeco;
+  if (editing && d.repeat === "none") {
+    // rotate: drag the round handle (hold Shift to snap to 15°); resize: drag the corner
+    const rot = el("div", {class: "pv-rot", title: "Drag to rotate (Shift: steps of 15°)"}), grip = el("div", {class: "pv-grip", title: "Drag to resize"});
+    node.append(rot, grip);
+    rot.addEventListener("pointerdown", e => {
+      e.preventDefault(); e.stopPropagation();
+      const r = node.getBoundingClientRect(), ox = r.left + r.width / 2, oy = r.top + r.height / 2;
+      const mv = ev => {
+        let a = Math.atan2(ev.clientY - oy, ev.clientX - ox) * 180 / Math.PI + 90;
+        if (a > 180) a -= 360;
+        if (ev.shiftKey) a = Math.round(a / 15) * 15;
+        d.rotation = clamp(Math.round(a), -180, 180); render();
+      };
+      const up = () => { removeEventListener("pointermove", mv); removeEventListener("pointerup", up); changed(); buildPanel(); };
+      addEventListener("pointermove", mv); addEventListener("pointerup", up);
+    });
+    grip.addEventListener("pointerdown", e => {
+      e.preventDefault(); e.stopPropagation();
+      const sy = e.clientY, s0 = d.size;
+      const mv = ev => { d.size = clamp(Math.round(s0 + (ev.clientY - sy) / scale / H * 100), 2, 100); render(); };
+      const up = () => { removeEventListener("pointermove", mv); removeEventListener("pointerup", up); changed(); buildPanel(); };
+      addEventListener("pointermove", mv); addEventListener("pointerup", up);
+    });
+  }
   node.addEventListener("pointerdown", e => {
     if (tab !== "media") return;
     e.preventDefault(); selDeco = i; buildPanel();
@@ -858,8 +978,32 @@ function decoration(d, i) {
     const up = () => { removeEventListener("pointermove", mv); removeEventListener("pointerup", up); changed(); buildPanel(); };
     addEventListener("pointermove", mv); addEventListener("pointerup", up);
   });
-  node.addEventListener("wheel", e => { if (tab !== "media") return; e.preventDefault(); d.size = clamp(d.size + (e.deltaY < 0 ? 1 : -1), 2, 100); selDeco = i; changed(); buildPanel(); }, {passive: false});
+  node.addEventListener("wheel", e => {
+    if (tab !== "media") return; e.preventDefault(); selDeco = i;
+    if (e.shiftKey) d.rotation = clamp(d.rotation + (e.deltaY < 0 ? 5 : -5), -180, 180);
+    else d.size = clamp(d.size + (e.deltaY < 0 ? 1 : -1), 2, 100);
+    changed(); buildPanel();
+  }, {passive: false});
   return [d, node];
+}
+
+/* decorations' own movement (the one being edited stays still, so it's easy to grab) */
+function decoMotions(decos) {
+  const sr = $("#screen").getBoundingClientRect();
+  for (const [d, node] of decos) {
+    if (d.motion === "none" || (tab === "media" && T.media.decorations.indexOf(d) === selDeco)) continue;
+    const sp = d.motionSpeed === "slow" ? 1.8 : d.motionSpeed === "fast" ? .55 : 1;
+    const loop = (kf, ms, alt = true, ease = "ease-in-out") => node.animate(kf, {duration: ms * sp, iterations: Infinity, direction: alt ? "alternate" : "normal", easing: ease});
+    if (d.motion === "float") loop([{translate: "0 0"}, {translate: `0 ${-H * .02}px`}], 1400);
+    else if (d.motion === "sway") loop([{rotate: "-6deg"}, {rotate: "6deg"}], 1200);
+    else if (d.motion === "spin") loop([{rotate: "0deg"}, {rotate: "360deg"}], 4000, false, "linear");
+    else if (d.motion === "pulse") loop([{scale: "1"}, {scale: "1.08"}], 900);
+    else if (d.motion === "blink") loop([{opacity: d.opacity / 100}, {opacity: d.opacity / 400}], 700);
+    else if (d.motion === "drift") {
+      const r = node.getBoundingClientRect(), x0 = (r.left - sr.left) / scale, w = r.width / scale;
+      loop([{translate: `${-w - x0}px 0`}, {translate: `${W - x0}px 0`}], 12000, false, "linear");
+    }
+  }
 }
 
 /* fit the device to the window */
@@ -996,13 +1140,13 @@ function sectionJump(d) { const k = (SECTIONS.indexOf(SAMPLE[hl].s) + d + SECTIO
 $("#screen").addEventListener("pointerdown", () => $("#screen").focus());
 
 /* ------------------------------ the controls ------------------------------ */
-const TABS = [["layout", "Layout"], ["colours", "Colours"], ["shape", "Shape & text"], ["media", "Pictures"], ["fx", "Animation & sound"], ["about", "About"]];
+const TABS = [["layout", "Layout"], ["colours", "Colours"], ["shape", "Shape & text"], ["buttons", "Buttons"], ["media", "Pictures"], ["fx", "Animation & sound"], ["about", "About"]];
 function buildTabs() {
   const box = $("#tabs"); box.innerHTML = "";
   for (const [id, label] of TABS) box.append(el("button", {class: tab === id ? "on" : "", onclick: () => { tab = id; buildTabs(); buildPanel(); render(); }}, label));
 }
-const get = (path) => path.split(".").reduce((o, k) => o[k], T);
-const set = (path, v) => { const ks = path.split("."); const last = ks.pop(); ks.reduce((o, k) => o[k], T)[last] = v; };
+const get = (path) => path.split(".").reduce((o, k) => o == null ? undefined : o[k], T);
+const set = (path, v) => { const ks = path.split("."); const last = ks.pop(); ks.reduce((o, k) => o[k] == null ? (o[k] = {}) : o[k], T)[last] = v; };
 function row(label, control, val) { return el("div", {class: "row"}, el("label", {}, label), val ? el("div", {class: "rng"}, control, val) : control); }
 function selectC(path, opts, after) {
   const s = el("select", {onchange: () => { set(path, s.value); if (after) after(); changed(); buildPanel(); }});
@@ -1092,6 +1236,38 @@ function buildPanel() {
     p.append(grp("Text"), row("Size", ...sliderC("style.textSize", 70, 160, 10, v => v + "%")), row("Font", selectC("style.font", fonts)));
     p.append(el("div", {class: "note"}, "Add a .ttf or .otf file (drop it on the page) to use your own font; it travels inside the theme file."));
     p.append(grp("Header"), row("Title", toggleC("style.showTitle")), row("Status", toggleC("style.showStatus")), row("Clock", toggleC("style.showClock")), row("Battery", toggleC("style.showBattery")));
+  } else if (tab === "buttons") {
+    const A = T.art;
+    p.append(grp("Picture buttons (every item)"),
+      el("div", {class: "note"}, "Use your own pictures as the items' buttons. The highlighted picture shows on the item you're on; leave it empty and DockPad brightens the normal one."),
+      row("Normal", fileSelect("art.button", ["image"], "None (use the colours)")),
+      row("Highlighted", fileSelect("art.buttonOn", ["image"], "Brighter normal one")));
+    if (A.button) p.append(row("Sharp edges", ...sliderC("art.slice", 0, 45, 1, v => v ? v + "% kept" : "stretch all")),
+      el("div", {class: "note"}, "Sharp edges keeps the corners and border of the picture from stretching when buttons are wide or tall (nine-slice). Set it to the share of the picture taken by its border."));
+    p.append(row("Show item names", toggleC("art.labels")),
+      el("div", {class: "note"}, "Turn names off when your pictures already say what each button does."));
+    // one item
+    const sel = el("select", {onchange: () => { artSel = sel.value; const k = SAMPLE.findIndex(x => artKey(x) === artSel); if (k >= 0) hl = k; buildPanel(); render(); }});
+    for (const [id, l] of ITEM_IDS) sel.append(el("option", {value: id, selected: id === artSel}, l + (SAMPLE.some(x => artKey(x) === id) ? "" : "  (not in the preview)")));
+    p.append(grp("One item's own pictures"), el("div", {class: "note"}, "Click an item on the preview, or choose it here."), row("Item", sel));
+    if (!A.items[artSel]) A.items[artSel] = {button: "", buttonOn: "", icon: "", iconOn: ""};
+    const base = "art.items." + artSel;
+    const tidy = () => { const e = T.art.items[artSel]; if (e && !e.button && !e.buttonOn && !e.icon && !e.iconOn && !("labels" in e)) delete T.art.items[artSel]; };
+    const lab = el("select", {onchange: () => { const e = T.art.items[artSel] || (T.art.items[artSel] = {button: "", buttonOn: "", icon: "", iconOn: ""});
+      if (lab.value === "") delete e.labels; else e.labels = lab.value === "show"; tidy(); changed(); buildPanel(); }});
+    const curLab = "labels" in A.items[artSel] ? (A.items[artSel].labels ? "show" : "hide") : "";
+    for (const [v, l] of [["", "Like every item"], ["show", "Show"], ["hide", "Hide"]]) lab.append(el("option", {value: v, selected: v === curLab}, l));
+    p.append(row("Button", fileSelect(base + ".button", ["image"], "Like every item", tidy)),
+      row("Button, highlighted", fileSelect(base + ".buttonOn", ["image"], "Like every item", tidy)),
+      row("Icon", fileSelect(base + ".icon", ["image"], "Built-in icon", tidy)),
+      row("Icon, highlighted", fileSelect(base + ".iconOn", ["image"], "Same icon", tidy)),
+      row("Name", lab));
+    tidy();
+    p.append(el("div", {class: "note"}, "Icons people pick themselves on the handheld (Sections & items) win over the theme's."));
+    p.append(grp("Pointer"), el("div", {class: "note"}, "A picture that follows the highlight, like a pointing hand or an arrow. Draw it pointing right; DockPad turns it around on the right side."),
+      row("Picture", fileSelect("art.cursor.file", ["image"], "None")));
+    if (A.cursor.file) p.append(el("div", {class: "note"}, "Where"), chips("art.cursor.side", SIDES),
+      row("Size", ...sliderC("art.cursor.size", 20, 200, 5, v => v + "% of the item")), el("div", {class: "note"}, "Movement"), chips("art.cursor.motion", CMOTIONS));
   } else if (tab === "media") {
     const bg = T.media.background, bgm = media.get(bg.file);
     p.append(grp("Background"), row("File", fileSelect("media.background.file", ["image", "video"], "None")));
@@ -1102,7 +1278,7 @@ function buildPanel() {
         row("Blur", ...sliderC("media.background.blur", 0, 25, 1, v => v || "none")), row("Darken", ...sliderC("media.background.dim", 0, 90, 5, v => v + "%")));
     }
     p.append(grp("Decorations"));
-    p.append(el("div", {class: "note"}, "Pictures and GIFs anywhere on screen. Drag them on the preview, scroll the mouse wheel over one to resize it."));
+    p.append(el("div", {class: "note"}, "Pictures and GIFs anywhere on screen, at any angle. Select one, then drag it on the preview."));
     const list = el("div", {class: "list"});
     T.media.decorations.forEach((d, i) => {
       const m = media.get(d.file);
@@ -1113,7 +1289,7 @@ function buildPanel() {
     });
     p.append(list);
     const imgs = filesOf(["image"]);
-    const add = el("select", {onchange: () => { if (!add.value) return; T.media.decorations.push({file: add.value, anchor: "bottom-right", x: 0, y: 0, size: 25, opacity: 100, front: false, repeat: "none", mirror: false}); selDeco = T.media.decorations.length - 1; changed(); buildPanel(); }});
+    const add = el("select", {onchange: () => { if (!add.value) return; T.media.decorations.push({file: add.value, anchor: "center", x: 0, y: 0, size: 25, opacity: 100, front: false, repeat: "none", mirror: false, rotation: 0, flip: false, motion: "none", motionSpeed: "normal"}); selDeco = T.media.decorations.length - 1; changed(); buildPanel(); }});
     add.append(el("option", {value: ""}, imgs.length ? "＋ Add a decoration…" : "Add pictures first (bottom bar)"));
     imgs.forEach(n => add.append(el("option", {value: n}, n)));
     p.append(el("div", {style: {marginTop: "8px"}}, add));
@@ -1122,10 +1298,14 @@ function buildPanel() {
       const base = "media.decorations." + selDeco;
       p.append(grp("Selected decoration"), row("Picture", fileSelect(base + ".file", ["image"], "(none)")),
         el("div", {class: "note"}, "Anchor"), chips(base + ".anchor", ANCHORS),
-        row("Nudge ←→", ...sliderC(base + ".x", -50, 50, 1, v => v + "%")), row("Nudge ↑↓", ...sliderC(base + ".y", -50, 50, 1, v => v + "%")),
-        row("Size", ...sliderC(base + ".size", 2, 100, 1, v => v + "% high")), row("Opacity", ...sliderC(base + ".opacity", 5, 100, 5, v => v + "%")),
+        row("Move ←→", ...sliderC(base + ".x", -100, 100, 1, v => v + "%")), row("Move ↑↓", ...sliderC(base + ".y", -100, 100, 1, v => v + "%")),
+        row("Size", ...sliderC(base + ".size", 2, 100, 1, v => v + "% high")), row("Rotation", ...sliderC(base + ".rotation", -180, 180, 1, v => v + "°")),
+        row("Opacity", ...sliderC(base + ".opacity", 5, 100, 5, v => v + "%")),
         el("div", {class: "note"}, "Repeat"), chips(base + ".repeat", REPEATS),
-        row("In front", toggleC(base + ".front")), row("Mirror", toggleC(base + ".mirror")));
+        row("In front", toggleC(base + ".front")), row("Mirror", toggleC(base + ".mirror")), row("Upside down", toggleC(base + ".flip")),
+        el("div", {class: "note"}, "Movement"), chips(base + ".motion", DMOTIONS),
+        d.motion !== "none" ? row("Speed", chips(base + ".motionSpeed", DSPEEDS)) : null,
+        el("div", {class: "note"}, "On the preview: drag to move, drag the round handle to rotate (Shift snaps), drag the corner or scroll to resize, Shift+scroll to rotate."));
     }
   } else if (tab === "fx") {
     p.append(grp("Opening", chips("fx.open", OPENS)), grp("Closing", chips("fx.close", OPENS)), grp("Speed", chips("fx.speed", SPEEDS)),

@@ -178,12 +178,24 @@ final class MediaDialog {
         box.addView(front);
         MaterialSwitch mirror = toggle("Mirror it (flip left-right)", d.mirror);
         box.addView(mirror);
+        MaterialSwitch flip = toggle("Upside down", d.flip);
+        box.addView(flip);
+        slider(box, "Rotation", -180, 180, 5, d.rotation, v -> d.rotation = v, v -> v + "°");
+        box.addView(label("Movement"));
+        RadioGroup motion = radios(MenuMedia.MOTION_LABELS, indexOf(MenuMedia.MOTIONS, d.motion));
+        box.addView(motion);
+        box.addView(label("Movement speed"));
+        RadioGroup mspeed = radios(MenuMedia.SPEED_LABELS, indexOf(MenuMedia.SPEEDS, d.motionSpeed));
+        box.addView(mspeed);
 
         Runnable save = () -> {
             d.anchor = MenuMedia.ANCHORS[checked(anchor)];
             d.repeat = MenuMedia.REPEATS[checked(repeat)];
             d.front = front.isChecked();
             d.mirror = mirror.isChecked();
+            d.flip = flip.isChecked();
+            d.motion = MenuMedia.MOTIONS[checked(motion)];
+            d.motionSpeed = MenuMedia.SPEEDS[checked(mspeed)];
             MenuTheme t = MenuTheme.load(a);
             if (index >= 0 && index < t.decorations.size()) t.decorations.set(index, d);
             else t.decorations.add(d);

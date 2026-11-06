@@ -131,6 +131,7 @@ public class QuickMenuActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        stopDecoMotions();
         releasePlayer();
         stopMusic();
         // let a closing sound finish before letting go of the sounds
@@ -462,6 +463,7 @@ public class QuickMenuActivity extends AppCompatActivity {
         root.addView(panel);
         applyStyle(panel);
         applyMedia(panel);
+        applyArt();
         currentPanel = panel;
         if (!opened) {
             opened = true;
@@ -477,6 +479,7 @@ public class QuickMenuActivity extends AppCompatActivity {
                 item.action.run();
             });
             t.setOnFocusChangeListener((v, has) -> {
+                artFocus(index, has);
                 // ignore focus Android moves on its own while a style hides items (tabs, XMB)
                 if (has && !selecting) {
                     selected = index;
@@ -511,6 +514,7 @@ public class QuickMenuActivity extends AppCompatActivity {
         } finally {
             selecting = false;
         }
+        placeCursor(index);
     }
 
     private boolean selecting;
@@ -1008,6 +1012,7 @@ public class QuickMenuActivity extends AppCompatActivity {
     /** Background (screen or panel) and decorations, from the theme. */
     private void applyMedia(View panel) {
         releasePlayer();
+        stopDecoMotions();
         MenuMedia.Background bg = theme.background;
         if (bg.isSet() && MenuMedia.exists(this, bg.file)) {
             boolean video = MenuMedia.isVideo(bg.file);
@@ -1160,10 +1165,70 @@ public class QuickMenuActivity extends AppCompatActivity {
         }
         v.setTranslationX(W * d.x / 100f);
         v.setTranslationY(H * d.y / 100f);
+        v.setRotation(d.rotation);
         v.setAlpha(d.opacity / 100f);
         noHighlight(v);
         v.setClickable(false);
+        decoMotion(v, d, W, H);
         return v;
+    }
+
+    private final List<android.animation.Animator> decoAnims = new java.util.ArrayList<>();
+
+    private void stopDecoMotions() {
+        for (android.animation.Animator a : decoAnims) a.cancel();
+        decoAnims.clear();
+    }
+
+    /** A decoration's own movement (float, sway, spin, pulse, blink, drift), looping while the menu is open. */
+    private void decoMotion(View v, MenuMedia.Decoration d, int W, int H) {
+        if (d.motion.equals("none")) return;
+        float sp = d.motionSpeed.equals("slow") ? 1.8f : d.motionSpeed.equals("fast") ? 0.55f : 1f;
+        android.animation.ObjectAnimator a;
+        float ty = v.getTranslationY(), r = v.getRotation();
+        switch (d.motion) {
+            case "float":
+                a = android.animation.ObjectAnimator.ofFloat(v, View.TRANSLATION_Y, ty, ty - H * 0.02f);
+                a.setDuration(Math.round(1400 * sp));
+                break;
+            case "sway":
+                a = android.animation.ObjectAnimator.ofFloat(v, View.ROTATION, r - 6, r + 6);
+                a.setDuration(Math.round(1200 * sp));
+                break;
+            case "spin":
+                a = android.animation.ObjectAnimator.ofFloat(v, View.ROTATION, r, r + 360);
+                a.setDuration(Math.round(4000 * sp));
+                a.setInterpolator(new android.view.animation.LinearInterpolator());
+                a.setRepeatMode(android.animation.ValueAnimator.RESTART);
+                break;
+            case "pulse":
+                a = android.animation.ObjectAnimator.ofPropertyValuesHolder(v,
+                        android.animation.PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, 1.08f),
+                        android.animation.PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, 1.08f));
+                a.setDuration(Math.round(900 * sp));
+                break;
+            case "blink":
+                a = android.animation.ObjectAnimator.ofFloat(v, View.ALPHA, v.getAlpha(), v.getAlpha() * 0.25f);
+                a.setDuration(Math.round(700 * sp));
+                break;
+            default: { // drift: slides across the whole screen, again and again
+                float w = Math.max(1, v.getLayoutParams() != null && v.getLayoutParams().width > 0 ? v.getLayoutParams().width : W / 5);
+                // from just off the left edge to just off the right edge, whatever the anchor
+                String an = d.anchor;
+                float x0 = an.endsWith("left") ? 0 : an.endsWith("right") ? W - w : (W - w) / 2f;
+                a = android.animation.ObjectAnimator.ofFloat(v, View.TRANSLATION_X, -w - x0, W - x0);
+                a.setDuration(Math.round(12000 * sp));
+                a.setInterpolator(new android.view.animation.LinearInterpolator());
+                a.setRepeatMode(android.animation.ValueAnimator.RESTART);
+            }
+        }
+        if (!d.motion.equals("spin") && !d.motion.equals("drift")) {
+            a.setRepeatMode(android.animation.ValueAnimator.REVERSE);
+            a.setInterpolator(new android.view.animation.AccelerateDecelerateInterpolator());
+        }
+        a.setRepeatCount(android.animation.ValueAnimator.INFINITE);
+        a.start();
+        decoAnims.add(a);
     }
 
     private View decorationImage(android.graphics.drawable.Drawable img, MenuMedia.Decoration d) {
@@ -1171,6 +1236,7 @@ public class QuickMenuActivity extends AppCompatActivity {
         iv.setImageDrawable(img);
         iv.setScaleType(android.widget.ImageView.ScaleType.FIT_XY);
         if (d.mirror) iv.setScaleX(-1f);
+        if (d.flip) iv.setScaleY(-1f);
         noHighlight(iv);
         return iv;
     }
@@ -1186,6 +1252,182 @@ public class QuickMenuActivity extends AppCompatActivity {
             case "bottom-left": return Gravity.BOTTOM | Gravity.LEFT;
             case "bottom": return Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
             default: return Gravity.BOTTOM | Gravity.RIGHT;
+        }
+    }
+
+    // ---- theme pictures: picture buttons, per-item icons, hidden labels, the pointer
+
+    /** Per tile: {icon view, normal picture, highlighted picture} when the theme gives it icons. */
+    private Object[][] artIcons = new Object[0][];
+    private FrameLayout cursorBox;
+    private android.widget.ImageView cursorImg;
+    private float cursorAspect = 1f;
+
+    private void applyArt() {
+        MenuArt art = theme.art;
+        artIcons = new Object[renderer.tiles.size()][];
+        cursorBox = null;
+        if (!art.any()) return;
+        for (int i = 0; i < renderer.tiles.size(); i++) {
+            View t = renderer.tiles.get(i);
+            MenuRender.Item it = renderer.selectable.get(i);
+            MenuArt.ItemArt ia = art.of(it.id);
+            String b = art.button, bOn = art.buttonOn;
+            if (ia != null && !ia.button.isEmpty()) {
+                b = ia.button;
+                bOn = ia.buttonOn;
+            } else if (ia != null && !ia.buttonOn.isEmpty()) bOn = ia.buttonOn;
+            if (!b.isEmpty()) {
+                android.graphics.drawable.Drawable d = MenuArt.button(this, b, bOn, art.slice);
+                if (d != null) {
+                    t.setBackground(d);
+                    t.setForeground(null); // the picture shows the highlight itself
+                }
+            }
+            if (!art.labelsFor(it.id)) hideLabels(t);
+            // the user's own icon (Sections & items) wins over the theme's
+            if (ia != null && !ia.icon.isEmpty() && it.iconFile == null) {
+                android.widget.ImageView iv = t.findViewById(R.id.row_icon);
+                if (iv == null) iv = firstImage(t);
+                android.graphics.drawable.Drawable n = MenuMedia.load(this, ia.icon, 320);
+                if (iv != null && n != null) {
+                    android.graphics.drawable.Drawable on = ia.iconOn.isEmpty() ? null : MenuMedia.load(this, ia.iconOn, 320);
+                    iv.setImageTintList(null);
+                    iv.setImageDrawable(n);
+                    artIcons[i] = new Object[]{iv, n, on};
+                }
+            }
+        }
+        if (!art.cursor.isEmpty() && MenuMedia.exists(this, art.cursor)) {
+            android.graphics.drawable.Drawable d = MenuMedia.load(this, art.cursor, 320);
+            if (d != null) {
+                cursorAspect = d.getIntrinsicWidth() / (float) Math.max(1, d.getIntrinsicHeight());
+                cursorBox = new FrameLayout(this);
+                cursorImg = new android.widget.ImageView(this);
+                cursorImg.setImageDrawable(d);
+                cursorImg.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+                if (art.cursorSide.equals("right")) cursorImg.setScaleX(-1f); // a pointer drawn facing right points back left
+                cursorBox.addView(cursorImg, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT));
+                noHighlight(cursorBox);
+                noHighlight(cursorImg);
+                cursorBox.setClickable(false);
+                cursorBox.setAlpha(0f);
+                root.addView(cursorBox, new FrameLayout.LayoutParams(1, 1, Gravity.TOP | Gravity.LEFT));
+                cursorMotion(art);
+            }
+        }
+    }
+
+    private static android.widget.ImageView firstImage(View v) {
+        if (v instanceof android.widget.ImageView) return (android.widget.ImageView) v;
+        if (v instanceof ViewGroup) {
+            ViewGroup g = (ViewGroup) v;
+            for (int i = 0; i < g.getChildCount(); i++) {
+                android.widget.ImageView r = firstImage(g.getChildAt(i));
+                if (r != null) return r;
+            }
+        }
+        return null;
+    }
+
+    private static void hideLabels(View v) {
+        if (v instanceof TextView && !"badge".equals(v.getTag())) v.setVisibility(View.GONE);
+        if (v instanceof ViewGroup) {
+            ViewGroup g = (ViewGroup) v;
+            for (int i = 0; i < g.getChildCount(); i++) hideLabels(g.getChildAt(i));
+        }
+    }
+
+    /** Swaps a tile's theme icon for its highlighted one (and back). */
+    private void artFocus(int index, boolean has) {
+        if (index < 0 || index >= artIcons.length || artIcons[index] == null) return;
+        Object[] a = artIcons[index];
+        android.graphics.drawable.Drawable d = (android.graphics.drawable.Drawable) (has && a[2] != null ? a[2] : a[1]);
+        ((android.widget.ImageView) a[0]).setImageDrawable(d);
+    }
+
+    private void cursorMotion(MenuArt art) {
+        android.animation.ObjectAnimator a;
+        switch (art.cursorMotion) {
+            case "bob": {
+                boolean sideways = art.cursorSide.equals("left") || art.cursorSide.equals("right");
+                float k = (art.cursorSide.equals("left") || art.cursorSide.equals("top") ? -1 : 1) * dpx(5);
+                a = android.animation.ObjectAnimator.ofFloat(cursorImg, sideways ? View.TRANSLATION_X : View.TRANSLATION_Y, 0, k);
+                a.setDuration(450);
+                break;
+            }
+            case "pulse":
+                a = android.animation.ObjectAnimator.ofPropertyValuesHolder(cursorImg,
+                        android.animation.PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, 1.12f),
+                        android.animation.PropertyValuesHolder.ofFloat(View.SCALE_X,
+                                cursorImg.getScaleX(), cursorImg.getScaleX() * 1.12f));
+                a.setDuration(600);
+                break;
+            case "spin":
+                a = android.animation.ObjectAnimator.ofFloat(cursorImg, View.ROTATION, 0, 360);
+                a.setDuration(2400);
+                a.setInterpolator(new android.view.animation.LinearInterpolator());
+                a.setRepeatCount(android.animation.ValueAnimator.INFINITE);
+                a.start();
+                decoAnims.add(a);
+                return;
+            default:
+                return;
+        }
+        a.setRepeatMode(android.animation.ValueAnimator.REVERSE);
+        a.setRepeatCount(android.animation.ValueAnimator.INFINITE);
+        a.setInterpolator(new android.view.animation.AccelerateDecelerateInterpolator());
+        a.start();
+        decoAnims.add(a);
+    }
+
+    private int dpx(float v) {
+        return Math.round(v * getResources().getDisplayMetrics().density);
+    }
+
+    /** Moves the pointer next to the highlighted item (again once the style has finished moving things). */
+    private void placeCursor(int index) {
+        if (cursorBox == null) return;
+        ui.post(() -> placeCursorNow(index, true));
+        ui.postDelayed(() -> placeCursorNow(index, true), 280);
+    }
+
+    private void placeCursorNow(int index, boolean animate) {
+        if (cursorBox == null || renderer == null || index < 0 || index >= renderer.tiles.size() || index != selected) return;
+        View t = renderer.tiles.get(index);
+        if (!t.isShown() || t.getWidth() == 0) return;
+        int[] a = new int[2], b = new int[2];
+        t.getLocationInWindow(a);
+        root.getLocationInWindow(b);
+        float tw = t.getWidth() * t.getScaleX(), th = t.getHeight() * t.getScaleY();
+        float x = a[0] - b[0], y = a[1] - b[1];
+        MenuArt art = theme.art;
+        int h = Math.max(dpx(12), Math.round(Math.min(th, dpx(140)) * art.cursorSize / 100f));
+        int w = Math.max(dpx(8), Math.round(h * cursorAspect));
+        ViewGroup.LayoutParams lp = cursorBox.getLayoutParams();
+        if (lp.width != w || lp.height != h) {
+            lp.width = w;
+            lp.height = h;
+            cursorBox.setLayoutParams(lp);
+        }
+        float gap = dpx(4), cx, cy;
+        switch (art.cursorSide) {
+            case "right": cx = x + tw + gap; cy = y + th / 2 - h / 2f; break;
+            case "top": cx = x + tw / 2 - w / 2f; cy = y - h - gap; break;
+            case "bottom": cx = x + tw / 2 - w / 2f; cy = y + th + gap; break;
+            default: cx = x - w - gap; cy = y + th / 2 - h / 2f;
+        }
+        // keep it on screen
+        cx = Math.max(0, Math.min(root.getWidth() - w, cx));
+        cy = Math.max(0, Math.min(root.getHeight() - h, cy));
+        boolean first = cursorBox.getAlpha() == 0f;
+        if (first || !animate) {
+            cursorBox.setTranslationX(cx);
+            cursorBox.setTranslationY(cy);
+            cursorBox.animate().alpha(1f).setDuration(120).start();
+        } else {
+            cursorBox.animate().translationX(cx).translationY(cy).alpha(1f).setDuration(110).start();
         }
     }
 

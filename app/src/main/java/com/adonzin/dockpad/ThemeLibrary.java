@@ -147,6 +147,7 @@ final class ThemeLibrary {
                 if (v.startsWith("file:")) out.add("media/" + v.substring(5));
             }
         }
+        MenuArt.files(o.optJSONObject("art"), out);
         return out;
     }
 
@@ -176,6 +177,7 @@ final class ThemeLibrary {
                 if (v.startsWith("file:") && media.containsKey(v.substring(5))) snd.put(k, "file:" + media.get(v.substring(5)));
             }
         }
+        MenuArt.rename(o.optJSONObject("art"), media);
     }
 
     // ------------------------------------------------------------------ theme files

@@ -54,11 +54,12 @@ Docked play on a handheld usually means setting up every emulator again for an e
 - **Pictures and video:**
   - a background picture, animated GIF or looping video, either behind the whole menu or inside its panel, with fill/fit, blur and darken
   - your own images as icons
-  - **decorations:** PNGs and GIFs placed anywhere (corners, edges, centre), sized, nudged, mirrored, behind or in front of the menu, or repeated along an edge
+  - **decorations:** PNGs and GIFs placed anywhere (corners, edges, centre), sized, moved, rotated, mirrored or upside down, behind or in front of the menu, repeated along an edge, and moving (float, sway, spin, pulse, blink, or drift across the screen)
 - **Themes:**
   - built-in themes (Default, Glass, Retro terminal, Neon ring, Console, Sunset dock)
   - save your own look as a theme and switch between them, including from the quick menu
   - share a theme as one `.dockpadtheme` file, with its pictures, sounds and font packed in
+  - picture buttons with a separate highlighted picture, per-item icons and buttons, and a pointer that follows the highlight (set up in the PC editor)
   - **Get themes:** browse the theme catalog with previews and install with one press; [how to make and share themes](docs/THEMES.md)
   - **PC theme editor:** design themes on a computer with a live preview of the handheld's screen, then import the file into DockPad ([details below](#pc-theme-editor))
 - **Animation and sound:**
@@ -111,7 +112,8 @@ It needs no install, and nothing you add is uploaded anywhere: it all stays in y
 
 - A live preview of the Retroid Pocket 5's screen with all twelve styles. Move around it with the arrow keys, and put your own game screenshot behind it.
 - Every setting from the handheld: layout, palettes, gradients, colours with see-through, borders, highlight, fonts, header.
-- Drag and drop pictures, GIFs, videos, sounds and `.ttf`/`.otf` fonts. Place decorations by dragging them on the preview and resize them with the mouse wheel. Arrange Freeform items by dragging.
+- Drag and drop pictures, GIFs, videos, sounds and `.ttf`/`.otf` fonts. Move, rotate and resize decorations right on the preview, and give them movement (float, sway, spin, pulse, blink, or drift across the screen). Arrange Freeform items by dragging.
+- **Picture buttons:** use your own pictures as the items' buttons, with a different picture for the highlighted one, sharp edges on any size (nine-slice), per-item buttons and icons, hidden names, and a pointer picture (like a hand or arrow) that follows the highlight.
 - Preview the opening and closing animations, highlight motions, sound packs, your own sounds and music.
 - Start from the built-in themes, open any `.dockpadtheme` file, undo and redo, edit the raw `theme.json`, and checks for missing or oversized files.
 - Your work is kept in the browser between visits.

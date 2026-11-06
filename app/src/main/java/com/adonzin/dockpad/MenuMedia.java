@@ -53,6 +53,10 @@ final class MenuMedia {
         boolean front = false;          // in front of the menu (else behind it)
         String repeat = "none";         // none, across, down
         boolean mirror = false;
+        int rotation = 0;               // degrees, -180..180
+        boolean flip = false;           // upside down
+        String motion = "none";         // none, float, sway, spin, pulse, blink, drift
+        String motionSpeed = "normal";  // slow, normal, fast
 
         Decoration copy() {
             return decode(encode());
@@ -70,6 +74,10 @@ final class MenuMedia {
                 o.put("front", front);
                 o.put("repeat", repeat);
                 o.put("mirror", mirror);
+                o.put("rotation", rotation);
+                o.put("flip", flip);
+                o.put("motion", motion);
+                o.put("motionSpeed", motionSpeed);
             } catch (Exception ignored) {
             }
             return o;
@@ -87,6 +95,10 @@ final class MenuMedia {
             d.front = o.optBoolean("front", false);
             d.repeat = oneOf(o.optString("repeat", "none"), REPEATS, "none");
             d.mirror = o.optBoolean("mirror", false);
+            d.rotation = clamp(o.optInt("rotation", 0), -180, 180);
+            d.flip = o.optBoolean("flip", false);
+            d.motion = oneOf(o.optString("motion", "none"), MOTIONS, "none");
+            d.motionSpeed = oneOf(o.optString("motionSpeed", "normal"), SPEEDS, "normal");
             return d;
         }
     }
@@ -95,6 +107,11 @@ final class MenuMedia {
             "bottom-left", "bottom", "bottom-right"};
     static final String[] ANCHOR_LABELS = {"Top left", "Top", "Top right", "Left", "Centre", "Right",
             "Bottom left", "Bottom", "Bottom right"};
+    static final String[] MOTIONS = {"none", "float", "sway", "spin", "pulse", "blink", "drift"};
+    static final String[] MOTION_LABELS = {"Still", "Float up and down", "Sway", "Spin", "Pulse", "Blink",
+            "Drift across the screen"};
+    static final String[] SPEEDS = {"slow", "normal", "fast"};
+    static final String[] SPEED_LABELS = {"Slow", "Normal", "Fast"};
     static final String[] REPEATS = {"none", "across", "down"};
     static final String[] REPEAT_LABELS = {"Once", "Repeat across the screen", "Repeat down the screen"};
 
