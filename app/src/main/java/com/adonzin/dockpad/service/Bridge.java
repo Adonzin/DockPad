@@ -650,6 +650,23 @@ final class Bridge {
         b.append("Cursor mode: ").append(pcModeOn ? "ON" : "off").append('\n');
         b.append("D-pad sent as: ").append(dpadForm == 1 ? "buttons" : dpadForm == 2 ? "hat" : "buttons + hat")
                 .append(dpadSeen == 0 ? " (not learned yet: press the built-in d-pad once)" : " (learned)").append('\n');
+        b.append("Battery: ");
+        if (batteries.isEmpty()) b.append("none reported");
+        for (Map.Entry<String, Battery.Level> e : batteries.entrySet()) {
+            b.append(e.getKey()).append(' ').append(e.getValue().percent).append('%')
+                    .append(e.getValue().charging ? " charging" : "").append("; ");
+        }
+        b.append('\n');
+        try {
+            StringBuilder bt = new StringBuilder();
+            for (String[] d : Bt.connectedDevices()) {
+                bt.append(d[0]).append(" (").append(d[2].equals("-1") ? "no level" : d[2] + "%").append(d[3].equals("1") ? ", controller" : "")
+                        .append("); ");
+            }
+            b.append("Bluetooth connected: ").append(bt.length() == 0 ? "none found" : bt).append('\n');
+        } catch (Throwable t) {
+            b.append("Bluetooth: ").append(t).append('\n');
+        }
         b.append("Multiplayer: ").append(multiplayer ? "on" : "off (everything is player 1)").append('\n');
         if (slots.isEmpty()) b.append("Virtual controller: not created\n");
         for (Slot sl : slots) {
