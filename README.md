@@ -40,7 +40,7 @@ Docked play on a handheld usually means setting up every emulator again for an e
 - Opens over any game with a button combo, and is fully navigable with a controller.
 - Has Home, Back, Cursor mode, an on-screen keyboard, rapid fire, face-button swaps, screenshot, force close, your own commands, live controllers list (with battery and disconnect), and pairing.
 - You choose which items it shows.
-- **Thirteen styles:**
+- **Twelve styles:**
   - list
   - compact list
   - grid
@@ -49,7 +49,6 @@ Docked play on a handheld usually means setting up every emulator again for an e
   - **dock** (icons that magnify as you pass)
   - **wheel** (a vertical drum)
   - **tabs** (one per section, L1/R1)
-  - **honeycomb** (hexagon tiles)
   - **rail** (a thin icon column with a name bubble)
   - **radial** (aim with the stick; several rings, L1/R1)
   - **edge arc** (a half-ring along the side, around your thumb)

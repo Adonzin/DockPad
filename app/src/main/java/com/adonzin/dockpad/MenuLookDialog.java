@@ -86,11 +86,11 @@ final class MenuLookDialog {
         Runnable refresh = () -> {
             String lay = MenuTheme.LAYOUTS[checked(layouts)];
             layoutHelp.setText(help(lay));
-            boolean usesPosition = in(lay, "list", "compact", "grid", "freeform", "wheel", "tabs", "honeycomb", "rail", "arc");
+            boolean usesPosition = in(lay, "list", "compact", "grid", "freeform", "wheel", "tabs", "rail", "arc");
             boolean edgeOnly = in(lay, "rail", "arc");
             boolean usesBand = in(lay, "carousel", "dock");
             boolean usesSize = in(lay, "carousel", "dock", "radial", "arc", "xmb", "rail");
-            boolean usesCols = in(lay, "grid", "freeform", "tabs", "honeycomb");
+            boolean usesCols = in(lay, "grid", "freeform", "tabs");
             boolean usesSections = in(lay, "list", "compact", "grid", "wheel", "carousel");
             posLabel.setText(edgeOnly ? "Side (left or right)" : "Position");
             posLabel.setVisibility(usesPosition ? View.VISIBLE : View.GONE);
@@ -166,7 +166,6 @@ final class MenuLookDialog {
             case "wheel": return "Items on a vertical drum: the middle one is big, the others curve away. Up/down turn "
                     + "it, left/right jump between sections.";
             case "tabs": return "One tab per section (L1/R1 or the row's edge switch tabs), with that section's tiles below.";
-            case "honeycomb": return "Hexagon tiles in a beehive pattern.";
             case "rail": return "A thin column of icons at the edge; the highlighted one shows its name beside it.";
             case "radial": return "Items on a ring in the middle. Aim with the stick, or go around with the D-pad. Many "
                     + "items make several rings (D-pad up/down or L1/R1 between them).";

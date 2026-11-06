@@ -888,7 +888,6 @@ final class MenuRender {
             case "arc": return new MenuStyles.ArcRenderer(c, t);
             case "wheel": return new MenuStyles.WheelRenderer(c, t);
             case "tabs": return new MenuStyles.TabsRenderer(c, t);
-            case "honeycomb": return new MenuStyles.HoneyRenderer(c, t);
             case "rail": return new MenuStyles.RailRenderer(c, t);
             default: return new ListRenderer(c, t, false);
         }

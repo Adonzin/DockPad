@@ -1,15 +1,7 @@
 package com.adonzin.dockpad;
 
 import android.content.Context;
-import android.graphics.Canvas;
-import android.graphics.ColorFilter;
-import android.graphics.Paint;
-import android.graphics.Path;
-import android.graphics.PixelFormat;
-import android.graphics.Rect;
-import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
-import android.graphics.drawable.StateListDrawable;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -29,7 +21,7 @@ import static com.adonzin.dockpad.MenuRender.LEFT;
 import static com.adonzin.dockpad.MenuRender.RIGHT;
 import static com.adonzin.dockpad.MenuRender.UP;
 
-/** More quick menu styles: XMB, dock, edge arc, wheel, tabs, honeycomb and rail. */
+/** More quick menu styles: XMB, dock, edge arc, wheel, tabs and rail. */
 final class MenuStyles {
     private MenuStyles() {
     }
@@ -713,118 +705,6 @@ final class MenuStyles {
         @Override
         int arrangeStep(int dir) {
             int cols = Math.max(2, theme.columns);
-            return dir == LEFT ? -1 : dir == RIGHT ? 1 : dir == UP ? -cols : cols;
-        }
-    }
-
-    // ------------------------------------------------------------------ honeycomb
-
-    /** A pointy-top hexagon. */
-    static final class HexDrawable extends Drawable {
-        final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG), stroke = new Paint(Paint.ANTI_ALIAS_FLAG);
-        final Path path = new Path();
-
-        HexDrawable(int color, int strokeColor, float strokeWidth) {
-            fill.setColor(color);
-            stroke.setColor(strokeColor);
-            stroke.setStyle(Paint.Style.STROKE);
-            stroke.setStrokeWidth(strokeWidth);
-        }
-
-        @Override
-        protected void onBoundsChange(Rect b) {
-            path.reset();
-            float cx = b.exactCenterX(), cy = b.exactCenterY();
-            float r = Math.min(b.width() / (float) Math.sqrt(3), b.height() / 2f) - stroke.getStrokeWidth();
-            for (int i = 0; i < 6; i++) {
-                double a = Math.toRadians(60 * i - 90);
-                float x = cx + (float) Math.cos(a) * r, y = cy + (float) Math.sin(a) * r;
-                if (i == 0) path.moveTo(x, y);
-                else path.lineTo(x, y);
-            }
-            path.close();
-        }
-
-        @Override
-        public void draw(Canvas canvas) {
-            canvas.drawPath(path, fill);
-            if (stroke.getStrokeWidth() > 0 && stroke.getColor() != 0) canvas.drawPath(path, stroke);
-        }
-
-        @Override
-        public void setAlpha(int alpha) {
-            fill.setAlpha(alpha);
-        }
-
-        @Override
-        public void setColorFilter(ColorFilter cf) {
-            fill.setColorFilter(cf);
-        }
-
-        @Override
-        public int getOpacity() {
-            return PixelFormat.TRANSLUCENT;
-        }
-    }
-
-    static final class HoneyRenderer extends MenuRender.Renderer {
-        HoneyRenderer(Context c, MenuTheme t) {
-            super(c, t);
-        }
-
-        final class HoneyCanvas extends ViewGroup {
-            HoneyCanvas(Context c) {
-                super(c);
-                setClipChildren(false);
-            }
-
-            int cols() {
-                return Math.max(3, theme.columns);
-            }
-
-            @Override
-            protected void onMeasure(int w, int h) {
-                int W = MeasureSpec.getSize(w);
-                int cw = (int) (W / (cols() + 0.5f)), ch = (int) (cw * 1.1547f);
-                for (View v : tiles) v.measure(MeasureSpec.makeMeasureSpec(cw, MeasureSpec.EXACTLY),
-                        MeasureSpec.makeMeasureSpec(ch, MeasureSpec.EXACTLY));
-                int rows = (tiles.size() + cols() - 1) / cols();
-                setMeasuredDimension(W, (int) (rows * ch * 0.75f + ch * 0.25f) + dp(8));
-            }
-
-            @Override
-            protected void onLayout(boolean changed, int l, int t, int r, int b) {
-                int W = r - l, cw = (int) (W / (cols() + 0.5f)), ch = (int) (cw * 1.1547f);
-                for (int i = 0; i < tiles.size(); i++) {
-                    int row = i / cols(), col = i % cols();
-                    int x = col * cw + (row % 2 == 1 ? cw / 2 : 0), y = (int) (row * ch * 0.75f);
-                    tiles.get(i).layout(x, y, x + cw, y + ch);
-                }
-            }
-        }
-
-        @Override
-        void build(List<MenuRender.Item> items) {
-            HoneyCanvas canvas = new HoneyCanvas(c);
-            for (MenuRender.Item it : items) {
-                if (it.action == null) continue;
-                StateListDrawable bg = new StateListDrawable();
-                bg.addState(new int[]{android.R.attr.state_focused}, new HexDrawable(
-                        color(com.google.android.material.R.attr.colorPrimaryContainer),
-                        color(androidx.appcompat.R.attr.colorPrimary), dp(3)));
-                bg.addState(new int[]{}, new HexDrawable(0x26FFFFFF, 0, 0));
-                MenuRender.SmartTile t = new MenuRender.SmartTile(c, it, true,
-                        color(androidx.appcompat.R.attr.colorPrimary), bg);
-                t.setForeground(null); // the hexagon itself shows the highlight
-                canvas.addView(t);
-                selectable(t, it);
-            }
-            view = canvas;
-        }
-
-        @Override
-        int arrangeStep(int dir) {
-            int cols = Math.max(3, theme.columns);
             return dir == LEFT ? -1 : dir == RIGHT ? 1 : dir == UP ? -cols : cols;
         }
     }
