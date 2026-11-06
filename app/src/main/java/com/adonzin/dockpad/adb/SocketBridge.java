@@ -189,4 +189,15 @@ public final class SocketBridge implements IBridge {
         Object r = rcTimeout("recordAllInput", ms + 10000, ms);
         return r == null ? "" : r.toString();
     }
+
+    @Override
+    public void setJoinByPress(boolean on) throws RemoteException {
+        rc("setJoinByPress", on);
+    }
+
+    @Override
+    public String disconnectController(String name) throws RemoteException {
+        Object r = rc("disconnectController", name);
+        return r == null ? "" : r.toString();
+    }
 }

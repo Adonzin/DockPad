@@ -24,4 +24,6 @@ interface IBridge {
     void typeKey(int code, boolean shift) = 20;
     void typeCombo(String csv) = 21;
     String recordAllInput(int ms) = 22;
+    void setJoinByPress(boolean on) = 23;
+    String disconnectController(String name) = 24;
 }

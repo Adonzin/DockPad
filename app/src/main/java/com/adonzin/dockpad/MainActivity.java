@@ -722,7 +722,8 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
                         c.optString("name"), sub);
                 TextView badge = row.findViewById(R.id.row_badge);
                 badge.setVisibility(View.VISIBLE);
-                badge.setText("Player " + c.optInt("player", 1));
+                int pl = c.optInt("player", 1);
+                badge.setText(pl == 0 ? "Press A to join" : "Player " + pl);
                 if (!touchpad && !builtIn) {
                     row.setFocusable(true);
                     row.setClickable(true);
@@ -911,6 +912,12 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
                 "Player 1 is the built-in controls plus your first external controller. Each further controller becomes the next player (\"DockPad Controller 2\", \"3\", \"4\"). When off, every controller is player 1.",
                 prefs.multiplayer(), v -> {
                     prefs.multiplayer(v);
+                    pushSettings();
+                });
+        addSwitch(controllerSettings, "Players join by pressing A",
+                "With multiplayer on, a controller does nothing until you press A (or any face button or Start) on it. Players are numbered in the order they join, not the order they connected. Changing this asks everyone to join again.",
+                prefs.joinByPress(), v -> {
+                    prefs.joinByPress(v);
                     pushSettings();
                 });
         addSwitch(appSettings, "Start automatically after a restart",

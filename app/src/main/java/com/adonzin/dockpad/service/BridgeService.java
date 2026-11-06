@@ -138,4 +138,18 @@ public class BridgeService extends IBridge.Stub {
             return "Couldn't record: " + e;
         }
     }
+
+    @Override
+    public void setJoinByPress(boolean on) {
+        bridge.setJoinByPress(on);
+    }
+
+    @Override
+    public String disconnectController(String name) {
+        try {
+            return bridge.disconnectController(name);
+        } catch (Throwable t) {
+            return "Couldn't disconnect: " + t;
+        }
+    }
 }

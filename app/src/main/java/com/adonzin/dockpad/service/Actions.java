@@ -114,6 +114,12 @@ final class Actions {
                 + ".MessageReceiver", "--es", "message", "Screenshot saved to Pictures/Screenshots");
     }
 
+    /** Shows a short message on screen (through the app). */
+    static void toast(String message) {
+        new Thread(() -> exec("am", "broadcast", "-n", BuildConfig.APPLICATION_ID + "/" + BuildConfig.APPLICATION_ID
+                + ".MessageReceiver", "--es", "message", message), "DockPad-toast").start();
+    }
+
     private static String launcherPackage() {
         String out = exec("cmd", "package", "resolve-activity", "--brief", "-a", "android.intent.action.MAIN",
                 "-c", "android.intent.category.HOME");

@@ -88,6 +88,38 @@ final class Bridge {
         }
     }
 
+    // press A to join: new controllers wait (and do nothing) until they press a button
+    private volatile boolean joinByPress = false;
+
+    void setJoinByPress(boolean on) {
+        if (joinByPress != on) {
+            joinByPress = on;
+            synchronized (this) {
+                for (Source s : sources.values()) s.close();
+                sources.clear();
+            }
+            lastDevList = "";
+        }
+    }
+
+    /** Disconnects a Bluetooth controller. Returns "" on success, else why not. */
+    String disconnectController(String name) {
+        String err = Bt.disconnect(name);
+        return err == null ? "" : err;
+    }
+
+    /** Gives a waiting controller the next free player. */
+    private void join(Source src) {
+        synchronized (this) {
+            if (!running || !src.alive || src.joined) return;
+            Slot sl = slot(nextFreePlayerIndex());
+            if (sl == null) return;
+            src.joinAs(sl);
+            lastDevList = ""; // its touchpad (if any) can follow now
+        }
+        Actions.toast("Player " + src.player + ": " + src.dev.name);
+    }
+
     /** Returns the virtual controller for a player, creating it (and any lower players) if needed. */
     private Slot slot(int index) {
         while (slots.size() <= index) {
@@ -572,7 +604,7 @@ final class Bridge {
         b.append("Physical controllers:\n");
         if (sources.isEmpty()) b.append("   none\n");
         for (Source s : sources.values()) {
-            b.append("• ").append(s.dev.name).append(" [").append(s.dev.id()).append("] → Player ").append(s.player)
+            b.append("• ").append(s.dev.name).append(" [").append(s.dev.id()).append("] → ").append(s.joined ? "Player " + s.player : "waiting (press A to join)")
                     .append(s.alive ? "" : " (disconnected)").append('\n')
                     .append("    ").append(s.touchpad ? "touchpad (click = mappable button)"
                             : s.mapper == null ? "" : s.mapper.layoutDescription).append('\n')
@@ -855,13 +887,20 @@ final class Bridge {
                 for (EvdevDevice d : fresh) {
                     boolean touchpad = d.isControllerTouchpad();
                     if ((pass == 0) == touchpad) continue;
+                    boolean isBuiltIn = d.path.equals(target.path);
                     int index;
-                    if (d.path.equals(target.path)) index = 0;
+                    if (isBuiltIn) index = 0;
                     else if (touchpad) index = parentPlayerIndex(d);
-                    else index = nextFreePlayerIndex();
+                    else if (multiplayer && joinByPress) {
+                        Source s = new Source(d, null, 0, false); // waits for a button press
+                        sources.put(d.path, s);
+                        s.start();
+                        continue;
+                    } else index = nextFreePlayerIndex();
+                    if (index < 0) continue; // its controller hasn't joined yet
                     Slot sl = slot(index);
                     if (sl == null) continue;
-                    Source s = new Source(d, sl.encoder, sl.player, d.path.equals(target.path));
+                    Source s = new Source(d, sl.encoder, sl.player, isBuiltIn);
                     sources.put(d.path, s);
                     s.start();
                 }
@@ -882,7 +921,7 @@ final class Bridge {
         if (!multiplayer) return 0;
         Set<Integer> used = new HashSet<>();
         for (Source s : sources.values()) {
-            if (s.touchpad || s.builtIn) continue;
+            if (s.touchpad || s.builtIn || !s.joined) continue;
             used.add(s.player - 1);
         }
         for (int i = 0; i < MAX_PLAYERS; i++) if (!used.contains(i)) return i;
@@ -898,6 +937,7 @@ final class Bridge {
             int sn = eventNumber(s.dev.path);
             if (sn < n && (best == null || sn > eventNumber(best.dev.path))) best = s;
         }
+        if (best != null && !best.joined) return -1;
         return best == null ? 0 : best.player - 1;
     }
 
@@ -947,8 +987,10 @@ final class Bridge {
 
     private final class Source {
         final EvdevDevice dev;
-        final TargetEncoder sink;
-        final int player;
+        volatile TargetEncoder sink;
+        volatile int player;
+        /** False while waiting for "press A to join". */
+        volatile boolean joined;
         volatile Mapper mapper, pcMapper, kbMapper;
         final boolean touchpad;
         /** The built-in controls: only read (for shortcuts) normally, taken over in PC mode. */
@@ -966,6 +1008,7 @@ final class Bridge {
             this.dev = dev;
             this.sink = sink;
             this.player = player;
+            this.joined = sink != null;
             this.builtIn = builtIn;
             this.wantGrab = !builtIn || takeOverBuiltIn();
             this.touchpad = dev.isControllerTouchpad();
@@ -995,8 +1038,10 @@ final class Bridge {
                     }
                 }
                 synchronized (this) {
-                    mapper = new Mapper(dev, sink);
-                    if (!builtIn && !touchpad) mapper.setTuning(tunings.get(dev.name));
+                    if (joined) {
+                        mapper = new Mapper(dev, sink);
+                        if (!builtIn && !touchpad) mapper.setTuning(tunings.get(dev.name));
+                    }
                     pcMapper = new Mapper(dev, pc.sink());
                     kbMapper = new Mapper(dev, keyboardInput.sink());
                     buildEngine();
@@ -1015,6 +1060,10 @@ final class Bridge {
                         int code = bb.getShort(p + off + 2) & 0xffff;
                         int value = bb.getInt(p + off + 4);
                         eventsRead.incrementAndGet();
+                        if (!joined) {
+                            if (type == Codes.EV_KEY && value == 1 && isJoinButton(code)) join(this);
+                            continue; // the press that joins doesn't reach the game
+                        }
                         if (builtIn) observeBuiltInDpad(type, code, value);
                         if (recording != null && wantGrab) recordEvent(dev.name, type, code, value);
                         synchronized (this) {
@@ -1102,6 +1151,20 @@ final class Bridge {
                 }
             }
             turboTasks.clear();
+        }
+
+        private boolean isJoinButton(int code) {
+            return code == Codes.BTN_SOUTH || code == Codes.BTN_EAST || code == Codes.BTN_NORTH
+                    || code == Codes.BTN_WEST || code == Codes.BTN_START;
+        }
+
+        synchronized void joinAs(Slot sl) {
+            sink = sl.encoder;
+            player = sl.player;
+            Mapper m = new Mapper(dev, sink);
+            m.setTuning(tunings.get(dev.name));
+            mapper = m;
+            joined = true;
         }
 
         synchronized void applyTuning() {

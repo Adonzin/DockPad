@@ -295,6 +295,26 @@ public class QuickMenuActivity extends AppCompatActivity {
         }));
     }
 
+    private String controllersKey = "";
+
+    private void confirmDisconnect(String name) {
+        new DpDialog(this).setTitle("Disconnect " + name + "?")
+                .setMessage("It disconnects from Bluetooth (most controllers then switch off). Press its "
+                        + "home button to connect it again.")
+                .setPositiveButton("Disconnect", (d, w) -> {
+                    android.content.Context app = getApplicationContext();
+                    runInBackground(b -> {
+                        String err = b.disconnectController(name);
+                        ui.post(() -> {
+                            android.widget.Toast.makeText(app, err == null || err.isEmpty()
+                                    ? name + " disconnected" : err, android.widget.Toast.LENGTH_LONG).show();
+                            refreshState();
+                        });
+                    });
+                })
+                .setNegativeButton("Cancel", null).show();
+    }
+
     /** External controllers from the last status, for the rapid-fire editor. */
     private final java.util.List<String> externals = new java.util.ArrayList<>();
 
@@ -365,6 +385,17 @@ public class QuickMenuActivity extends AppCompatActivity {
                     && !externals.contains(c.optString("name"))) externals.add(c.optString("name"));
         }
         if (controllersAnchor == null) return;
+        StringBuilder key = new StringBuilder(running ? "on" : "off");
+        if (ctrls != null) for (int i = 0; i < ctrls.length(); i++) {
+            JSONObject c = ctrls.optJSONObject(i);
+            if (c != null) key.append('|').append(c.optString("name")).append(c.optInt("player")).append(c.optBoolean("touchpad"));
+        }
+        // only rebuild when something visible changed, so the highlight stays put
+        if (key.toString().equals(controllersKey) && controllersAnchor.getChildCount() > 0) return;
+        controllersKey = key.toString();
+        View focused = getCurrentFocus();
+        int focusIndex = focused != null && focused.getParent() == controllersAnchor
+                ? controllersAnchor.indexOfChild(focused) : -1;
         controllersAnchor.removeAllViews();
         boolean any = false;
         if (ctrls != null) for (int i = 0; i < ctrls.length(); i++) {
@@ -379,8 +410,21 @@ public class QuickMenuActivity extends AppCompatActivity {
             r.findViewById(R.id.row_subtitle).setVisibility(View.GONE);
             TextView badge = r.findViewById(R.id.row_badge);
             badge.setVisibility(View.VISIBLE);
-            badge.setText("P" + c.optInt("player", 1));
+            int pl = c.optInt("player", 1);
+            badge.setText(pl == 0 ? "Press A to join" : "P" + pl);
+            if (!c.optBoolean("builtIn")) {
+                String name = c.optString("name");
+                ((TextView) r.findViewById(R.id.row_subtitle)).setText("Select to disconnect");
+                r.findViewById(R.id.row_subtitle).setVisibility(View.VISIBLE);
+                r.setFocusable(true);
+                r.setClickable(true);
+                r.setDefaultFocusHighlightEnabled(false);
+                r.setOnClickListener(v -> confirmDisconnect(name));
+            }
             controllersAnchor.addView(r);
+        }
+        if (focusIndex >= 0 && focusIndex < controllersAnchor.getChildCount()) {
+            controllersAnchor.getChildAt(focusIndex).requestFocus();
         }
         if (!any) {
             TextView t = new TextView(this);

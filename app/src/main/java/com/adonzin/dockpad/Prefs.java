@@ -32,6 +32,8 @@ final class Prefs {
 
     boolean multiplayer() { return p.getBoolean("multiplayer", true); }
     void multiplayer(boolean v) { p.edit().putBoolean("multiplayer", v).apply(); }
+    boolean joinByPress() { return p.getBoolean("joinByPress", false); }
+    void joinByPress(boolean v) { p.edit().putBoolean("joinByPress", v).apply(); }
 
     /** The user wants the bridge on: start it again automatically when the app can. */
     boolean bridgeWanted() { return p.getBoolean("bridgeWanted", false); }
@@ -95,6 +97,7 @@ final class Prefs {
         b.setBuiltIn(builtIn());
         b.setPcSettings(pcSpeed() + "," + pcPointerLeft());
         b.setLayouts(layoutsSpec());
+        b.setJoinByPress(joinByPress());
         b.setMultiplayer(multiplayer());
         b.setTouchpadAsButton(touchpadAsButton());
         b.setShortcuts(shortcutsSpec());
