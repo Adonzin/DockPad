@@ -484,11 +484,36 @@ public class QuickMenuActivity extends AppCompatActivity {
             firstRow.requestFocus();
             if (kc != KeyEvent.KEYCODE_BUTTON_B && kc != KeyEvent.KEYCODE_BACK) return true;
         }
+        // wrap around: up from the first item goes to the last, down from the last to the first
+        if ((kc == KeyEvent.KEYCODE_DPAD_UP || kc == KeyEvent.KEYCODE_DPAD_DOWN)
+                && e.getAction() == KeyEvent.ACTION_DOWN) {
+            List<View> rows = new java.util.ArrayList<>();
+            collectRows(list, rows);
+            View f = getCurrentFocus();
+            if (rows.size() > 1 && f != null) {
+                boolean atTop = f == rows.get(0), atBottom = f == rows.get(rows.size() - 1);
+                if ((kc == KeyEvent.KEYCODE_DPAD_UP && atTop) || (kc == KeyEvent.KEYCODE_DPAD_DOWN && atBottom)) {
+                    // only on a fresh press, so holding the stick stops at the end instead of spinning round
+                    if (e.getRepeatCount() == 0) rows.get(atTop ? rows.size() - 1 : 0).requestFocus();
+                    return true;
+                }
+            }
+        }
         if (DpDialog.Controller.isFromController(e)
                 && DpDialog.Controller.handle(e, getWindow().getDecorView(), this::finish)) {
             return true;
         }
         return super.dispatchKeyEvent(e);
+    }
+
+    /** Selectable rows, top to bottom. */
+    private static void collectRows(ViewGroup g, List<View> out) {
+        for (int i = 0; i < g.getChildCount(); i++) {
+            View v = g.getChildAt(i);
+            if (v.getVisibility() != View.VISIBLE) continue;
+            if (v.isFocusable()) out.add(v);
+            else if (v instanceof ViewGroup) collectRows((ViewGroup) v, out);
+        }
     }
 
     private static boolean isDpad(int kc) {

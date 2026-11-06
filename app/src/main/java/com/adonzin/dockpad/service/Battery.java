@@ -141,4 +141,37 @@ final class Battery {
             return "";
         }
     }
+
+    /** What each battery source sees, for Diagnostics. */
+    @android.annotation.SuppressLint("NewApi")
+    static String describe() {
+        StringBuilder b = new StringBuilder();
+        File[] all = new File("/sys/class/power_supply").listFiles();
+        b.append("  Power supplies: ");
+        if (all == null) b.append("can't read the list");
+        else for (File f : all) {
+            String cap = read(new File(f, "capacity"));
+            b.append(f.getName()).append(" [").append(read(new File(f, "scope")).isEmpty() ? "-" : read(new File(f, "scope")))
+                    .append(", ").append(cap.isEmpty() ? "no level" : cap + "%").append("]; ");
+        }
+        b.append("\n  Input devices with a battery: ");
+        int found = 0;
+        if (Build.VERSION.SDK_INT >= 31) {
+            try {
+                for (int id : InputDevice.getDeviceIds()) {
+                    InputDevice d = InputDevice.getDevice(id);
+                    if (d == null) continue;
+                    BatteryState s = d.getBatteryState();
+                    if (s != null && s.isPresent()) {
+                        b.append(d.getName()).append(" (").append(Math.round(s.getCapacity() * 100)).append("%); ");
+                        found++;
+                    }
+                }
+            } catch (Throwable t) {
+                b.append("error ").append(t).append("; ");
+            }
+        }
+        if (found == 0) b.append("none");
+        return b.toString();
+    }
 }

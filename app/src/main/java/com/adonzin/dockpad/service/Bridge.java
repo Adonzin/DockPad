@@ -664,6 +664,7 @@ final class Bridge {
                         .append("); ");
             }
             b.append("Bluetooth connected: ").append(bt.length() == 0 ? "none found" : bt).append('\n');
+            b.append(Battery.describe()).append('\n');
         } catch (Throwable btErr) {
             b.append("Bluetooth: ").append(btErr).append('\n');
         }
