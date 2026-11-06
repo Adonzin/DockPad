@@ -1,25 +1,106 @@
 # DockPad
 
-Use any Bluetooth or USB controller as if it were your Android handheld's **built-in controls**, so you don't have to remap Player 1 in every emulator when you dock.
+**Dock your Android handheld, pick up any controller, and play. No remapping.**
 
-DockPad takes exclusive control of external controllers, translates their input to the built-in controls' layout, and writes it straight into the built-in controls' own input device. Apps see the presses as coming from the built-in controls, so emulators already set up for them work with any controller without remapping. Extra players get virtual controllers ("DockPad Controller 2", "3", "4").
+DockPad makes Bluetooth and USB controllers act exactly like your handheld's **built-in controls**. Every emulator you've already set up for the built-in controls just works with a PlayStation, Xbox, 8BitDo or Switch-style pad, with nothing to configure per app or per controller.
 
-Status: early test version, built for the Retroid Pocket 5.
+Built for and tested on the **Retroid Pocket 5** (Android 13). It works without root.
+
+[**⬇ Download the latest DockPad.apk**](../../releases/latest)
+
+---
+
+## Why DockPad?
+
+Docked play on a handheld usually means setting up every emulator again for an external controller, and doing it again for the next controller. DockPad skips all of that. Player 1's controller is sent straight into the built-in controls' own input device, so apps can't tell the difference. RetroArch, Dolphin, NetherSX2, PPSSPP, Azahar, Eden, Vita3K and others keep the settings they already have.
+
+## Features
+
+**Controllers**
+- Any Bluetooth or USB gamepad becomes the built-in controls. Keyboards are left alone.
+- **Multiplayer:** extra controllers become players 2–4 ("DockPad Controller 2", "3", "4"). Optionally, players join by pressing A.
+- **Per-controller fixes:** swap A/B and X/Y, auto-map by button labels (Nintendo-style pads), change or turn off any button, and reset to default.
+- **Fine-tuning:** stick dead zone, stick response curve, trigger press point, swap sticks, invert Y, and left stick as D-pad.
+- **Rapid fire** on any buttons, with an adjustable speed and a master on/off.
+- **Rumble pass-through** to controllers that support it.
+- **Battery levels**, with a low-battery warning.
+- **Pair new controllers** without leaving your game.
+- Detects the built-in controls on other handhelds automatically, or by asking you to press a built-in button.
+
+**Shortcuts & macros**
+- Any button or combo, held or pressed, can do:
+  - Home, Back, or another button
+  - a keyboard key
+  - a system action: screenshot, clear recent apps, force close the game, previous app, brightness, media keys, sleep, open an app…
+  - a recorded sequence of presses
+- Adjustable hold time per shortcut.
+- DualShock 4 / DualSense touchpad click as a button.
+
+**Quick menu overlay**
+- Opens over any game with a button combo, and is fully navigable with a controller.
+- Has Home, Back, Cursor mode, an on-screen keyboard, rapid fire, face-button swaps, screenshot, force close, your own commands, live controllers list (with battery and disconnect), and pairing.
+- You choose which items it shows.
+
+**Cursor mode**
+- Turns controllers into a mouse and keyboard, for Moonlight, remote desktop, or apps without controller support.
+
+**DockPad keyboard**
+- An on-screen keyboard you type on with a controller.
+- Letters, symbols and F-key pages, with sticky Ctrl/Alt/Shift.
+
+**Comfort**
+- Starts by itself after a restart and survives sleep.
+- Can switch Wireless debugging off again once it has started.
+- Quick Settings tiles for DockPad and Cursor mode.
+- The whole app can be used with a controller (L1/R1 switch tabs).
+- Updates itself from inside the app.
+- Built-in diagnostics, button checker and rumble test.
 
 ## Install
 
-1. On the device, download **DockPad.apk** from [the latest release](../../releases/latest) and install it.
-2. Open DockPad and follow the setup: turn on Developer options, connect to Wi-Fi, then **Pair**. In Wireless debugging, tap "Pair device with pairing code" and type the code into DockPad's notification. You only need to do this once.
-3. DockPad starts itself again after every restart. It switches Wireless debugging on just long enough to start, then off again.
+1. On your handheld, download **DockPad.apk** from [the latest release](../../releases/latest) and install it.
+2. Open DockPad and follow the setup:
+   1. Turn on Developer options.
+   2. Connect to Wi-Fi.
+   3. Tap **Pair**.
+   4. In Wireless debugging, choose "Pair device with pairing code".
+   5. Type the code into DockPad's notification.
 
-If you already use [Shizuku](https://shizuku.rikka.app/), DockPad can use it instead of pairing.
+   You only do this once. No PC and no Shizuku needed.
+3. Turn DockPad on. From then on it starts by itself. To update later, go to **Settings → Updates**.
+
+Already use [Shizuku](https://shizuku.rikka.app/)? DockPad can use it instead of pairing.
+
+## Good to know
+
+- **Player 1** goes into the built-in controls, so there's nothing to set up. **Players 2–4** appear as "DockPad Controller 2–4". Set those up once in each emulator's multiplayer settings.
+- Some controller buttons and features never reach Android on Retroid devices. For example, the 8BitDo SF30 Pro's Home and Star buttons, its battery level and its rumble are not passed along. Use shortcuts for missing buttons. **Controllers → Test controllers** shows what each controller sends.
+- Games rumble player 1 through the handheld's own motor. DockPad copies that to your controller, so the handheld may buzz too unless you turn device vibration off in the emulator.
+- Stopping DockPad or restarting the device releases every controller.
 
 ## How it works
 
-- `core/`: plain Java with no Android dependency. It parses `getevent -i`, detects gamepads, and maps any controller layout (Linux standard, PlayStation, Xbox, Retroid-normalized) to a normalized state, filling in missing analog/digital triggers and d-pad/hat.
-- `service/`: a Shizuku user service running with ADB privileges. It grabs each physical controller's `/dev/input/eventN` (EVIOCGRAB) so apps stop seeing it. It creates the virtual controller with Android's built-in `uinput` shell tool and writes the translated events to it (`core/TargetEncoder`).
+DockPad uses Android's own developer tools (Wireless debugging), the same access a PC gets over ADB, to start a small background service with "shell" privileges. That service:
 
-  Note: injecting events with `InputManager.injectInputEvent` doesn't work for this. Android 13+ relabels injected events as coming from the "Virtual" device (id -1).
-- `MainActivity`: start/stop, live status, and an input tester that shows which device apps think each press came from.
+- **Takes over each external controller** by holding exclusive access to its `/dev/input/eventN` device, so apps stop seeing it directly.
+- **Translates** any layout to a normalized state: Linux standard, PlayStation, Xbox, Nintendo, or Retroid's own. It fills in missing analog or digital triggers and D-pad/hat forms. The translation code is in `core/` and is pure Java, unit-testable off-device.
+- **Writes player 1** straight into the built-in controls' own input device, in the exact form the built-in controls use. Apps see real built-in input, not "Virtual" injected events (Android 13 relabels those).
+- **Creates players 2–4** as virtual controllers with Android's `uinput` tool. The virtual controllers accept rumble, which is passed on to the real controller.
+- **Handles everything else:** shortcuts, macros, rapid fire, Cursor mode, the keyboard, battery, pairing and Bluetooth disconnect.
 
-Stopping the bridge, closing the Shizuku service, or rebooting releases everything.
+| Folder | What's in it |
+|---|---|
+| `app/src/main/java/.../core` | Device parsing, controller mapping, shortcuts, layouts, fine-tuning (no Android dependency) |
+| `app/src/main/java/.../service` | The background service: input bridge, virtual devices, actions, Bluetooth, rumble, updates |
+| `app/src/main/java/.../adb` | Built-in Wireless debugging pairing and service start-up |
+| `app/src/main/java/...` | App screens, quick menu, keyboard overlay, tiles, dialogs |
+
+## Building
+
+Every push to `main` is built by GitHub Actions and published as the `latest` release. To build locally with JDK 17 and the Android SDK, run:
+
+```
+gradle :app:assembleRelease
+```
+
+The APK is in `app/build/outputs/apk/release/`.
