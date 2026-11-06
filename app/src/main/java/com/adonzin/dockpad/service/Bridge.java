@@ -1261,7 +1261,8 @@ final class Bridge {
                     }
                 }
             } catch (Throwable t) {
-                if (running && alive) error(dev.name, t);
+                // ENODEV just means the controller was disconnected
+                if (running && alive && !String.valueOf(t.getMessage()).contains("ENODEV")) error(dev.name, t);
             } finally {
                 close();
             }

@@ -27,14 +27,32 @@ final class Rumble {
     }
 
     /** Starts or stops rumble on a real controller. Returns false if Android can't rumble it. */
+    /**
+     * The Android device that can rumble for this controller: itself, or (on Retroid devices, which
+     * re-create Bluetooth controllers without rumble) the original device with the same name.
+     */
+    static InputDevice rumbleDevice(EvdevDevice dev) {
+        InputDevice best = null;
+        String want = Battery.norm(dev.name);
+        for (int id : InputDevice.getDeviceIds()) {
+            InputDevice d = InputDevice.getDevice(id);
+            if (d == null || VirtualPad.isOurs(d.getName())) continue;
+            if (d.getVibratorManager().getVibratorIds().length == 0) continue;
+            String n = Battery.norm(d.getName());
+            boolean same = d.getVendorId() == dev.vendor && d.getProductId() == dev.product && n.equals(want);
+            if (same) return d;
+            if (best == null && !n.isEmpty() && !want.isEmpty()
+                    && (n.equals(want) || n.startsWith(want) || want.startsWith(n))) best = d;
+        }
+        return best;
+    }
+
     static boolean set(EvdevDevice dev, boolean on) {
         if (Build.VERSION.SDK_INT < 31) return false;
         try {
-            InputDevice d = Bridge.findAndroidDevice(dev);
-            if (d == null) d = Bridge.findAndroidDeviceByName(dev.name);
+            InputDevice d = rumbleDevice(dev);
             if (d == null) return false;
             android.os.VibratorManager vm = d.getVibratorManager();
-            if (vm.getVibratorIds().length == 0) return false;
             if (on) {
                 vm.vibrate(CombinedVibration.createParallel(VibrationEffect.createOneShot(MAX_MS, 200)));
             } else {
@@ -50,9 +68,7 @@ final class Rumble {
     static boolean canRumble(EvdevDevice dev) {
         if (Build.VERSION.SDK_INT < 31) return false;
         try {
-            InputDevice d = Bridge.findAndroidDevice(dev);
-            if (d == null) d = Bridge.findAndroidDeviceByName(dev.name);
-            return d != null && d.getVibratorManager().getVibratorIds().length > 0;
+            return rumbleDevice(dev) != null;
         } catch (Throwable t) {
             return false;
         }
@@ -89,6 +105,23 @@ final class Rumble {
 
     private static StateListener registered;
 
+    private static int constant(Class<?> c, String name) throws Exception {
+        java.lang.reflect.Field f;
+        try {
+            f = c.getDeclaredField(name);
+        } catch (NoSuchFieldException e) {
+            f = null;
+        }
+        if (f == null) {
+            for (java.lang.reflect.Field x : org.lsposed.hiddenapibypass.HiddenApiBypass.getStaticFields(c)) {
+                if (x.getName().equals(name)) f = x;
+            }
+            if (f == null) throw new NoSuchFieldException(name);
+        }
+        f.setAccessible(true);
+        return f.getInt(null);
+    }
+
     /** Watches the handheld's motor. Returns null when watching, else why not. */
     static synchronized String watchHandheld(Listener l) {
         if (registered != null) return null;
@@ -97,8 +130,8 @@ final class Rumble {
                     .invoke(null, "vibrator_manager");
             if (svc == null) return "no vibrator service";
             Class<?> stub = Class.forName(MANAGER + "$Stub");
-            int idsCode = stub.getDeclaredField("TRANSACTION_getVibratorIds").getInt(null);
-            int regCode = stub.getDeclaredField("TRANSACTION_registerVibratorStateListener").getInt(null);
+            int idsCode = constant(stub, "TRANSACTION_getVibratorIds");
+            int regCode = constant(stub, "TRANSACTION_registerVibratorStateListener");
 
             int[] ids;
             Parcel d = Parcel.obtain(), r = Parcel.obtain();
