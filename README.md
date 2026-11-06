@@ -103,7 +103,11 @@ Docked play on a handheld usually means setting up every emulator again for an e
 
 ## PC theme editor
 
-A theme editor that runs in any desktop browser: [`tools/theme-editor.html`](tools/theme-editor.html). Download that one file and open it; it needs no install and no internet, and nothing you add is uploaded anywhere.
+A theme editor that runs in any desktop browser.
+
+**▶ [Open the theme editor](https://adonzin.github.io/DockPad/tools/theme-editor.html)**
+
+It needs no install, and nothing you add is uploaded anywhere: it all stays in your browser. To use it offline, download [`tools/theme-editor.html`](tools/theme-editor.html) (the **Download raw file** button) and open the file.
 
 - A live preview of the Retroid Pocket 5's screen with all twelve styles. Move around it with the arrow keys, and put your own game screenshot behind it.
 - Every setting from the handheld: layout, palettes, gradients, colours with see-through, borders, highlight, fonts, header.
