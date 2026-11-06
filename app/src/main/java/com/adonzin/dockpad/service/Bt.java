@@ -232,4 +232,49 @@ final class Bt {
             return "";
         }
     }
+
+    private static List<String[]> cachedDevices = new ArrayList<>();
+    private static long cachedAt;
+
+    /** Connected paired devices: {name, address, bluetooth battery (-1 unknown), controller-type "1"/"0"}. */
+    static synchronized List<String[]> connectedDevices() {
+        long now = android.os.SystemClock.uptimeMillis();
+        if (now - cachedAt < 5000) return cachedDevices;
+        List<String[]> list = new ArrayList<>();
+        StringBuilder diag = new StringBuilder();
+        if (Build.VERSION.SDK_INT >= 33) {
+            for (BluetoothAdapter a : adapters(diag)) {
+                try {
+                    Set<BluetoothDevice> bonded = a.getBondedDevices();
+                    if (bonded == null || bonded.isEmpty()) continue;
+                    Method battery = null;
+                    try {
+                        battery = method(BluetoothDevice.class, "getBatteryLevel");
+                    } catch (Throwable ignored) {
+                    }
+                    for (BluetoothDevice d : bonded) {
+                        if (!Boolean.TRUE.equals(isConnected(d))) continue;
+                        int lvl = -1;
+                        try {
+                            if (battery != null) lvl = (Integer) battery.invoke(d);
+                        } catch (Throwable ignored) {
+                        }
+                        boolean pad = false;
+                        try {
+                            BluetoothClass c = d.getBluetoothClass();
+                            pad = c != null && c.getMajorDeviceClass() == BluetoothClass.Device.Major.PERIPHERAL;
+                        } catch (Throwable ignored) {
+                        }
+                        list.add(new String[]{safeName(d), d.getAddress(), String.valueOf(lvl), pad ? "1" : "0"});
+                    }
+                    break;
+                } catch (Throwable t) {
+                    Log.w(TAG, "Bluetooth list", t);
+                }
+            }
+        }
+        cachedDevices = list;
+        cachedAt = now;
+        return list;
+    }
 }

@@ -161,6 +161,58 @@ final class Bridge {
         return t;
     });
 
+    // ---------------------------------------------------------------- battery
+
+    private volatile Map<String, Battery.Level> batteries = new java.util.HashMap<>();
+    private final java.util.Set<String> warnedLow = new java.util.HashSet<>();
+    private Thread batteryThread;
+    private volatile boolean batteryDirty = true;
+
+    private void startBatteryWatch() {
+        if (batteryThread != null) return;
+        batteryThread = new Thread(() -> {
+            while (true) {
+                try {
+                    // every 30 s, or soon after a controller connects
+                    for (int i = 0; i < 30 && !batteryDirty; i++) Thread.sleep(1000);
+                    if (batteryDirty) Thread.sleep(2000); // let it settle
+                    batteryDirty = false;
+                    if (running) refreshBatteries();
+                } catch (InterruptedException e) {
+                    return;
+                } catch (Throwable t) {
+                    Log.w(TAG, "battery", t);
+                }
+            }
+        }, "DockPad-battery");
+        batteryThread.setDaemon(true);
+        batteryThread.start();
+    }
+
+    private void refreshBatteries() {
+        List<String> names = new ArrayList<>();
+        synchronized (this) {
+            for (Source s : sources.values()) {
+                boolean isBuiltIn = target != null && s.dev.path.equals(target.path);
+                if (s.alive && !s.touchpad && !isBuiltIn && !names.contains(s.dev.name)) names.add(s.dev.name);
+            }
+        }
+        if (names.isEmpty()) {
+            batteries = new java.util.HashMap<>();
+            return;
+        }
+        Map<String, Battery.Level> now = Battery.read(names);
+        batteries = now;
+        for (Map.Entry<String, Battery.Level> e : now.entrySet()) {
+            Battery.Level l = e.getValue();
+            if (l.percent >= 0 && l.percent <= 15 && !l.charging) {
+                if (warnedLow.add(e.getKey())) Actions.toast(e.getKey() + ": battery low (" + l.percent + "%)");
+            } else if (l.percent > 25 || l.charging) {
+                warnedLow.remove(e.getKey());
+            }
+        }
+    }
+
     void setTouchpadAsButton(boolean on) {
         touchpadAsButton = on;
         lastDevList = ""; // rescan
@@ -280,6 +332,7 @@ final class Bridge {
             return "already running";
         }
         running = true;
+        startBatteryWatch();
         lastDevList = "";
         // lets the app draw DockPad's keyboard over other apps
         Actions.exec("appops", "set", com.adonzin.dockpad.BuildConfig.APPLICATION_ID, "SYSTEM_ALERT_WINDOW", "allow");
@@ -576,6 +629,11 @@ final class Bridge {
                 c.put("touchpad", s.touchpad);
                 c.put("exclusive", s.hideMethod.startsWith("yes"));
                 c.put("lastButton", s.lastKey < 0 ? "" : Codes.keyName(s.lastKey));
+                Battery.Level bl = batteries.get(s.dev.name);
+                if (bl != null && !s.touchpad) {
+                    c.put("battery", bl.percent);
+                    c.put("charging", bl.charging);
+                }
                 ctrls.put(c);
             }
             o.put("controllers", ctrls);
@@ -903,6 +961,7 @@ final class Bridge {
                     Source s = new Source(d, sl.encoder, sl.player, isBuiltIn);
                     sources.put(d.path, s);
                     s.start();
+                    batteryDirty = true;
                 }
             }
         }

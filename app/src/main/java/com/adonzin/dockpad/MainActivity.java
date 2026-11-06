@@ -715,6 +715,10 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
                 String sub = builtIn ? "Built-in controls" : touchpad ? "Touchpad: click works as a button"
                         : prefs.layout(name).summary() + " · tap to change";
                 if (!c.optBoolean("exclusive")) sub += " · couldn't take over: apps may see it twice";
+                if (c.has("battery")) {
+                    int pct = c.optInt("battery");
+                    sub = (c.optBoolean("charging") ? "Charging, " + pct + "%" : "Battery " + pct + "%") + " · " + sub;
+                }
                 String last = c.optString("lastButton", "");
                 if (!last.isEmpty()) sub += " · last: " + last;
                 View row = addInfoRow(controllersList,

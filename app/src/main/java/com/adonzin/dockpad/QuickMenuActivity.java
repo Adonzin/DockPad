@@ -420,7 +420,8 @@ public class QuickMenuActivity extends AppCompatActivity {
         StringBuilder key = new StringBuilder(running ? "on" : "off");
         if (ctrls != null) for (int i = 0; i < ctrls.length(); i++) {
             JSONObject c = ctrls.optJSONObject(i);
-            if (c != null) key.append('|').append(c.optString("name")).append(c.optInt("player")).append(c.optBoolean("touchpad"));
+            if (c != null) key.append('|').append(c.optString("name")).append(c.optInt("player")).append(c.optBoolean("touchpad"))
+                    .append(c.optInt("battery", -1)).append(c.optBoolean("charging"));
         }
         // only rebuild when something visible changed, so the highlight stays put
         if (key.toString().equals(controllersKey) && controllersAnchor.getChildCount() > 0) return;
@@ -446,7 +447,13 @@ public class QuickMenuActivity extends AppCompatActivity {
             badge.setText(pl == 0 ? "Press A to join" : "P" + pl);
             if (!c.optBoolean("builtIn")) {
                 String name = c.optString("name");
-                ((TextView) r.findViewById(R.id.row_subtitle)).setText("Select to disconnect");
+                String sub = "Select to disconnect";
+                if (c.has("battery")) {
+                    int pct = c.optInt("battery");
+                    sub = (c.optBoolean("charging") ? "Charging, " + pct + "%" : "Battery " + pct + "%")
+                            + (pct <= 15 && !c.optBoolean("charging") ? " (low)" : "") + " · " + sub;
+                }
+                ((TextView) r.findViewById(R.id.row_subtitle)).setText(sub);
                 r.findViewById(R.id.row_subtitle).setVisibility(View.VISIBLE);
                 r.setFocusable(true);
                 r.setClickable(true);
