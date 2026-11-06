@@ -17,6 +17,9 @@ public final class ControllerLayout {
     public boolean swapAB, swapXY;
     /** raw button -> button it should act as (custom changes, applied after the swaps) */
     public final LinkedHashMap<Integer, Integer> custom = new LinkedHashMap<>();
+    /** Rapid fire: these buttons (as the game sees them) repeat while held, turboRate presses a second. */
+    public final java.util.LinkedHashSet<Integer> turbo = new java.util.LinkedHashSet<>();
+    public int turboRate = 10;
 
     /**
      * Controllers labelled the Nintendo way (B at the bottom, A on the right), so their labels
@@ -39,10 +42,12 @@ public final class ControllerLayout {
     public void reset() {
         swapAB = swapXY = false;
         custom.clear();
+        turbo.clear();
+        turboRate = 10;
     }
 
     public boolean isEmpty() {
-        return !swapAB && !swapXY && custom.isEmpty();
+        return !swapAB && !swapXY && custom.isEmpty() && turbo.isEmpty();
     }
 
     /** The final raw -> new button table. */
@@ -65,6 +70,12 @@ public final class ControllerLayout {
         if (swapAB) parts.add("A/B swapped");
         if (swapXY) parts.add("X/Y swapped");
         if (!custom.isEmpty()) parts.add(custom.size() == 1 ? "1 button changed" : custom.size() + " buttons changed");
+        if (!turbo.isEmpty()) {
+            StringBuilder t = new StringBuilder("rapid fire: ");
+            int i = 0;
+            for (int c : turbo) t.append(i++ == 0 ? "" : ", ").append(targetLabel(c));
+            parts.add(t.toString());
+        }
         return parts.isEmpty() ? "Standard layout" : String.join(", ", parts);
     }
 
@@ -75,12 +86,16 @@ public final class ControllerLayout {
             if (c.length() > 0) c.append(',');
             c.append(e.getKey()).append(':').append(e.getValue());
         }
-        return device + "\t" + (swapAB ? "A" : "") + (swapXY ? "X" : "") + "-\t" + (c.length() == 0 ? "-" : c);
+        StringBuilder t = new StringBuilder().append(turboRate).append(':');
+        int i = 0;
+        for (int code : turbo) t.append(i++ == 0 ? "" : ",").append(code);
+        return device + "\t" + (swapAB ? "A" : "") + (swapXY ? "X" : "") + "-\t" + (c.length() == 0 ? "-" : c)
+                + "\t" + t;
     }
 
     public static ControllerLayout decode(String line) {
         String[] f = line.split("\t");
-        if (f.length != 3) return null;
+        if (f.length != 3 && f.length != 4) return null;
         ControllerLayout l = new ControllerLayout();
         l.device = f[0];
         l.swapAB = f[1].contains("A");
@@ -94,8 +109,21 @@ public final class ControllerLayout {
                 }
             }
         }
+        if (f.length == 4) {
+            String[] t = f[3].split(":", 2);
+            try {
+                l.turboRate = Math.max(2, Math.min(30, Integer.parseInt(t[0])));
+                if (t.length > 1 && !t[1].isEmpty()) for (String c : t[1].split(",")) l.turbo.add(Integer.parseInt(c));
+            } catch (Exception ignored) {
+            }
+        }
         return l;
     }
+
+    /** Buttons that can rapid-fire. */
+    public static final String[] TURBO_LABELS = {"A", "B", "X", "Y", "L1", "R1", "L2", "R2", "L3", "R3"};
+    public static final int[] TURBO_CODES = {BTN_SOUTH, BTN_EAST, BTN_NORTH, BTN_WEST, BTN_TL, BTN_TR, BTN_TL2,
+            BTN_TR2, BTN_THUMBL, BTN_THUMBR};
 
     public static Map<String, ControllerLayout> decodeAll(String text) {
         Map<String, ControllerLayout> m = new LinkedHashMap<>();

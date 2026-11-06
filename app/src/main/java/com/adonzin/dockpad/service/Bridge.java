@@ -138,8 +138,32 @@ final class Bridge {
 
     void setLayouts(String spec) {
         Map<String, Map<Integer, Integer>> m = new java.util.HashMap<>();
-        for (ControllerLayout l : ControllerLayout.decodeAll(spec).values()) m.put(l.device, l.table());
+        Map<String, ControllerLayout> t = new java.util.HashMap<>();
+        for (ControllerLayout l : ControllerLayout.decodeAll(spec).values()) {
+            m.put(l.device, l.table());
+            if (!l.turbo.isEmpty()) t.put(l.device, l);
+        }
         layouts = m;
+        turbos = t;
+    }
+
+    // ---------------------------------------------------------------- rapid fire
+
+    private volatile Map<String, ControllerLayout> turbos = new java.util.HashMap<>();
+    private volatile boolean turboOn = true;
+
+    boolean isTurboOn() {
+        return turboOn;
+    }
+
+    void setTurboOn(boolean on) {
+        turboOn = on;
+        List<Source> list;
+        synchronized (this) {
+            list = new ArrayList<>(sources.values());
+        }
+        for (Source s : list) s.stopTurbo();
+        Log.i(TAG, "Rapid fire " + (on ? "on" : "off"));
     }
 
     void setShortcuts(String spec) {
@@ -485,6 +509,8 @@ final class Bridge {
             o.put("swapAB", swapAB);
             o.put("swapXY", swapXY);
             o.put("keyboard", keyboardOpen);
+            o.put("turbo", turboOn);
+            o.put("turboConfigured", !turbos.isEmpty());
             o.put("error", lastError);
             JSONArray players = new JSONArray();
             for (Slot sl : slots) {
@@ -1001,6 +1027,7 @@ final class Bridge {
                                 }
                                 if (!touchpad && !builtIn) code = applySwap(code);
                                 if (handleKey(code, value)) continue;
+                                if (turboKey(code, value)) continue;
                             }
                             deliver(type, code, value);
                         }
@@ -1024,7 +1051,48 @@ final class Bridge {
             }
         }
 
+        // rapid fire: per held button, a timer that keeps pressing and releasing it
+        private final Map<Integer, ScheduledFuture<?>> turboTasks = new java.util.HashMap<>();
+
+        private boolean turboKey(int code, int value) {
+            if (builtIn || touchpad || keyboardOpen || pcModeOn) return false;
+            ScheduledFuture<?> running = turboTasks.get(code);
+            if (value == 0 && running != null) {
+                running.cancel(false);
+                turboTasks.remove(code);
+                deliver(Codes.EV_KEY, code, 0);
+                return true;
+            }
+            ControllerLayout cfg = turbos.get(dev.name);
+            if (!turboOn || cfg == null || !cfg.turbo.contains(code)) return false;
+            if (value == 2 || running != null) return true;
+            if (value != 1) return false;
+            deliver(Codes.EV_KEY, code, 1);
+            long half = Math.max(20, 500 / Math.max(2, cfg.turboRate)); // press + release = one cycle
+            final boolean[] down = {true};
+            turboTasks.put(code, timer.scheduleAtFixedRate(() -> {
+                synchronized (Source.this) {
+                    if (!alive) return;
+                    down[0] = !down[0];
+                    deliver(Codes.EV_KEY, code, down[0] ? 1 : 0);
+                }
+            }, half, half, TimeUnit.MILLISECONDS));
+            return true;
+        }
+
+        synchronized void stopTurbo() {
+            for (Map.Entry<Integer, ScheduledFuture<?>> e : turboTasks.entrySet()) {
+                e.getValue().cancel(false);
+                try {
+                    deliver(Codes.EV_KEY, e.getKey(), 0);
+                } catch (Throwable ignored) {
+                }
+            }
+            turboTasks.clear();
+        }
+
         synchronized void modeChanged() {
+            stopTurbo();
             try {
                 if (mapper != null) mapper.releaseAll();
                 if (pcMapper != null) pcMapper.releaseAll();
@@ -1090,6 +1158,8 @@ final class Bridge {
         }
 
         synchronized void close() {
+            for (ScheduledFuture<?> f : turboTasks.values()) f.cancel(false);
+            turboTasks.clear();
             boolean wasAlive = alive;
             alive = false;
             if (engine != null) {

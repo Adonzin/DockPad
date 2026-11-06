@@ -61,7 +61,8 @@ public final class Codes {
             ACTION_BRIGHTNESS_DOWN = -112, ACTION_PLAY_PAUSE = -113, ACTION_NEXT_TRACK = -114,
             ACTION_PREVIOUS_TRACK = -115, ACTION_MUTE = -116, ACTION_MOONLIGHT_KEYBOARD = -117,
             ACTION_QUICK_MENU = -118, ACTION_HOME = -119, ACTION_BACK = -120,
-            ACTION_SWAP_AB = -121, ACTION_SWAP_XY = -122, ACTION_SWAP_FACE = -123, ACTION_DOCKPAD_KEYBOARD = -124;
+            ACTION_SWAP_AB = -121, ACTION_SWAP_XY = -122, ACTION_SWAP_FACE = -123, ACTION_DOCKPAD_KEYBOARD = -124,
+            ACTION_TOGGLE_TURBO = -125;
 
     public static final String[] CATEGORIES = {"Controller button", "Keyboard key", "System action"};
 
@@ -76,7 +77,7 @@ public final class Codes {
                     "I (key)", "J (key)", "K (key)", "L (key)", "M (key)", "N (key)", "O (key)", "P (key)",
                     "Q (key)", "R (key)", "S (key)", "T (key)", "U (key)", "V (key)", "W (key)", "X (key)",
                     "Y (key)", "Z (key)", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"},
-            {"Open the quick menu", "Open/close the DockPad keyboard", "Home", "Back", "Swap A/B on/off (external controllers)",
+            {"Open the quick menu", "Open/close the DockPad keyboard", "Rapid fire on/off", "Home", "Back", "Swap A/B on/off (external controllers)",
                     "Swap X/Y on/off (external controllers)", "Swap A/B and X/Y on/off (Nintendo layout)", "Clear all recent apps", "Force close the current app", "Switch to the previous app", "Screenshot",
                     "Open notifications", "Open quick settings", "Close notifications / quick settings",
                     "Toggle on-screen keyboard (with controllers connected)", "Open an app…",
@@ -96,7 +97,7 @@ public final class Codes {
                     KB + 37, KB + 38, KB + 50, KB + 49, KB + 24, KB + 25, KB + 16, KB + 19, KB + 31, KB + 20,
                     KB + 22, KB + 47, KB + 17, KB + 45, KB + 21, KB + 44,
                     KB + 11, KB + 2, KB + 3, KB + 4, KB + 5, KB + 6, KB + 7, KB + 8, KB + 9, KB + 10},
-            {ACTION_QUICK_MENU, ACTION_DOCKPAD_KEYBOARD, ACTION_HOME, ACTION_BACK, ACTION_SWAP_AB, ACTION_SWAP_XY, ACTION_SWAP_FACE, ACTION_CLEAR_RECENTS, ACTION_FORCE_CLOSE, ACTION_PREVIOUS_APP, ACTION_SCREENSHOT,
+            {ACTION_QUICK_MENU, ACTION_DOCKPAD_KEYBOARD, ACTION_TOGGLE_TURBO, ACTION_HOME, ACTION_BACK, ACTION_SWAP_AB, ACTION_SWAP_XY, ACTION_SWAP_FACE, ACTION_CLEAR_RECENTS, ACTION_FORCE_CLOSE, ACTION_PREVIOUS_APP, ACTION_SCREENSHOT,
                     ACTION_NOTIFICATIONS, ACTION_QUICK_SETTINGS, ACTION_CLOSE_PANELS, ACTION_TOGGLE_IME_SETTING,
                     ACTION_OPEN_APP, ACTION_TOGGLE_PC_MODE, ACTION_SLEEP, ACTION_BRIGHTNESS_UP,
                     ACTION_BRIGHTNESS_DOWN, ACTION_PLAY_PAUSE, ACTION_NEXT_TRACK, ACTION_PREVIOUS_TRACK,

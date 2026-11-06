@@ -79,6 +79,53 @@ final class ControllerDialog {
                     : "Standard layout (already matches)", Toast.LENGTH_SHORT).show();
         });
 
+        TextView turboTitle = text("Rapid fire", false);
+        turboTitle.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleSmall);
+        turboTitle.setPadding(0, dp(16), 0, dp(4));
+        box.addView(turboTitle);
+        box.addView(text("While held, these buttons press repeatedly. Turn all rapid fire on or off from the "
+                + "quick menu.", true));
+        MaterialButton turboPick = new MaterialButton(activity, null,
+                com.google.android.material.R.attr.materialButtonOutlinedStyle);
+        box.addView(turboPick);
+        TextView rateLabel = text("", false);
+        box.addView(rateLabel);
+        com.google.android.material.slider.Slider rate = new com.google.android.material.slider.Slider(activity);
+        rate.setValueFrom(4);
+        rate.setValueTo(20);
+        rate.setStepSize(1);
+        rate.setValue(Math.max(4, Math.min(20, layout.turboRate)));
+        box.addView(rate);
+        Runnable turboRefresh = () -> {
+            StringBuilder t = new StringBuilder();
+            for (int c : layout.turbo) t.append(t.length() == 0 ? "" : ", ").append(ControllerLayout.targetLabel(c));
+            turboPick.setText(layout.turbo.isEmpty() ? "Choose rapid-fire buttons" : "Rapid fire: " + t);
+            rateLabel.setText("Speed: " + layout.turboRate + " presses a second");
+        };
+        turboRefresh.run();
+        rate.addOnChangeListener((sl, value, fromUser) -> {
+            if (!fromUser) return;
+            layout.turboRate = Math.round(value);
+            save(layout);
+            turboRefresh.run();
+        });
+        turboPick.setOnClickListener(v -> {
+            String[] labels = ControllerLayout.TURBO_LABELS;
+            boolean[] checked = new boolean[labels.length];
+            for (int i = 0; i < labels.length; i++) checked[i] = layout.turbo.contains(ControllerLayout.TURBO_CODES[i]);
+            new DpDialog(activity)
+                    .setTitle("Rapid-fire buttons")
+                    .setMultiChoiceItems(labels, checked, (d, i, c) -> checked[i] = c)
+                    .setPositiveButton("Save", (d, w) -> {
+                        layout.turbo.clear();
+                        for (int i = 0; i < labels.length; i++) if (checked[i]) layout.turbo.add(ControllerLayout.TURBO_CODES[i]);
+                        save(layout);
+                        turboRefresh.run();
+                    })
+                    .setNegativeButton("Cancel", null)
+                    .show();
+        });
+
         TextView customTitle = text("Changed buttons", false);
         customTitle.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleSmall);
         customTitle.setPadding(0, dp(16), 0, dp(4));

@@ -36,7 +36,7 @@ public class QuickMenuActivity extends AppCompatActivity {
     private LinearLayout list;
     private TextView status;
     private volatile IBridge bridge;
-    private boolean running, cursor, swapAB, swapXY;
+    private boolean running, cursor, swapAB, swapXY, turbo = true, turboConfigured;
     private View firstRow;
 
     @Override
@@ -100,7 +100,7 @@ public class QuickMenuActivity extends AppCompatActivity {
     /** Built-in items the user can show or hide: id, label (for the settings checklist). */
     static final String[][] ITEMS = {
             {"home", "Home"}, {"back", "Back"}, {"cursor", "Cursor mode on/off"},
-            {"nintendo", "Nintendo layout (swap A/B and X/Y)"}, {"swapab", "Swap A/B"}, {"swapxy", "Swap X/Y"},
+            {"turbo", "Rapid fire on/off"}, {"nintendo", "Nintendo layout (swap A/B and X/Y)"}, {"swapab", "Swap A/B"}, {"swapxy", "Swap X/Y"},
             {"dpkeyboard", "Keyboard (DockPad)"}, {"keyboard", "Show keyboard (Moonlight)"}, {"screenshot", "Screenshot"},
             {"forceclose", "Force close the game"}, {"controllers", "Controllers list"},
             {"power", "Turn DockPad on/off"}, {"openapp", "Open DockPad"}};
@@ -121,7 +121,7 @@ public class QuickMenuActivity extends AppCompatActivity {
         if (shown("home")) row(R.drawable.ic_home, "Home", null, () -> command(Codes.ACTION_HOME));
         if (shown("back")) row(R.drawable.ic_back, "Back", null, () -> command(Codes.ACTION_BACK));
 
-        String[] tools = {"dpkeyboard", "cursor", "nintendo", "swapab", "swapxy", "keyboard", "screenshot", "forceclose"};
+        String[] tools = {"dpkeyboard", "cursor", "turbo", "nintendo", "swapab", "swapxy", "keyboard", "screenshot", "forceclose"};
         boolean anyTool = false;
         for (String t : tools) anyTool |= shown(t);
         if (anyTool) section("Tools");
@@ -133,6 +133,10 @@ public class QuickMenuActivity extends AppCompatActivity {
                 });
         if (shown("cursor")) row(R.drawable.ic_mouse, cursor ? "Turn Cursor mode off" : "Turn Cursor mode on",
                 "Controllers act as a mouse and keyboard", () -> withBridge(b -> b.setPcMode(!cursor)));
+        if (shown("turbo")) row(R.drawable.ic_bolt, "Rapid fire: " + (turbo ? "on" : "off"),
+                turboConfigured ? "For the buttons set in each controller's settings"
+                        : "No rapid-fire buttons set yet (DockPad → controller settings)",
+                () -> withBridge(b -> b.runCommand(oneAction(Codes.ACTION_TOGGLE_TURBO), 0)));
         if (shown("nintendo")) row(R.drawable.ic_gamepad, "Nintendo layout: " + (swapAB && swapXY ? "on" : "off"),
                 "Swaps A/B and X/Y on external controllers", () -> withBridge(b -> b.runCommand(
                         oneAction(Codes.ACTION_SWAP_FACE), 0)));
@@ -255,7 +259,11 @@ public class QuickMenuActivity extends AppCompatActivity {
             ui.post(() -> {
                 boolean r = o.optBoolean("running"), c = o.optBoolean("pcMode");
                 boolean ab = o.optBoolean("swapAB"), xy = o.optBoolean("swapXY");
-                boolean changed = r != running || c != cursor || ab != swapAB || xy != swapXY;
+                boolean tb = o.optBoolean("turbo", true), tc = o.optBoolean("turboConfigured");
+                boolean changed = r != running || c != cursor || ab != swapAB || xy != swapXY
+                        || tb != turbo || tc != turboConfigured;
+                turbo = tb;
+                turboConfigured = tc;
                 running = r;
                 cursor = c;
                 swapAB = ab;

@@ -73,6 +73,7 @@ final class Actions {
                             + ".KeyboardReceiver");
                 }
                 break;
+            case Codes.ACTION_TOGGLE_TURBO: if (b != null) b.setTurboOn(!b.isTurboOn()); break;
             case Codes.ACTION_SWAP_AB: if (b != null) b.toggleSwap(true, false); break;
             case Codes.ACTION_SWAP_XY: if (b != null) b.toggleSwap(false, true); break;
             case Codes.ACTION_SWAP_FACE: if (b != null) b.toggleSwap(true, true); break;
