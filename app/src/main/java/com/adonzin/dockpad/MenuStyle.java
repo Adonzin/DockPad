@@ -96,7 +96,8 @@ final class MenuStyle {
         s.borderColor = color(o.optString("borderColor", ""));
         s.glow = o.optBoolean("glow", s.glow);
         s.textSize = clamp(o.optInt("textSize", s.textSize), 70, 160);
-        s.font = oneOf(o.optString("font", s.font), FONTS, "default");
+        String f = o.optString("font", s.font);
+        s.font = isFontFile(f) ? f : oneOf(f, FONTS, "default");
         s.highlight = oneOf(o.optString("highlight", s.highlight), HIGHLIGHTS, "filled");
         s.showTitle = o.optBoolean("showTitle", s.showTitle);
         s.showStatus = o.optBoolean("showStatus", s.showStatus);
@@ -342,6 +343,97 @@ final class MenuStyle {
         set.playTogether(ObjectAnimator.ofFloat(null, View.SCALE_X, to), ObjectAnimator.ofFloat(null, View.SCALE_Y, to));
         set.setDuration(120);
         return set;
+    }
+
+    // ------------------------------------------------------------------ fonts
+
+    /** Imported fonts are stored as "file:<name>" (a file in DockPad's fonts folder). */
+    static boolean isFontFile(String f) {
+        return f != null && f.startsWith("file:") && f.substring(5).matches("[A-Za-z0-9._ -]{1,60}");
+    }
+
+    static java.io.File fontDir(Context c) {
+        java.io.File d = new java.io.File(c.getFilesDir(), "fonts");
+        //noinspection ResultOfMethodCallIgnored
+        d.mkdirs();
+        return d;
+    }
+
+    /** Imported font file names, A to Z. */
+    static String[] importedFonts(Context c) {
+        String[] names = fontDir(c).list();
+        if (names == null) return new String[0];
+        java.util.Arrays.sort(names, String.CASE_INSENSITIVE_ORDER);
+        return names;
+    }
+
+    private static final java.util.Map<String, Typeface> loaded = new java.util.HashMap<>();
+
+    static Typeface loadFont(Context c, String fileName) {
+        Typeface t = loaded.get(fileName);
+        if (t != null) return t;
+        try {
+            java.io.File f = new java.io.File(fontDir(c), fileName);
+            if (!f.isFile()) return null;
+            t = Typeface.createFromFile(f);
+            loaded.put(fileName, t);
+            return t;
+        } catch (Throwable e) {
+            return null;
+        }
+    }
+
+    /** Copies a font the user picked into DockPad; returns its file name. */
+    static String importFont(Context c, android.net.Uri uri) throws Exception {
+        String name = "font.ttf";
+        try (android.database.Cursor cur = c.getContentResolver().query(uri,
+                new String[]{android.provider.OpenableColumns.DISPLAY_NAME}, null, null, null)) {
+            if (cur != null && cur.moveToFirst() && cur.getString(0) != null) name = cur.getString(0);
+        }
+        name = name.replaceAll("[^A-Za-z0-9._ -]", "_");
+        if (name.length() > 60) name = name.substring(name.length() - 60);
+        String lower = name.toLowerCase();
+        if (!lower.endsWith(".ttf") && !lower.endsWith(".otf")) throw new Exception("pick a .ttf or .otf font file");
+        java.io.File out = new java.io.File(fontDir(c), name);
+        long total = 0;
+        try (java.io.InputStream in = c.getContentResolver().openInputStream(uri);
+             java.io.FileOutputStream fo = new java.io.FileOutputStream(out)) {
+            if (in == null) throw new Exception("couldn't open the file");
+            byte[] buf = new byte[65536];
+            int n;
+            while ((n = in.read(buf)) > 0) {
+                total += n;
+                if (total > 15_000_000) throw new Exception("that font is too big (15 MB at most)");
+                fo.write(buf, 0, n);
+            }
+        } catch (Exception e) {
+            //noinspection ResultOfMethodCallIgnored
+            out.delete();
+            throw e;
+        }
+        loaded.remove(name);
+        try {
+            Typeface.createFromFile(out); // throws if it isn't a usable font
+        } catch (Throwable t) {
+            //noinspection ResultOfMethodCallIgnored
+            out.delete();
+            throw new Exception("Android can't read that font");
+        }
+        return name;
+    }
+
+    static void removeFont(Context c, String fileName) {
+        loaded.remove(fileName);
+        //noinspection ResultOfMethodCallIgnored
+        new java.io.File(fontDir(c), fileName).delete();
+    }
+
+    Typeface typeface(Context c, boolean bold) {
+        if (isFontFile(font)) {
+            Typeface t = loadFont(c, font.substring(5));
+            if (t != null) return bold ? Typeface.create(t, Typeface.BOLD) : t;
+        }
+        return typeface(bold);
     }
 
     Typeface typeface(boolean bold) {

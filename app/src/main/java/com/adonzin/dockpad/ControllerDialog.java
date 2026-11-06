@@ -48,6 +48,35 @@ final class ControllerDialog {
                 + "controller acting like the wrong layout), fix it here. Changes apply right away.", true);
         box.addView(intro);
 
+        MaterialButton rename = new MaterialButton(activity, null,
+                com.google.android.material.R.attr.materialButtonOutlinedStyle);
+        rename.setText(host.prefs().isRenamed(device) ? "Name: " + host.prefs().controllerName(device) + " (change…)"
+                : "Give it a name…");
+        rename.setOnClickListener(v -> {
+            android.widget.EditText e = new android.widget.EditText(activity);
+            e.setText(host.prefs().controllerName(device));
+            e.setSelectAllOnFocus(true);
+            e.setSingleLine(true);
+            android.widget.FrameLayout fb = new android.widget.FrameLayout(activity);
+            fb.setPadding(dp(24), dp(8), dp(24), 0);
+            fb.addView(e);
+            new DpDialog(activity).setTitle("Name for " + device)
+                    .setMessage("Shown in DockPad and the quick menu, e.g. “Red PS4”. Leave empty for its own name. "
+                            + "(Controllers of the same model share a name.)")
+                    .setView(fb)
+                    .setPositiveButton("Save", (d, w) -> {
+                        String n = e.getText().toString().trim();
+                        if (n.length() > 40) n = n.substring(0, 40);
+                        host.prefs().controllerName(device, n);
+                        rename.setText(host.prefs().isRenamed(device) ? "Name: " + host.prefs().controllerName(device)
+                                + " (change…)" : "Give it a name…");
+                        host.layoutsChanged();
+                    })
+                    .setNegativeButton("Cancel", null).show();
+            e.requestFocus();
+        });
+        box.addView(rename);
+
         MaterialSwitch ab = new MaterialSwitch(activity);
         ab.setForeground(activity.getDrawable(R.drawable.focus_ring));
         ab.setPadding(dp(6), dp(10), dp(6), dp(10));
@@ -203,7 +232,7 @@ final class ControllerDialog {
         android.widget.ScrollView sv = new android.widget.ScrollView(activity);
         sv.addView(box);
         new DpDialog(activity)
-                .setTitle(device)
+                .setTitle(host.prefs().controllerName(device))
                 .setView(sv)
                 .setPositiveButton("Done", null)
                 .setNeutralButton("Reset to default", (d, w) -> {

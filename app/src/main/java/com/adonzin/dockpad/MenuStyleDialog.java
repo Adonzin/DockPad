@@ -20,19 +20,26 @@ import com.google.android.material.slider.Slider;
 
 /** The quick menu's look: palette, colours and gradients, transparency, shapes, text, highlight, header. */
 final class MenuStyleDialog {
+    /** Opens a file picker for a font; calls back with the imported file name. */
+    interface FontImporter {
+        void pick(java.util.function.Consumer<String> done);
+    }
+
     private final Activity a;
+    private final FontImporter fonts;
     private final MenuTheme theme;
     private final MenuStyle st;
     private LinearLayout box;
 
-    private MenuStyleDialog(Activity a) {
+    private MenuStyleDialog(Activity a, FontImporter fonts) {
         this.a = a;
+        this.fonts = fonts;
         this.theme = MenuTheme.load(a);
         this.st = theme.style;
     }
 
-    static void show(Activity a) {
-        new MenuStyleDialog(a).open();
+    static void show(Activity a, FontImporter fonts) {
+        new MenuStyleDialog(a, fonts).open();
     }
 
     private void open() {
@@ -105,7 +112,50 @@ final class MenuStyleDialog {
 
         label("Text");
         slider("Size", 70, 160, 10, st.textSize, v -> st.textSize = v, v -> v + "%");
-        radios(MenuStyle.FONT_LABELS, indexOf(MenuStyle.FONTS, st.font), i -> st.font = MenuStyle.FONTS[i]);
+        String[] imported = MenuStyle.importedFonts(a);
+        String[] fontIds = new String[MenuStyle.FONTS.length + imported.length];
+        String[] fontLabels = new String[fontIds.length];
+        for (int i = 0; i < MenuStyle.FONTS.length; i++) {
+            fontIds[i] = MenuStyle.FONTS[i];
+            fontLabels[i] = MenuStyle.FONT_LABELS[i];
+        }
+        for (int i = 0; i < imported.length; i++) {
+            fontIds[MenuStyle.FONTS.length + i] = "file:" + imported[i];
+            fontLabels[MenuStyle.FONTS.length + i] = imported[i].replaceAll("(?i)\\.(ttf|otf)$", "") + "  (imported)";
+        }
+        RadioGroup fontGroup = radios(fontLabels, indexOf(fontIds, st.font), i -> {
+            st.font = fontIds[i];
+            custom();
+        });
+        // show each font in its own typeface
+        for (int i = 0; i < fontGroup.getChildCount(); i++) {
+            MenuStyle probe = new MenuStyle();
+            probe.font = fontIds[i];
+            ((RadioButton) fontGroup.getChildAt(i)).setTypeface(probe.typeface(a, false));
+        }
+        LinearLayout fontButtons = new LinearLayout(a);
+        MaterialButton importFont = new MaterialButton(a, null, com.google.android.material.R.attr.materialButtonOutlinedStyle);
+        importFont.setText("Import a font file…");
+        importFont.setOnClickListener(v -> fonts.pick(name -> {
+            st.font = "file:" + name;
+            custom();
+            build();
+        }));
+        fontButtons.addView(importFont);
+        if (MenuStyle.isFontFile(st.font)) {
+            MaterialButton remove = new MaterialButton(a, null, com.google.android.material.R.attr.materialButtonOutlinedStyle);
+            remove.setText("Remove this font");
+            remove.setOnClickListener(v -> {
+                MenuStyle.removeFont(a, st.font.substring(5));
+                st.font = "default";
+                build();
+            });
+            LinearLayout.LayoutParams ml = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT);
+            ml.setMarginStart(dp(8));
+            fontButtons.addView(remove, ml);
+        }
+        box.addView(fontButtons);
 
         label("Highlight");
         small("How the selected item stands out.");
@@ -184,7 +234,7 @@ final class MenuStyleDialog {
         box.addView(t);
     }
 
-    private void radios(String[] labels, int sel, IntSet on) {
+    private RadioGroup radios(String[] labels, int sel, IntSet on) {
         RadioGroup g = new RadioGroup(a);
         for (int i = 0; i < labels.length; i++) {
             RadioButton b = new RadioButton(a);
@@ -203,6 +253,7 @@ final class MenuStyleDialog {
             }
         });
         box.addView(g);
+        return g;
     }
 
     private void slider(String name, int from, int to, int step, int value, IntSet on, IntLabel fmt) {

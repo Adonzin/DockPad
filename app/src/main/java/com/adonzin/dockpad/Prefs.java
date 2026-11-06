@@ -32,6 +32,30 @@ final class Prefs {
 
     boolean multiplayer() { return p.getBoolean("multiplayer", true); }
     void multiplayer(boolean v) { p.edit().putBoolean("multiplayer", v).apply(); }
+    /** The name the user gave a controller (or its own name). */
+    String controllerName(String device) {
+        try {
+            String v = new org.json.JSONObject(p.getString("controllerNames", "{}")).optString(device, "");
+            return v.isEmpty() ? device : v;
+        } catch (Exception e) {
+            return device;
+        }
+    }
+
+    boolean isRenamed(String device) {
+        return !controllerName(device).equals(device);
+    }
+
+    void controllerName(String device, String name) {
+        try {
+            org.json.JSONObject o = new org.json.JSONObject(p.getString("controllerNames", "{}"));
+            if (name == null || name.trim().isEmpty() || name.trim().equals(device)) o.remove(device);
+            else o.put(device, name.trim());
+            p.edit().putString("controllerNames", o.toString()).apply();
+        } catch (Exception ignored) {
+        }
+    }
+
     boolean rumble() { return p.getBoolean("rumble", true); }
     void rumble(boolean v) { p.edit().putBoolean("rumble", v).apply(); }
     boolean joinByPress() { return p.getBoolean("joinByPress", false); }

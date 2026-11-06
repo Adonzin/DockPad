@@ -174,7 +174,14 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         findViewById(R.id.check_updates).setOnClickListener(v -> checkUpdates(true));
         findViewById(R.id.backup_save).setOnClickListener(v -> saveBackup());
         findViewById(R.id.menu_look).setOnClickListener(v -> MenuLookDialog.show(this));
-        findViewById(R.id.menu_style).setOnClickListener(v -> MenuStyleDialog.show(this));
+        findViewById(R.id.menu_style).setOnClickListener(v -> MenuStyleDialog.show(this, done -> {
+            fontDone = done;
+            try {
+                pickFont.launch(new String[]{"font/*", "application/x-font-ttf", "application/x-font-otf", "application/octet-stream", "*/*"});
+            } catch (Exception e) {
+                Toast.makeText(this, "No file picker available", Toast.LENGTH_SHORT).show();
+            }
+        }));
         findViewById(R.id.backup_restore).setOnClickListener(v -> {
             try {
                 pickBackup.launch(new String[]{"application/json", "application/octet-stream", "text/plain", "*/*"});
@@ -723,9 +730,10 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
                 }
                 String last = c.optString("lastButton", "");
                 if (!last.isEmpty()) sub += " · last: " + last;
+                if (prefs.isRenamed(name)) sub = name + " · " + sub;
                 View row = addInfoRow(controllersList,
                         builtIn ? R.drawable.ic_handheld : touchpad ? R.drawable.ic_touch : R.drawable.ic_gamepad,
-                        c.optString("name"), sub);
+                        prefs.controllerName(name), sub);
                 TextView badge = row.findViewById(R.id.row_badge);
                 badge.setVisibility(View.VISIBLE);
                 int pl = c.optInt("player", 1);
@@ -985,6 +993,29 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
     }
 
     // ------------------------------------------------------------------ reset
+
+    // ------------------------------------------------------------------ fonts for the quick menu
+
+    private java.util.function.Consumer<String> fontDone;
+
+    private final androidx.activity.result.ActivityResultLauncher<String[]> pickFont =
+            registerForActivityResult(new androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+                    uri -> {
+                        if (uri == null || fontDone == null) return;
+                        java.util.function.Consumer<String> done = fontDone;
+                        bg.execute(() -> {
+                            try {
+                                String name = MenuStyle.importFont(this, uri);
+                                ui.post(() -> {
+                                    Toast.makeText(this, "Font added: " + name, Toast.LENGTH_SHORT).show();
+                                    done.accept(name);
+                                });
+                            } catch (Exception e) {
+                                ui.post(() -> Toast.makeText(this, "Couldn't add the font: " + e.getMessage(),
+                                        Toast.LENGTH_LONG).show());
+                            }
+                        });
+                    });
 
     // ------------------------------------------------------------------ backup & sharing
 

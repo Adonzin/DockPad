@@ -319,6 +319,7 @@ public class QuickMenuActivity extends AppCompatActivity {
     }
 
     private void addControllers() {
+        Prefs prefs = new Prefs(this);
         boolean any = false;
         JSONArray ctrls = lastControllers;
         if (ctrls != null) for (int i = 0; i < ctrls.length(); i++) {
@@ -343,7 +344,7 @@ public class QuickMenuActivity extends AppCompatActivity {
             }
             items.add(new MenuRender.Item("ctrl:" + name + ":" + i, "controllers", section,
                     builtIn ? R.drawable.ic_handheld : R.drawable.ic_gamepad,
-                    builtIn ? "Built-in controls" : name, builtIn ? "Always player 1" : sub, badge, action));
+                    builtIn ? "Built-in controls" : prefs.controllerName(name), builtIn ? "Always player 1" : sub, badge, action));
         }
         if (!any) {
             items.add(new MenuRender.Item("ctrl:none", "controllers", section, 0,
@@ -654,7 +655,7 @@ public class QuickMenuActivity extends AppCompatActivity {
             boolean sub = t.getId() == R.id.row_subtitle;
             t.setTextColor(sub ? (text & 0x00FFFFFF) | 0xB3000000 : text);
             boolean bold = t.getTypeface() != null && t.getTypeface().isBold();
-            t.setTypeface(st.typeface(bold));
+            t.setTypeface(st.typeface(this, bold));
             if (scale != 1f) {
                 if (t.getAutoSizeTextType() == TextView.AUTO_SIZE_TEXT_TYPE_UNIFORM) {
                     t.setAutoSizeTextTypeUniformWithConfiguration(Math.round(8 * scale), Math.round(16 * scale), 1,
@@ -985,7 +986,7 @@ public class QuickMenuActivity extends AppCompatActivity {
 
 
     private void confirmDisconnect(String name) {
-        new DpDialog(this).setTitle("Disconnect " + name + "?")
+        new DpDialog(this).setTitle("Disconnect " + new Prefs(this).controllerName(name) + "?")
                 .setMessage("It disconnects from Bluetooth (most controllers then switch off). Press its "
                         + "home button to connect it again.")
                 .setPositiveButton("Disconnect", (d, w) -> {
@@ -1021,8 +1022,11 @@ public class QuickMenuActivity extends AppCompatActivity {
             return;
         }
         String[] names = externals.toArray(new String[0]);
+        String[] shown = new String[names.length];
+        Prefs prefs = new Prefs(this);
+        for (int i = 0; i < names.length; i++) shown[i] = prefs.controllerName(names[i]);
         new DpDialog(this).setTitle("Which controller?")
-                .setItems(names, (d, w) -> editTurboFor(names[w]))
+                .setItems(shown, (d, w) -> editTurboFor(names[w]))
                 .setNegativeButton("Cancel", null).show();
     }
 
@@ -1036,7 +1040,7 @@ public class QuickMenuActivity extends AppCompatActivity {
         String[] labels = ControllerLayout.TURBO_LABELS;
         boolean[] checked = new boolean[labels.length];
         for (int i = 0; i < labels.length; i++) checked[i] = l.turbo.contains(ControllerLayout.TURBO_CODES[i]);
-        new DpDialog(this).setTitle("Rapid fire: " + name)
+        new DpDialog(this).setTitle("Rapid fire: " + prefs.controllerName(name))
                 .setMultiChoiceItems(labels, checked, (d, w, on) -> checked[w] = on)
                 .setPositiveButton("Next", (d, w) -> {
                     l.turbo.clear();

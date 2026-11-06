@@ -26,11 +26,11 @@ import java.util.Locale;
 final class Backup {
     static final String[] SECTION_IDS = {"shortcuts", "quickmenu", "controllers", "settings"};
     static final String[] SECTION_LABELS = {"Shortcuts & macros", "Quick menu (commands, items, look and layout)",
-            "Controller layouts (button fixes, rapid fire, fine-tuning)", "Settings"};
+            "Controllers (names, button fixes, rapid fire, fine-tuning)", "Settings"};
     private static final String[][] SECTION_KEYS = {
             {"shortcuts"},
             {"menuCommands", "menuHidden", "menuTheme", "menuOrder", "menuCustom"},
-            {"layouts"},
+            {"layouts", "controllerNames"},
             {"multiplayer", "joinByPress", "touchpadAsButton", "rumble", "includeBuiltIn", "autoStart", "turnOffWD",
                     "pcSpeed", "pcPointerLeft", "autoUpdateCheck"},
     };

@@ -19,6 +19,7 @@ Docked play on a handheld usually means setting up every emulator again for an e
 **Controllers**
 - Any Bluetooth or USB gamepad becomes the built-in controls. Keyboards are left alone.
 - **Multiplayer:** extra controllers become players 2–4 ("DockPad Controller 2", "3", "4"). Optionally, players join by pressing A.
+- **Names:** give any controller its own name (e.g. "Red PS4"), shown in the app and the quick menu.
 - **Per-controller fixes:** swap A/B and X/Y, auto-map by button labels (Nintendo-style pads), change or turn off any button, and reset to default.
 - **Fine-tuning:** stick dead zone, stick response curve, trigger press point, swap sticks, invert Y, and left stick as D-pad.
 - **Rapid fire** on any buttons, with an adjustable speed and a master on/off.
@@ -47,7 +48,7 @@ Docked play on a handheld usually means setting up every emulator again for an e
   - palettes (Midnight, Ocean, Sunset, Neon, Retro terminal, Candy and more), or your own colours, including linear, radial and sweep gradients
   - transparency, and how dark the game behind it gets
   - corner roundness, borders and a glowing edge
-  - text size and font
+  - text size and font, including your own imported `.ttf` / `.otf` fonts
   - highlight style (filled, outline, glow, grow or underline)
   - an optional clock and handheld battery in the header
 - **Twelve styles:**
