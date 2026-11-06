@@ -133,7 +133,7 @@ public class QuickMenuActivity extends AppCompatActivity {
             {"home", "Home"}, {"back", "Back"}, {"cursor", "Cursor mode on/off"},
             {"turbo", "Rapid fire on/off"}, {"turboedit", "Rapid fire buttons (edit)"}, {"nintendo", "Nintendo layout (swap A/B and X/Y)"}, {"swapab", "Swap A/B"}, {"swapxy", "Swap X/Y"},
             {"dpkeyboard", "Keyboard (DockPad)"}, {"keyboard", "Show keyboard (Moonlight)"}, {"screenshot", "Screenshot"},
-            {"forceclose", "Force close the game"}, {"controllers", "Controllers list"},
+            {"forceclose", "Force close the game"}, {"controllers", "Controllers list"}, {"pair", "Pair a new controller"},
             {"power", "Turn DockPad on/off"}, {"openapp", "Open DockPad"}};
 
     private java.util.Set<String> hidden;
@@ -194,12 +194,14 @@ public class QuickMenuActivity extends AppCompatActivity {
             }
         }
 
+        if (shown("controllers") || shown("pair")) section("Controllers");
         if (shown("controllers")) {
-            section("Controllers");
             controllersAnchor = new LinearLayout(this);
             controllersAnchor.setOrientation(LinearLayout.VERTICAL);
             list.addView(controllersAnchor);
         }
+        if (shown("pair")) row(R.drawable.ic_add, "Pair a new controller…",
+                "Find a controller in pairing mode and connect it", () -> PairDialog.show(this));
 
         if (shown("power") || shown("openapp")) section("DockPad");
         if (shown("power")) row(R.drawable.ic_power, running ? "Turn DockPad off" : "Turn DockPad on", null,

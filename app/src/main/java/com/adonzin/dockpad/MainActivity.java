@@ -149,6 +149,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
             else startBridge();
         });
         findViewById(R.id.add_shortcut).setOnClickListener(v -> editor.addNew());
+        findViewById(R.id.pair_controller).setOnClickListener(v -> PairDialog.show(this));
         findViewById(R.id.open_tester).setOnClickListener(v -> startActivity(new Intent(this, TesterActivity.class)));
         findViewById(R.id.open_diagnostics).setOnClickListener(v -> showDiagnostics());
         findViewById(R.id.open_reset).setOnClickListener(v -> showReset());

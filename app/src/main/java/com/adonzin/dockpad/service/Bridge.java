@@ -336,6 +336,10 @@ final class Bridge {
         lastDevList = "";
         // lets the app draw DockPad's keyboard over other apps
         Actions.exec("appops", "set", com.adonzin.dockpad.BuildConfig.APPLICATION_ID, "SYSTEM_ALERT_WINDOW", "allow");
+        // lets the app search for and pair controllers without a permission prompt
+        for (String perm : new String[]{"BLUETOOTH_SCAN", "BLUETOOTH_CONNECT"}) {
+            Actions.exec("pm", "grant", com.adonzin.dockpad.BuildConfig.APPLICATION_ID, "android.permission." + perm);
+        }
         scanner = new Thread(this::scanLoop, "DockPad-scan");
         scanner.setDaemon(true);
         scanner.start();
