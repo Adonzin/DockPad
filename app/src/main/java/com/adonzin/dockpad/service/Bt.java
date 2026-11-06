@@ -39,8 +39,44 @@ final class Bt {
         }
     }
 
+    private static boolean hooked;
+
+    /**
+     * A normal app process is connected to the Bluetooth service at startup (ActivityThread). Ours isn't,
+     * so every adapter comes back empty until we do the same.
+     */
+    private static synchronized void hookUp(StringBuilder diag) {
+        if (hooked) return;
+        try {
+            Class<?> init = Class.forName("android.bluetooth.BluetoothFrameworkInitializer");
+            Field f = null;
+            try {
+                f = init.getDeclaredField("sBluetoothServiceManager");
+                f.setAccessible(true);
+            } catch (Throwable ignored) {
+            }
+            if (f == null || f.get(null) == null) {
+                Class<?> mgr = Class.forName("android.os.BluetoothServiceManager");
+                java.lang.reflect.Constructor<?> c = mgr.getDeclaredConstructor();
+                c.setAccessible(true);
+                Object manager = c.newInstance();
+                method(init, "setBluetoothServiceManager", mgr).invoke(null, manager);
+            }
+            hooked = true;
+        } catch (Throwable t) {
+            diag.append("hook-up: ").append(cause(t)).append("; ");
+            try {
+                method(Class.forName("android.app.ActivityThread"), "initializeMainlineModules").invoke(null);
+                hooked = true;
+            } catch (Throwable t2) {
+                diag.append("mainline init: ").append(cause(t2)).append("; ");
+            }
+        }
+    }
+
     /** Ways to get an adapter that speaks for the shell. */
     private static List<BluetoothAdapter> adapters(StringBuilder diag) {
+        hookUp(diag);
         List<BluetoothAdapter> list = new ArrayList<>();
         try {
             AttributionSource src = new AttributionSource.Builder(android.os.Process.myUid())
