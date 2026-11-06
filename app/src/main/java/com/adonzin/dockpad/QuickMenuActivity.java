@@ -2,16 +2,17 @@ package com.adonzin.dockpad;
 
 import android.content.Context;
 import android.content.Intent;
-import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.Gravity;
+import android.view.InputDevice;
 import android.view.KeyEvent;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
-import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -26,67 +27,50 @@ import com.google.android.material.color.DynamicColors;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The quick menu: a controller-driven panel over whatever is running. Opened by a shortcut
- * ("Open the quick menu"); B, the same shortcut, or tapping outside closes it.
+ * ("Open the quick menu"); B, the same shortcut, or tapping outside closes it. It is drawn from the
+ * menu theme ({@link MenuTheme}) in one of several layouts ({@link MenuRender}); Y arranges items.
  */
 public class QuickMenuActivity extends AppCompatActivity {
     private final Handler ui = new Handler(Looper.getMainLooper());
-    private LinearLayout list;
-    private TextView status;
+    private FrameLayout root;
+    private TextView status, hint;
+    private String statusText = "";
     private volatile IBridge bridge;
     private boolean running, cursor, swapAB, swapXY, turbo = true, turboConfigured;
-    private View firstRow;
+    private MenuTheme theme;
+    private MenuRender.Renderer renderer;
+    private List<MenuRender.Item> items = new ArrayList<>();
+    private int selected = -1;
+    private String selectedId;
+    private boolean arranging;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         DynamicColors.applyToActivityIfAvailable(this);
         super.onCreate(savedInstanceState);
         overridePendingTransition(0, 0);
-
-        FrameLayout root = new FrameLayout(this);
-        root.setOnClickListener(v -> finish()); // tap outside the panel
-        ScrollView scroll = new ScrollView(this);
-        scroll.setBackgroundResource(R.drawable.menu_panel);
-        scroll.setClickable(true); // taps on the panel don't close it
-        // these layers take taps, but must never be what a controller highlights
-        for (View v : new View[]{root, scroll}) {
-            v.setFocusable(false);
-            v.setFocusableInTouchMode(false);
-            v.setDefaultFocusHighlightEnabled(false);
-        }
-        scroll.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
-        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(340), ViewGroup.LayoutParams.MATCH_PARENT);
-        lp.gravity = Gravity.START;
-        root.addView(scroll, lp);
-
-        LinearLayout panel = new LinearLayout(this);
-        panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setPadding(dp(16), dp(24), dp(16), dp(24));
-        scroll.addView(panel);
-
-        TextView title = new TextView(this);
-        title.setText("DockPad");
-        title.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleLarge);
-        panel.addView(title);
-        status = new TextView(this);
-        status.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall);
-        status.setPadding(0, 0, 0, dp(12));
-        panel.addView(status);
-
-        list = new LinearLayout(this);
-        list.setOrientation(LinearLayout.VERTICAL);
-        panel.addView(list);
-
-        setContentView(root);
-        build();
-        refreshState();
-        // start on the first item, so the first press already moves through the menu
-        ui.post(() -> {
-            if (firstRow != null) firstRow.requestFocus();
+        root = new FrameLayout(this);
+        root.setOnClickListener(v -> {
+            if (!arranging) finish(); // tap outside the panel
         });
+        noHighlight(root);
+        setContentView(root);
+        theme = MenuTheme.load(this);
+        rebuild();
+        refreshState();
+    }
+
+    private static void noHighlight(View v) {
+        v.setFocusable(false);
+        v.setFocusableInTouchMode(false);
+        v.setDefaultFocusHighlightEnabled(false);
     }
 
     @Override
@@ -117,6 +101,7 @@ public class QuickMenuActivity extends AppCompatActivity {
     protected void onPause() {
         super.onPause();
         ui.removeCallbacks(poll);
+        if (arranging) saveArrangement();
         if (!isFinishing()) finish(); // something else came to the front
     }
 
@@ -137,114 +122,494 @@ public class QuickMenuActivity extends AppCompatActivity {
             {"power", "Turn DockPad on/off"}, {"openapp", "Open DockPad"}};
 
     private java.util.Set<String> hidden;
+    private String section = "";
 
     private boolean shown(String id) {
         return !hidden.contains(id);
     }
 
-    private void build() {
-        list.removeAllViews();
-        firstRow = null;
-        controllersAnchor = null;
+    private void add(String id, int icon, String title, String subtitle, Runnable action) {
+        if (shown(id)) items.add(new MenuRender.Item(id, id, section, icon, title, subtitle, null, action));
+    }
+
+    /** The items, in their default order (the user's order is applied after). */
+    private List<MenuRender.Item> collect() {
+        items = new ArrayList<>();
         hidden = new Prefs(this).menuHidden();
 
-        if (shown("home") || shown("back")) section("Navigation");
-        if (shown("home")) row(R.drawable.ic_home, "Home", null, () -> command(Codes.ACTION_HOME));
-        if (shown("back")) row(R.drawable.ic_back, "Back", null, () -> command(Codes.ACTION_BACK));
+        section = "Navigation";
+        add("home", R.drawable.ic_home, "Home", null, () -> command(Codes.ACTION_HOME));
+        add("back", R.drawable.ic_back, "Back", null, () -> command(Codes.ACTION_BACK));
 
-        String[] tools = {"dpkeyboard", "cursor", "turbo", "turboedit", "nintendo", "swapab", "swapxy", "keyboard", "screenshot", "forceclose"};
-        boolean anyTool = false;
-        for (String t : tools) anyTool |= shown(t);
-        if (anyTool) section("Tools");
-        if (shown("dpkeyboard")) row(R.drawable.ic_keyboard, KeyboardOverlay.isOpen() ? "Close keyboard" : "Keyboard",
+        section = "Tools";
+        add("dpkeyboard", R.drawable.ic_keyboard, KeyboardOverlay.isOpen() ? "Close keyboard" : "Keyboard",
                 "Type into whatever app is open", () -> {
                     finish();
                     Context app = getApplicationContext();
                     ui.postDelayed(() -> KeyboardOverlay.toggle(app), 300);
                 });
-        if (shown("cursor")) row(R.drawable.ic_mouse, cursor ? "Turn Cursor mode off" : "Turn Cursor mode on",
+        add("cursor", R.drawable.ic_mouse, cursor ? "Turn Cursor mode off" : "Turn Cursor mode on",
                 "Controllers act as a mouse and keyboard", () -> withBridge(b -> b.setPcMode(!cursor)));
-        if (shown("turbo")) row(R.drawable.ic_bolt, "Rapid fire: " + (turbo ? "on" : "off"),
+        add("turbo", R.drawable.ic_bolt, "Rapid fire: " + (turbo ? "on" : "off"),
                 turboConfigured ? "For the buttons set in each controller's settings"
                         : "No rapid-fire buttons set yet (DockPad → controller settings)",
                 () -> withBridge(b -> b.runCommand(oneAction(Codes.ACTION_TOGGLE_TURBO), 0)));
-        if (shown("turboedit")) row(R.drawable.ic_bolt, "Rapid fire buttons…",
+        add("turboedit", R.drawable.ic_bolt, "Rapid fire buttons…",
                 "Choose which buttons repeat, and how fast", this::editTurbo);
-        if (shown("nintendo")) row(R.drawable.ic_gamepad, "Nintendo layout: " + (swapAB && swapXY ? "on" : "off"),
+        add("nintendo", R.drawable.ic_gamepad, "Nintendo layout: " + (swapAB && swapXY ? "on" : "off"),
                 "Swaps A/B and X/Y on external controllers", () -> withBridge(b -> b.runCommand(
                         oneAction(Codes.ACTION_SWAP_FACE), 0)));
-        if (shown("swapab")) row(R.drawable.ic_gamepad, "Swap A/B: " + (swapAB ? "on" : "off"), null,
+        add("swapab", R.drawable.ic_gamepad, "Swap A/B: " + (swapAB ? "on" : "off"), null,
                 () -> withBridge(b -> b.runCommand(oneAction(Codes.ACTION_SWAP_AB), 0)));
-        if (shown("swapxy")) row(R.drawable.ic_gamepad, "Swap X/Y: " + (swapXY ? "on" : "off"), null,
+        add("swapxy", R.drawable.ic_gamepad, "Swap X/Y: " + (swapXY ? "on" : "off"), null,
                 () -> withBridge(b -> b.runCommand(oneAction(Codes.ACTION_SWAP_XY), 0)));
-        if (shown("keyboard")) row(R.drawable.ic_keyboard, "Show keyboard (Moonlight)", null,
+        add("keyboard", R.drawable.ic_keyboard, "Show keyboard (Moonlight)", null,
                 () -> command(Codes.ACTION_MOONLIGHT_KEYBOARD));
-        if (shown("screenshot")) row(R.drawable.ic_camera, "Screenshot", null, () -> command(Codes.ACTION_SCREENSHOT));
-        if (shown("forceclose")) row(R.drawable.ic_close_app, "Force close the game",
+        add("screenshot", R.drawable.ic_camera, "Screenshot", null, () -> command(Codes.ACTION_SCREENSHOT));
+        add("forceclose", R.drawable.ic_close_app, "Force close the game",
                 "Closes the app that's open right now", () -> command(Codes.ACTION_FORCE_CLOSE));
 
-        List<Shortcut> mine = new Prefs(this).menuCommands();
-        if (!mine.isEmpty()) {
-            section("My commands");
-            for (Shortcut c : mine) {
-                row(R.drawable.ic_bolt, c.device, c.actionLabel(), () -> {
-                    finish();
-                    runInBackground(b -> b.runCommand(c.encode(), 350));
-                });
-            }
+        section = "My commands";
+        for (Shortcut c : new Prefs(this).menuCommands()) {
+            String id = "cmd:" + Integer.toHexString(c.encode().hashCode());
+            items.add(new MenuRender.Item(id, id, section, R.drawable.ic_bolt, c.device, c.actionLabel(), null, () -> {
+                finish();
+                runInBackground(b -> b.runCommand(c.encode(), 350));
+            }));
         }
 
-        if (shown("controllers") || shown("pair")) section("Controllers");
-        if (shown("controllers")) {
-            controllersAnchor = new LinearLayout(this);
-            controllersAnchor.setOrientation(LinearLayout.VERTICAL);
-            list.addView(controllersAnchor);
-        }
-        if (shown("pair")) row(R.drawable.ic_add, "Pair a new controller…",
+        section = "Controllers";
+        if (shown("controllers")) addControllers();
+        add("pair", R.drawable.ic_add, "Pair a new controller…",
                 "Find a controller in pairing mode and connect it", () -> PairDialog.show(this));
 
-        if (shown("power") || shown("openapp")) section("DockPad");
-        if (shown("power")) row(R.drawable.ic_power, running ? "Turn DockPad off" : "Turn DockPad on", null,
+        section = "DockPad";
+        add("power", R.drawable.ic_power, running ? "Turn DockPad off" : "Turn DockPad on", null,
                 () -> withBridge(b -> {
                     new Prefs(this).bridgeWanted(!running);
                     if (running) b.stop();
                     else b.start(true);
                 }));
-        if (shown("openapp")) row(R.drawable.ic_open, "Open DockPad", null, () -> {
+        add("openapp", R.drawable.ic_open, "Open DockPad", null, () -> {
             startActivity(new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             finish();
         });
-        if (list.getChildCount() == 0) {
-            TextView t = new TextView(this);
-            t.setText("Everything is hidden. Choose items in DockPad → Quick menu.");
-            list.addView(t);
+        return items;
+    }
+
+    private JSONArray lastControllers;
+    private String controllersKey = "";
+
+    /** Remembers the controllers; returns true if what the menu shows for them changed. */
+    private boolean showControllers(JSONArray ctrls) {
+        externals.clear();
+        if (ctrls != null) for (int i = 0; i < ctrls.length(); i++) {
+            JSONObject c = ctrls.optJSONObject(i);
+            if (c != null && !c.optBoolean("touchpad") && !c.optBoolean("builtIn")
+                    && !externals.contains(c.optString("name"))) externals.add(c.optString("name"));
+        }
+        StringBuilder key = new StringBuilder(running ? "on" : "off");
+        if (ctrls != null) for (int i = 0; i < ctrls.length(); i++) {
+            JSONObject c = ctrls.optJSONObject(i);
+            if (c != null) key.append('|').append(c.optString("name")).append(c.optInt("player")).append(c.optBoolean("touchpad"))
+                    .append(c.optInt("battery", -1)).append(c.optBoolean("charging"));
+        }
+        lastControllers = ctrls;
+        if (key.toString().equals(controllersKey)) return false;
+        controllersKey = key.toString();
+        return true;
+    }
+
+    private void addControllers() {
+        boolean any = false;
+        JSONArray ctrls = lastControllers;
+        if (ctrls != null) for (int i = 0; i < ctrls.length(); i++) {
+            JSONObject c = ctrls.optJSONObject(i);
+            if (c == null || c.optBoolean("touchpad")) continue;
+            any = true;
+            boolean builtIn = c.optBoolean("builtIn");
+            String name = c.optString("name");
+            int pl = c.optInt("player", 1);
+            String badge = pl == 0 ? "Press A to join" : "P" + pl;
+            String sub = null;
+            Runnable action = () -> { };
+            if (!builtIn) {
+                sub = "Select to disconnect";
+                if (c.has("battery")) {
+                    int pct = c.optInt("battery");
+                    sub = (c.optBoolean("charging") ? "Charging, " + pct + "%" : "Battery " + pct + "%")
+                            + (pct <= 15 && !c.optBoolean("charging") ? " (low)" : "") + " · " + sub;
+                }
+                action = () -> confirmDisconnect(name);
+            }
+            items.add(new MenuRender.Item("ctrl:" + name + ":" + i, "controllers", section,
+                    builtIn ? R.drawable.ic_handheld : R.drawable.ic_gamepad,
+                    builtIn ? "Built-in controls" : name, builtIn ? "Always player 1" : sub, badge, action));
+        }
+        if (!any) {
+            items.add(new MenuRender.Item("ctrl:none", "controllers", section, 0,
+                    running ? "No controllers found" : "DockPad is off", null, null, null));
         }
     }
 
-    private LinearLayout controllersAnchor;
-
-    private void section(String text) {
-        TextView t = new TextView(this);
-        t.setText(text.toUpperCase());
-        t.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_LabelMedium);
-        t.setTypeface(Typeface.DEFAULT_BOLD);
-        t.setPadding(dp(6), dp(14), 0, dp(2));
-        list.addView(t);
+    /** Puts the items in the user's order (by groups; within sections when they're shown). */
+    private List<MenuRender.Item> ordered(List<MenuRender.Item> in) {
+        List<String> order = MenuTheme.order(this);
+        Map<String, Integer> rank = new HashMap<>();
+        for (int i = 0; i < order.size(); i++) rank.put(order.get(i), i);
+        List<String> sections = new ArrayList<>();
+        for (MenuRender.Item it : in) if (!sections.contains(it.section)) sections.add(it.section);
+        List<MenuRender.Item> out = new ArrayList<>(in);
+        boolean bySection = theme.sections && !theme.layout.equals("radial") && !theme.layout.equals("freeform");
+        // stable sort: section first (if shown), then the user's rank, then the default order
+        List<MenuRender.Item> original = new ArrayList<>(in);
+        out.sort((a, b) -> {
+            if (bySection) {
+                int s = Integer.compare(sections.indexOf(a.section), sections.indexOf(b.section));
+                if (s != 0) return s;
+            }
+            int ra = rank.containsKey(a.group) ? rank.get(a.group) : Integer.MAX_VALUE;
+            int rb = rank.containsKey(b.group) ? rank.get(b.group) : Integer.MAX_VALUE;
+            if (ra != rb) return Integer.compare(ra, rb);
+            return Integer.compare(original.indexOf(a), original.indexOf(b));
+        });
+        return out;
     }
 
-    private void row(int icon, String title, String subtitle, Runnable action) {
-        View r = getLayoutInflater().inflate(R.layout.item_row, list, false);
-        ((ImageView) r.findViewById(R.id.row_icon)).setImageResource(icon);
-        ((TextView) r.findViewById(R.id.row_title)).setText(title);
-        TextView sub = r.findViewById(R.id.row_subtitle);
-        if (subtitle == null) sub.setVisibility(View.GONE);
-        else sub.setText(subtitle);
-        r.setFocusable(true);
-        r.setClickable(true);
-        r.setDefaultFocusHighlightEnabled(false); // we draw our own outline
-        r.setOnClickListener(v -> action.run());
-        list.addView(r);
-        if (firstRow == null) firstRow = r;
+    /** Builds the menu again (keeping the highlight on the same item). */
+    private void rebuild() {
+        if (renderer != null && selected >= 0 && selected < renderer.selectable.size()) {
+            selectedId = renderer.selectable.get(selected).id;
+        }
+        List<MenuRender.Item> list = ordered(collect());
+        renderer = MenuRender.create(this, theme);
+        renderer.build(list);
+        root.removeAllViews();
+        boolean radial = theme.layout.equals("radial");
+        View panel = radial ? radialPanel() : sidePanel();
+        root.addView(panel);
+        for (int i = 0; i < renderer.tiles.size(); i++) {
+            int index = i;
+            View t = renderer.tiles.get(i);
+            t.setOnFocusChangeListener((v, has) -> {
+                if (has) {
+                    selected = index;
+                    renderer.onSelected(index);
+                }
+            });
+        }
+        int want = 0;
+        if (selectedId != null) {
+            for (int i = 0; i < renderer.selectable.size(); i++) {
+                if (renderer.selectable.get(i).id.equals(selectedId)) want = i;
+            }
+        }
+        selected = renderer.tiles.isEmpty() ? -1 : Math.min(want, renderer.tiles.size() - 1);
+        int focus = selected;
+        ui.post(() -> select(focus));
+        if (arranging && theme.layout.equals("freeform")) enableTouchArranging();
+    }
+
+    private void select(int index) {
+        if (renderer == null || index < 0 || index >= renderer.tiles.size()) return;
+        selected = index;
+        renderer.tiles.get(index).requestFocus();
+        renderer.onSelected(index);
+    }
+
+    /** List, grid and freeform: a panel at the side, centre or full screen. */
+    private View sidePanel() {
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(16), dp(24), dp(16), dp(16));
+        panel.setClickable(true); // taps on the panel don't close it
+        noHighlight(panel);
+        TextView title = new TextView(this);
+        title.setText("DockPad");
+        title.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleLarge);
+        panel.addView(title);
+        status = new TextView(this);
+        status.setText(statusText);
+        status.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall);
+        status.setPadding(0, 0, 0, dp(8));
+        panel.addView(status);
+        boolean free = theme.layout.equals("freeform");
+        if (free) {
+            panel.addView(renderer.view, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
+        } else {
+            ScrollView scroll = new ScrollView(this);
+            noHighlight(scroll);
+            scroll.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
+            scroll.addView(renderer.view);
+            panel.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
+        }
+        if (renderer.tiles.isEmpty()) {
+            TextView t = new TextView(this);
+            t.setText("Everything is hidden. Choose items in DockPad → Shortcuts → Quick menu.");
+            panel.addView(t, 2);
+        }
+        hint = new TextView(this);
+        hint.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_LabelSmall);
+        hint.setPadding(dp(4), dp(8), 0, 0);
+        panel.addView(hint);
+        updateHint();
+
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(0xE6121519);
+        float r = dp(24);
+        FrameLayout.LayoutParams lp;
+        switch (theme.position) {
+            case "right":
+                bg.setCornerRadii(new float[]{r, r, 0, 0, 0, 0, r, r});
+                lp = new FrameLayout.LayoutParams(dp(theme.width), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.END);
+                break;
+            case "center":
+                bg.setCornerRadius(r);
+                lp = new FrameLayout.LayoutParams(dp(theme.width), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.CENTER);
+                lp.topMargin = lp.bottomMargin = dp(24);
+                break;
+            case "full":
+                lp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+                break;
+            default:
+                bg.setCornerRadii(new float[]{0, 0, r, r, r, r, 0, 0});
+                lp = new FrameLayout.LayoutParams(dp(theme.width), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.START);
+        }
+        panel.setBackground(bg);
+        panel.setLayoutParams(lp);
+        return panel;
+    }
+
+    /** Radial: a ring in the middle of the screen, the game dimmed behind it. */
+    private View radialPanel() {
+        root.setBackgroundColor(0x99000000);
+        FrameLayout holder = new FrameLayout(this);
+        noHighlight(holder);
+        int size = Math.min(dp(theme.width + 200), Math.min(getResources().getDisplayMetrics().widthPixels,
+                getResources().getDisplayMetrics().heightPixels) - dp(16));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setShape(GradientDrawable.OVAL);
+        bg.setColor(0xE6121519);
+        holder.setBackground(bg);
+        holder.setClickable(true);
+        holder.addView(renderer.view, new FrameLayout.LayoutParams(size, size, Gravity.CENTER));
+        status = null;
+        LinearLayout column = new LinearLayout(this);
+        column.setOrientation(LinearLayout.VERTICAL);
+        column.setGravity(Gravity.CENTER_HORIZONTAL);
+        noHighlight(column);
+        column.addView(holder, new LinearLayout.LayoutParams(size, size));
+        hint = new TextView(this);
+        hint.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_LabelSmall);
+        hint.setGravity(Gravity.CENTER);
+        hint.setPadding(0, dp(6), 0, 0);
+        column.addView(hint);
+        updateHint();
+        column.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
+        return column;
+    }
+
+    private void updateHint() {
+        if (hint == null) return;
+        boolean free = theme.layout.equals("freeform"), radial = theme.layout.equals("radial");
+        if (arranging) {
+            hint.setText(free ? "ARRANGING · D-pad/stick: move · L1/R1: smaller/bigger · drag by touch · A or Y: done"
+                    : "ARRANGING · D-pad: move this item · A or Y: done");
+            hint.setTextColor(0xFFFFD54F);
+        } else {
+            hint.setText(radial ? "Stick: aim · D-pad: around / between rings · Y: arrange · B: close"
+                    : "Y: arrange items · B: close");
+            hint.setTextColor(0xB3FFFFFF);
+        }
+    }
+
+    // ------------------------------------------------------------------ arranging
+
+    private void toggleArranging() {
+        if (renderer == null || renderer.tiles.isEmpty()) return;
+        arranging = !arranging;
+        if (!arranging) saveArrangement();
+        updateHint();
+        if (arranging && theme.layout.equals("freeform")) enableTouchArranging();
+        if (!arranging) rebuild();
+    }
+
+    /** Moves the selected item (and its group) by some places in the user's order. */
+    private void arrangeBy(int step) {
+        if (step == 0 || selected < 0) return;
+        List<String> groups = new ArrayList<>();
+        List<String> groupSections = new ArrayList<>();
+        for (MenuRender.Item it : renderer.selectable) {
+            if (!groups.contains(it.group)) {
+                groups.add(it.group);
+                groupSections.add(it.section);
+            }
+        }
+        String g = renderer.selectable.get(selected).group;
+        int from = groups.indexOf(g);
+        int to = Math.max(0, Math.min(groups.size() - 1, from + step));
+        boolean bySection = theme.sections && !theme.layout.equals("radial") && !theme.layout.equals("freeform");
+        if (bySection) {
+            // stay inside the section
+            String sec = groupSections.get(from);
+            while (to != from && !groupSections.get(to).equals(sec)) to += step > 0 ? -1 : 1;
+        }
+        if (to == from) return;
+        groups.remove(from);
+        groups.add(to, g);
+        // keep the order of hidden or absent items too
+        List<String> all = new ArrayList<>(groups);
+        for (String old : MenuTheme.order(this)) if (!all.contains(old)) all.add(old);
+        MenuTheme.saveOrder(this, all);
+        selectedId = renderer.selectable.get(selected).id;
+        rebuild();
+    }
+
+    private void saveArrangement() {
+        if (renderer instanceof MenuRender.FreeRenderer) {
+            MenuRender.FreeRenderer f = (MenuRender.FreeRenderer) renderer;
+            for (int i = 0; i < f.selectable.size(); i++) {
+                MenuRender.Item it = f.selectable.get(i);
+                String key = it.group.equals("controllers") ? "controllers" : it.id;
+                if (key.equals("controllers") && theme.free.containsKey("controllers")
+                        && !it.id.equals(firstControllerId(f))) continue; // the block follows its first item
+                theme.free.put(key, f.rects.get(i).clone());
+            }
+            theme.save(this);
+        }
+    }
+
+    private static String firstControllerId(MenuRender.FreeRenderer f) {
+        for (MenuRender.Item it : f.selectable) if (it.group.equals("controllers")) return it.id;
+        return "";
+    }
+
+    @android.annotation.SuppressLint("ClickableViewAccessibility")
+    private void enableTouchArranging() {
+        if (!(renderer instanceof MenuRender.FreeRenderer)) return;
+        MenuRender.FreeRenderer f = (MenuRender.FreeRenderer) renderer;
+        for (int i = 0; i < f.tiles.size(); i++) {
+            int index = i;
+            float[] last = new float[2];
+            f.tiles.get(i).setOnTouchListener((v, e) -> {
+                if (!arranging) return false;
+                View canvas = f.canvas;
+                switch (e.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        last[0] = e.getRawX();
+                        last[1] = e.getRawY();
+                        select(index);
+                        return true;
+                    case MotionEvent.ACTION_MOVE:
+                        float dx = (e.getRawX() - last[0]) / Math.max(1, canvas.getWidth());
+                        float dy = (e.getRawY() - last[1]) / Math.max(1, canvas.getHeight());
+                        last[0] = e.getRawX();
+                        last[1] = e.getRawY();
+                        f.nudge(index, dx, dy, 1f);
+                        return true;
+                    default:
+                        return true;
+                }
+            });
+        }
+    }
+
+    // ------------------------------------------------------------------ controller keys and stick
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent e) {
+        int kc = e.getKeyCode();
+        boolean down = e.getAction() == KeyEvent.ACTION_DOWN;
+        boolean fresh = down && e.getRepeatCount() == 0;
+        if (kc == KeyEvent.KEYCODE_BUTTON_Y) {
+            if (fresh) toggleArranging();
+            return true;
+        }
+        if (arranging) {
+            if (kc == KeyEvent.KEYCODE_BUTTON_A || kc == KeyEvent.KEYCODE_DPAD_CENTER || kc == KeyEvent.KEYCODE_ENTER
+                    || kc == KeyEvent.KEYCODE_BUTTON_B || kc == KeyEvent.KEYCODE_BACK) {
+                if (fresh) toggleArranging();
+                return true;
+            }
+            int dir = direction(kc);
+            if (renderer instanceof MenuRender.FreeRenderer) {
+                MenuRender.FreeRenderer f = (MenuRender.FreeRenderer) renderer;
+                if (down && selected >= 0) {
+                    float step = e.getRepeatCount() > 6 ? 0.025f : 0.012f;
+                    if (dir >= 0) f.nudge(selected, dir == MenuRender.LEFT ? -step : dir == MenuRender.RIGHT ? step : 0,
+                            dir == MenuRender.UP ? -step : dir == MenuRender.DOWN ? step : 0, 1f);
+                    if (kc == KeyEvent.KEYCODE_BUTTON_L1) f.nudge(selected, 0, 0, 0.9f);
+                    if (kc == KeyEvent.KEYCODE_BUTTON_R1) f.nudge(selected, 0, 0, 1.1f);
+                }
+                return true;
+            }
+            if (dir >= 0) {
+                if (down) arrangeBy(renderer.arrangeStep(dir));
+                return true;
+            }
+            return true; // nothing else while arranging
+        }
+        int dir = direction(kc);
+        if (dir >= 0 && renderer != null) {
+            if (down) {
+                if (getCurrentFocus() == null && selected < 0) select(0);
+                else {
+                    int next = renderer.move(selected, dir, fresh);
+                    if (next >= 0) select(next);
+                }
+            }
+            return true;
+        }
+        // make sure something is highlighted as soon as a controller is used
+        if (down && getCurrentFocus() == null && renderer != null && !renderer.tiles.isEmpty()
+                && DpDialog.Controller.isFromController(e) && kc != KeyEvent.KEYCODE_BUTTON_B
+                && kc != KeyEvent.KEYCODE_BACK) {
+            select(Math.max(0, selected));
+            return true;
+        }
+        if (DpDialog.Controller.isFromController(e)
+                && DpDialog.Controller.handle(e, getWindow().getDecorView(), this::finish)) {
+            return true;
+        }
+        return super.dispatchKeyEvent(e);
+    }
+
+    private static int direction(int kc) {
+        switch (kc) {
+            case KeyEvent.KEYCODE_DPAD_UP: return MenuRender.UP;
+            case KeyEvent.KEYCODE_DPAD_DOWN: return MenuRender.DOWN;
+            case KeyEvent.KEYCODE_DPAD_LEFT: return MenuRender.LEFT;
+            case KeyEvent.KEYCODE_DPAD_RIGHT: return MenuRender.RIGHT;
+            default: return -1;
+        }
+    }
+
+    private long stickHeldSince;
+
+    /** Radial: aim with the stick. Freeform while arranging: move with the stick. */
+    @Override
+    public boolean dispatchGenericMotionEvent(MotionEvent e) {
+        boolean joystick = (e.getSource() & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK
+                && e.getAction() == MotionEvent.ACTION_MOVE;
+        if (joystick && renderer != null) {
+            float x = e.getAxisValue(MotionEvent.AXIS_X), y = e.getAxisValue(MotionEvent.AXIS_Y);
+            float mag = (float) Math.hypot(x, y);
+            if (arranging && renderer instanceof MenuRender.FreeRenderer) {
+                if (mag > 0.25f && selected >= 0) {
+                    ((MenuRender.FreeRenderer) renderer).nudge(selected, x * 0.02f, y * 0.02f, 1f);
+                }
+                return true;
+            }
+            if (!arranging && renderer instanceof MenuRender.RadialRenderer) {
+                if (mag > 0.55f) {
+                    int i = renderer.aim(x, y, selected);
+                    if (i >= 0 && i != selected) select(i);
+                }
+                return true; // the stick doesn't also move the highlight like a D-pad
+            }
+        }
+        return super.dispatchGenericMotionEvent(e);
     }
 
     // ------------------------------------------------------------------ talking to DockPad
@@ -312,19 +677,13 @@ public class QuickMenuActivity extends AppCompatActivity {
                 cursor = c;
                 swapAB = ab;
                 swapXY = xy;
-                status.setText((running ? "On" : "Off") + (cursor ? " · Cursor mode on" : ""));
-                if (changed) {
-                    View focused = getCurrentFocus();
-                    int index = focused == null ? -1 : list.indexOfChild(focused);
-                    build();
-                    if (index >= 0 && index < list.getChildCount()) list.getChildAt(index).requestFocus();
-                }
-                showControllers(o.optJSONArray("controllers"));
+                statusText = (running ? "On" : "Off") + (cursor ? " · Cursor mode on" : "");
+                if (status != null) status.setText(statusText);
+                if (showControllers(o.optJSONArray("controllers")) || changed) rebuild();
             });
         }));
     }
 
-    private String controllersKey = "";
 
     private void confirmDisconnect(String name) {
         new DpDialog(this).setTitle("Disconnect " + name + "?")
@@ -411,117 +770,6 @@ public class QuickMenuActivity extends AppCompatActivity {
         withBridge(b -> b.setLayouts(spec));
     }
 
-    private void showControllers(JSONArray ctrls) {
-        externals.clear();
-        if (ctrls != null) for (int i = 0; i < ctrls.length(); i++) {
-            JSONObject c = ctrls.optJSONObject(i);
-            if (c != null && !c.optBoolean("touchpad") && !c.optBoolean("builtIn")
-                    && !externals.contains(c.optString("name"))) externals.add(c.optString("name"));
-        }
-        if (controllersAnchor == null) return;
-        StringBuilder key = new StringBuilder(running ? "on" : "off");
-        if (ctrls != null) for (int i = 0; i < ctrls.length(); i++) {
-            JSONObject c = ctrls.optJSONObject(i);
-            if (c != null) key.append('|').append(c.optString("name")).append(c.optInt("player")).append(c.optBoolean("touchpad"))
-                    .append(c.optInt("battery", -1)).append(c.optBoolean("charging"));
-        }
-        // only rebuild when something visible changed, so the highlight stays put
-        if (key.toString().equals(controllersKey) && controllersAnchor.getChildCount() > 0) return;
-        controllersKey = key.toString();
-        View focused = getCurrentFocus();
-        int focusIndex = focused != null && focused.getParent() == controllersAnchor
-                ? controllersAnchor.indexOfChild(focused) : -1;
-        controllersAnchor.removeAllViews();
-        boolean any = false;
-        if (ctrls != null) for (int i = 0; i < ctrls.length(); i++) {
-            JSONObject c = ctrls.optJSONObject(i);
-            if (c == null || c.optBoolean("touchpad")) continue;
-            any = true;
-            View r = getLayoutInflater().inflate(R.layout.item_row, controllersAnchor, false);
-            ((ImageView) r.findViewById(R.id.row_icon)).setImageResource(
-                    c.optBoolean("builtIn") ? R.drawable.ic_handheld : R.drawable.ic_gamepad);
-            ((TextView) r.findViewById(R.id.row_title)).setText(
-                    c.optBoolean("builtIn") ? "Built-in controls" : c.optString("name"));
-            r.findViewById(R.id.row_subtitle).setVisibility(View.GONE);
-            TextView badge = r.findViewById(R.id.row_badge);
-            badge.setVisibility(View.VISIBLE);
-            int pl = c.optInt("player", 1);
-            badge.setText(pl == 0 ? "Press A to join" : "P" + pl);
-            if (!c.optBoolean("builtIn")) {
-                String name = c.optString("name");
-                String sub = "Select to disconnect";
-                if (c.has("battery")) {
-                    int pct = c.optInt("battery");
-                    sub = (c.optBoolean("charging") ? "Charging, " + pct + "%" : "Battery " + pct + "%")
-                            + (pct <= 15 && !c.optBoolean("charging") ? " (low)" : "") + " · " + sub;
-                }
-                ((TextView) r.findViewById(R.id.row_subtitle)).setText(sub);
-                r.findViewById(R.id.row_subtitle).setVisibility(View.VISIBLE);
-                r.setFocusable(true);
-                r.setClickable(true);
-                r.setDefaultFocusHighlightEnabled(false);
-                r.setOnClickListener(v -> confirmDisconnect(name));
-            }
-            controllersAnchor.addView(r);
-        }
-        if (focusIndex >= 0 && focusIndex < controllersAnchor.getChildCount()) {
-            controllersAnchor.getChildAt(focusIndex).requestFocus();
-        }
-        if (!any) {
-            TextView t = new TextView(this);
-            t.setText(running ? "No controllers found" : "DockPad is off");
-            t.setPadding(dp(6), dp(6), 0, dp(6));
-            controllersAnchor.addView(t);
-        }
-    }
-
-    // ------------------------------------------------------------------ controller keys
-
-    @Override
-    public boolean dispatchKeyEvent(KeyEvent e) {
-        int kc = e.getKeyCode();
-        // make sure something is highlighted as soon as a controller is used
-        if (e.getAction() == KeyEvent.ACTION_DOWN && getCurrentFocus() == null && firstRow != null
-                && (DpDialog.Controller.isFromController(e) || isDpad(kc))) {
-            firstRow.requestFocus();
-            if (kc != KeyEvent.KEYCODE_BUTTON_B && kc != KeyEvent.KEYCODE_BACK) return true;
-        }
-        // wrap around: up from the first item goes to the last, down from the last to the first
-        if ((kc == KeyEvent.KEYCODE_DPAD_UP || kc == KeyEvent.KEYCODE_DPAD_DOWN)
-                && e.getAction() == KeyEvent.ACTION_DOWN) {
-            List<View> rows = new java.util.ArrayList<>();
-            collectRows(list, rows);
-            View f = getCurrentFocus();
-            if (rows.size() > 1 && f != null) {
-                boolean atTop = f == rows.get(0), atBottom = f == rows.get(rows.size() - 1);
-                if ((kc == KeyEvent.KEYCODE_DPAD_UP && atTop) || (kc == KeyEvent.KEYCODE_DPAD_DOWN && atBottom)) {
-                    // only on a fresh press, so holding the stick stops at the end instead of spinning round
-                    if (e.getRepeatCount() == 0) rows.get(atTop ? rows.size() - 1 : 0).requestFocus();
-                    return true;
-                }
-            }
-        }
-        if (DpDialog.Controller.isFromController(e)
-                && DpDialog.Controller.handle(e, getWindow().getDecorView(), this::finish)) {
-            return true;
-        }
-        return super.dispatchKeyEvent(e);
-    }
-
-    /** Selectable rows, top to bottom. */
-    private static void collectRows(ViewGroup g, List<View> out) {
-        for (int i = 0; i < g.getChildCount(); i++) {
-            View v = g.getChildAt(i);
-            if (v.getVisibility() != View.VISIBLE) continue;
-            if (v.isFocusable()) out.add(v);
-            else if (v instanceof ViewGroup) collectRows((ViewGroup) v, out);
-        }
-    }
-
-    private static boolean isDpad(int kc) {
-        return kc == KeyEvent.KEYCODE_DPAD_UP || kc == KeyEvent.KEYCODE_DPAD_DOWN
-                || kc == KeyEvent.KEYCODE_DPAD_LEFT || kc == KeyEvent.KEYCODE_DPAD_RIGHT;
-    }
 
     private int dp(int v) {
         return (int) (v * getResources().getDisplayMetrics().density + 0.5f);

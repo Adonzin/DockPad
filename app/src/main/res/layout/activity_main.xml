@@ -421,6 +421,14 @@
                         android:text="Choose what's in it" />
                 </LinearLayout>
 
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/menu_look"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="Look &amp; layout…" />
+
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"

@@ -40,6 +40,14 @@ Docked play on a handheld usually means setting up every emulator again for an e
 - Opens over any game with a button combo, and is fully navigable with a controller.
 - Has Home, Back, Cursor mode, an on-screen keyboard, rapid fire, face-button swaps, screenshot, force close, your own commands, live controllers list (with battery and disconnect), and pairing.
 - You choose which items it shows.
+- **Five layouts:**
+  - list
+  - compact list
+  - grid of tiles
+  - **radial** (aim with the stick; large menus get several rings)
+  - **freeform** (put every item anywhere, at any size)
+- Left, right, centre or full screen, at any width.
+- **Arrange it from the menu itself:** press Y to move items, or in Freeform to move and resize them with the stick, D-pad or touch.
 
 **Cursor mode**
 - Turns controllers into a mouse and keyboard, for Moonlight, remote desktop, or apps without controller support.
