@@ -315,9 +315,15 @@ public class QuickMenuActivity extends AppCompatActivity {
             int index = i;
             View t = renderer.tiles.get(i);
             t.setOnFocusChangeListener((v, has) -> {
-                if (has) {
+                // ignore focus Android moves on its own while a style hides items (tabs, XMB)
+                if (has && !selecting) {
                     selected = index;
-                    renderer.onSelected(index);
+                    selecting = true;
+                    try {
+                        renderer.onSelected(index);
+                    } finally {
+                        selecting = false;
+                    }
                 }
             });
         }
@@ -336,9 +342,16 @@ public class QuickMenuActivity extends AppCompatActivity {
     private void select(int index) {
         if (renderer == null || index < 0 || index >= renderer.tiles.size()) return;
         selected = index;
-        renderer.onSelected(index); // first: some styles reveal the item here (tabs, XMB)
-        renderer.tiles.get(index).requestFocus();
+        selecting = true;
+        try {
+            renderer.onSelected(index); // first: some styles reveal the item here (tabs, XMB)
+            renderer.tiles.get(index).requestFocus();
+        } finally {
+            selecting = false;
+        }
     }
+
+    private boolean selecting;
 
     /** List, grid and freeform: a panel at the side, centre or full screen. */
     private View sidePanel() {

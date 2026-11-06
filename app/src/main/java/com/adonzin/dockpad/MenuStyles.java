@@ -85,7 +85,7 @@ final class MenuStyles {
         }
 
         final class XmbCanvas extends ViewGroup {
-            int sec, item;
+            int sec, item, first, rowH = 1;
 
             XmbCanvas(Context c) {
                 super(c);
@@ -122,14 +122,9 @@ final class MenuStyles {
                 }
                 int y0 = top + hs + dp(34);
                 List<Integer> mine = secs.isEmpty() ? new ArrayList<>() : secs.get(sec);
-                int rowH = mine.isEmpty() ? dp(56) : Math.max(dp(48), tiles.get(mine.get(0)).getMeasuredHeight());
-                int visible = Math.max(1, (H - y0 - dp(36)) / rowH);
-                int pos = mine.indexOf(item), first = Math.max(0, Math.min(pos - visible / 2, mine.size() - visible));
                 for (int i = 0; i < tiles.size(); i++) {
                     View v = tiles.get(i);
                     int at = mine.indexOf(i);
-                    boolean show = at >= first && at < first + visible;
-                    v.setVisibility(at >= 0 ? (show ? VISIBLE : INVISIBLE) : GONE);
                     if (at < 0) continue;
                     int y = y0 + (at - first) * rowH;
                     int x = anchorX - hs;
@@ -172,9 +167,21 @@ final class MenuStyles {
             if (secs.isEmpty() || index < 0) return;
             canvas.sec = sectionIndex(secs, index);
             canvas.item = index;
-            // show this section's items right away, so the highlight can land on them
+            // which of this section's items fit on screen (decided here, not while drawing)
             List<Integer> mine = secs.get(canvas.sec);
-            for (int i = 0; i < tiles.size(); i++) tiles.get(i).setVisibility(mine.contains(i) ? View.VISIBLE : View.GONE);
+            int H = canvas.getHeight() > 0 ? canvas.getHeight() : c.getResources().getDisplayMetrics().heightPixels;
+            int hs = canvas.head(), y0 = (int) (H * 0.12f) + hs + dp(34);
+            View any = tiles.get(mine.get(0));
+            canvas.rowH = Math.max(dp(48), any.getMeasuredHeight() > 0 ? any.getMeasuredHeight() : dp(60));
+            int visible = Math.max(1, (H - y0 - dp(36)) / canvas.rowH);
+            int pos = mine.indexOf(index);
+            canvas.first = Math.max(0, Math.min(pos - visible / 2, mine.size() - visible));
+            // show the new items first, so the highlighted one is never hidden
+            for (int at = 0; at < mine.size(); at++) {
+                boolean show = at >= canvas.first && at < canvas.first + visible;
+                tiles.get(mine.get(at)).setVisibility(show ? View.VISIBLE : View.INVISIBLE);
+            }
+            for (int i = 0; i < tiles.size(); i++) if (!mine.contains(i)) tiles.get(i).setVisibility(View.GONE);
             remembered[Math.min(63, canvas.sec)] = secs.get(canvas.sec).indexOf(index);
             canvas.requestLayout();
         }

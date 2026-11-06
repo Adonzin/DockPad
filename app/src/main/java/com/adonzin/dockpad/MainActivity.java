@@ -1253,7 +1253,9 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
             } catch (Exception e) {
                 s = "Couldn't reach DockPad's service: " + e;
             }
-            String text = "DockPad " + BuildConfig.VERSION_NAME + "\n" + s;
+            String crash = DockPadApp.lastCrash(this);
+            String text = "DockPad " + BuildConfig.VERSION_NAME + "\n" + s
+                    + (crash.isEmpty() ? "" : "\n\nLast app crash:\n" + crash);
             ui.post(() -> {
                 TextView tv = new TextView(this);
                 tv.setText(text);
