@@ -31,12 +31,11 @@ jobs:
       - name: Report build errors
         if: failure()
         run: |
-          grep -E "error:|ERROR:|e: |What went wrong|AAPT|Execution failed" -A2 build.log | head -60 | while IFS= read -r line; do
+          {
+            grep -hE ": (Error|Fatal): " build.log $(find app/build -path "*lint*" -name "*.txt" 2>/dev/null) 2>/dev/null
+            grep -E "error:|ERROR:|e: |What went wrong" -A1 build.log
+          } | head -9 | while IFS= read -r line; do
             [ -n "$line" ] && echo "::error::${line}"
-          done
-          grep -E ": (Error|Fatal|Warning): " build.log | head -10 | while IFS= read -r line; do echo "::error::lint: ${line}"; done
-          find app/build -path "*lint*" -name "*.txt" 2>/dev/null | head -5 | while read f; do
-            grep -E "Error|Fatal|\.java:" "$f" | head -20 | while IFS= read -r line; do echo "::error::lint: ${line}"; done
           done
 
       - name: Publish as "latest" release
