@@ -930,6 +930,12 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
                     prefs.multiplayer(v);
                     pushSettings();
                 });
+        addSwitch(controllerSettings, "Rumble",
+                "Passes game rumble to your controllers (those that have rumble, like PlayStation and Xbox pads). Player 1's rumble is copied from the handheld's own motor, so the handheld still buzzes too unless you turn its vibration off in the emulator.",
+                prefs.rumble(), v -> {
+                    prefs.rumble(v);
+                    pushSettings();
+                });
         addSwitch(controllerSettings, "Players join by pressing A",
                 "With multiplayer on, a controller does nothing until you press A (or any face button or Start) on it. Players are numbered in the order they join, not the order they connected. Changing this asks everyone to join again.",
                 prefs.joinByPress(), v -> {

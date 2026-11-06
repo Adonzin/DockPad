@@ -205,4 +205,9 @@ public final class SocketBridge implements IBridge {
     public void installUpdate(String url, int version) throws RemoteException {
         rc("installUpdate", url, version);
     }
+
+    @Override
+    public void setRumble(boolean on) throws RemoteException {
+        rc("setRumble", on);
+    }
 }

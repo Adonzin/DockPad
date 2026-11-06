@@ -166,4 +166,9 @@ public class BridgeService extends IBridge.Stub {
             Actions.exec("sh", "-c", "(sleep 3; am start -n " + pkg + "/" + pkg + ".MainActivity) >/dev/null 2>&1 &");
         }, "DockPad-update").start();
     }
+
+    @Override
+    public void setRumble(boolean on) {
+        bridge.setRumble(on);
+    }
 }

@@ -27,4 +27,5 @@ interface IBridge {
     void setJoinByPress(boolean on) = 23;
     String disconnectController(String name) = 24;
     void installUpdate(String url, int version) = 25;
+    void setRumble(boolean on) = 26;
 }

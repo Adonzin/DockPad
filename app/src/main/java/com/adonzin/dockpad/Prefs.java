@@ -32,6 +32,8 @@ final class Prefs {
 
     boolean multiplayer() { return p.getBoolean("multiplayer", true); }
     void multiplayer(boolean v) { p.edit().putBoolean("multiplayer", v).apply(); }
+    boolean rumble() { return p.getBoolean("rumble", true); }
+    void rumble(boolean v) { p.edit().putBoolean("rumble", v).apply(); }
     boolean joinByPress() { return p.getBoolean("joinByPress", false); }
     void joinByPress(boolean v) { p.edit().putBoolean("joinByPress", v).apply(); }
 
@@ -104,6 +106,7 @@ final class Prefs {
         b.setPcSettings(pcSpeed() + "," + pcPointerLeft());
         b.setLayouts(layoutsSpec());
         b.setJoinByPress(joinByPress());
+        b.setRumble(rumble());
         b.setMultiplayer(multiplayer());
         b.setTouchpadAsButton(touchpadAsButton());
         b.setShortcuts(shortcutsSpec());

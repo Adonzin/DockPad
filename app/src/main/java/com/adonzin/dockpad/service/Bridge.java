@@ -88,6 +88,50 @@ final class Bridge {
         }
     }
 
+    // ---------------------------------------------------------------- rumble pass-through
+
+    private volatile boolean rumbleOn = true;
+    private volatile String handheldWatch = "not started";
+    private volatile boolean p1Rumbling;
+    private ScheduledFuture<?> p1Pending;
+
+    void setRumble(boolean on) {
+        rumbleOn = on;
+        if (!on) {
+            for (int p = 1; p <= MAX_PLAYERS; p++) rumblePlayer(p, false);
+        }
+    }
+
+    /** Sends rumble to every real controller playing as this player. */
+    private void rumblePlayer(int player, boolean on) {
+        if (on && (!rumbleOn || !running)) return;
+        List<Source> list = new ArrayList<>();
+        synchronized (this) {
+            for (Source s : sources.values()) {
+                boolean isBuiltIn = target != null && s.dev.path.equals(target.path);
+                if (s.alive && s.joined && !s.touchpad && !isBuiltIn && s.player == player) list.add(s);
+            }
+        }
+        for (Source s : list) Rumble.set(s.dev, on);
+    }
+
+    /** Player 1's rumble: games use the handheld's own motor, so copy it (ignoring tiny UI clicks). */
+    private synchronized void handheldVibrating(boolean on) {
+        if (p1Pending != null) {
+            p1Pending.cancel(false);
+            p1Pending = null;
+        }
+        if (on) {
+            p1Pending = timer.schedule(() -> {
+                p1Rumbling = true;
+                rumblePlayer(1, true);
+            }, 40, TimeUnit.MILLISECONDS);
+        } else if (p1Rumbling) {
+            p1Rumbling = false;
+            timer.execute(() -> rumblePlayer(1, false));
+        }
+    }
+
     // press A to join: new controllers wait (and do nothing) until they press a button
     private volatile boolean joinByPress = false;
 
@@ -135,6 +179,8 @@ final class Bridge {
                 pad = w;
             } else {
                 VirtualPad v = new VirtualPad();
+                final int pl = player;
+                v.onRumble(on -> rumblePlayer(pl, on)); // games can rumble players 2+ like any controller
                 if (!v.create(target, VirtualPad.nameFor(player))) {
                     lastError = v.describe();
                     return slots.isEmpty() ? null : slots.get(0);
@@ -336,6 +382,8 @@ final class Bridge {
         lastDevList = "";
         // lets the app draw DockPad's keyboard over other apps
         Actions.exec("appops", "set", com.adonzin.dockpad.BuildConfig.APPLICATION_ID, "SYSTEM_ALERT_WINDOW", "allow");
+        String watch = Rumble.watchHandheld(this::handheldVibrating);
+        handheldWatch = watch == null ? "watching" : "unavailable (" + watch + ")";
         // lets the app search for and pair controllers without a permission prompt
         for (String perm : new String[]{"BLUETOOTH_SCAN", "BLUETOOTH_CONNECT"}) {
             Actions.exec("pm", "grant", com.adonzin.dockpad.BuildConfig.APPLICATION_ID, "android.permission." + perm);
@@ -697,6 +745,14 @@ final class Bridge {
             b.append("Bluetooth connected: ").append(bt.length() == 0 ? "none found" : bt).append('\n');
             b.append(Battery.describe()).append('\n');
             b.append(rumbleReport());
+            b.append("Rumble pass-through: ").append(rumbleOn ? "on" : "off").append("; handheld motor: ")
+                    .append(handheldWatch).append("; controllers: ");
+            List<Source> list = new ArrayList<>(sources.values());
+            for (Source s : list) {
+                if (s.touchpad || (target != null && s.dev.path.equals(target.path))) continue;
+                b.append(s.dev.name).append(Rumble.canRumble(s.dev) ? " (can rumble)" : " (no rumble)").append("; ");
+            }
+            b.append('\n');
         } catch (Throwable btErr) {
             b.append("Bluetooth: ").append(btErr).append('\n');
         }

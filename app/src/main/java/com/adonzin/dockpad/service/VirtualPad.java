@@ -37,13 +37,25 @@ final class VirtualPad implements PadOut {
         return name;
     }
 
+    /** Called when a game starts/stops rumble on this controller. */
+    interface RumbleListener {
+        void rumble(boolean on);
+    }
+
+    private volatile RumbleListener rumbleListener;
+
+    /** Makes the controller report rumble support; set before create(). */
+    void onRumble(RumbleListener l) {
+        rumbleListener = l;
+    }
+
     private Process process;
     private OutputStream stdin;
     private final List<String> toolOutput = Collections.synchronizedList(new ArrayList<>());
     private volatile String error = "";
 
     boolean create(EvdevDevice clone, String name) {
-        return createWithJson(name, registerJson(clone, name));
+        return createWithJson(name, registerJson(clone, name, rumbleListener != null));
     }
 
     /** Creates any kind of virtual device from a uinput "register" command. */
@@ -56,6 +68,14 @@ final class VirtualPad implements PadOut {
                 try (BufferedReader r = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
                     String line;
                     while ((line = r.readLine()) != null) {
+                        if (line.contains("\"vibrating\"")) {
+                            RumbleListener l = rumbleListener;
+                            if (l != null) {
+                                java.util.regex.Matcher m = java.util.regex.Pattern.compile("\"status\"\\s*:\\s*(-?\\d+)").matcher(line);
+                                if (m.find()) l.rumble(Integer.parseInt(m.group(1)) != 0);
+                            }
+                            continue;
+                        }
                         Log.i("DockPad", "uinput: " + line);
                         toolOutput.add(line);
                         while (toolOutput.size() > 5) toolOutput.remove(0);
@@ -87,7 +107,7 @@ final class VirtualPad implements PadOut {
         return "NOT running" + (error.isEmpty() ? "" : " — " + error) + (out.isEmpty() ? "" : " — " + out);
     }
 
-    static String registerJson(EvdevDevice d, String name) {
+    static String registerJson(EvdevDevice d, String name, boolean rumble) {
         StringBuilder keys = new StringBuilder();
         for (int k : sorted(d.keys)) keys.append(keys.length() == 0 ? "" : ",").append(k);
         StringBuilder absBits = new StringBuilder();
@@ -104,10 +124,12 @@ final class VirtualPad implements PadOut {
         return "{\"id\":1,\"command\":\"register\",\"name\":\"" + name + "\""
                 + ",\"vid\":" + d.vendor + ",\"pid\":" + d.product + ",\"bus\":\"usb\""
                 + ",\"configuration\":["
-                + "{\"type\":100,\"data\":[1,3]}"          // UI_SET_EVBIT: EV_KEY, EV_ABS
+                + "{\"type\":100,\"data\":[1,3" + (rumble ? ",21" : "") + "]}" // UI_SET_EVBIT: EV_KEY, EV_ABS (+EV_FF)
                 + ",{\"type\":101,\"data\":[" + keys + "]}"  // UI_SET_KEYBIT
                 + ",{\"type\":103,\"data\":[" + absBits + "]}" // UI_SET_ABSBIT
-                + "],\"abs_info\":[" + absInfo + "]}";
+                + (rumble ? ",{\"type\":107,\"data\":[80]}" : "") // UI_SET_FFBIT: FF_RUMBLE
+                + "],\"abs_info\":[" + absInfo + "]"
+                + (rumble ? ",\"ff_effects_max\":16" : "") + "}";
     }
 
     static String json(String name, int vid, int pid, int[] evBits, int[] keyBits, int[] relBits, int[] absBits,

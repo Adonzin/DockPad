@@ -127,6 +127,7 @@ public final class ShellMain {
                     case "pollKeyboard": r = svc.pollKeyboard(); break;
                     case "typeKey": svc.typeKey(a.optInt(0), a.optBoolean(1)); break;
                     case "typeCombo": svc.typeCombo(a.optString(0)); break;
+                    case "setRumble": svc.setRumble(a.optBoolean(0)); break;
                     case "setJoinByPress": svc.setJoinByPress(a.optBoolean(0)); break;
                     case "disconnectController": r = svc.disconnectController(a.optString(0)); break;
                     case "recordAllInput": r = svc.recordAllInput(a.optInt(0, 10000)); break;
