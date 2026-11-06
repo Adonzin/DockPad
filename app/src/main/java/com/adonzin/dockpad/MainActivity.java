@@ -268,6 +268,9 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
             }
             return true;
         }
+        // wrap around and L2/R2 jumps, within the open tab's page
+        View page = findViewById(pages[Math.max(0, tabs.getSelectedTabPosition())]);
+        if (DpDialog.Controller.navigate(e, page)) return true;
         if (DpDialog.Controller.isFromController(e)
                 && DpDialog.Controller.handle(e, getWindow().getDecorView(), this::finish)) {
             return true;

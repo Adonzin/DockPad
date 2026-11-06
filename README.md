@@ -79,7 +79,7 @@ Docked play on a handheld usually means setting up every emulator again for an e
 - Starts by itself after a restart and survives sleep.
 - Can switch Wireless debugging off again once it has started.
 - Quick Settings tiles for DockPad and Cursor mode.
-- The whole app can be used with a controller. Its tabs (Home, Controllers, Shortcuts, Quick menu, Settings) switch with L1/R1.
+- The whole app can be used with a controller. Its tabs (Home, Controllers, Shortcuts, Quick menu, Settings) switch with L1/R1, lists wrap around, and L2/R2 jump to the top or bottom.
 - Updates itself from inside the app.
 - **Backup & sharing:** save your whole setup (shortcuts, quick menu, controller layouts, settings) to one file, restore it later, or share it with friends.
 - Built-in diagnostics, button checker and rumble test.
