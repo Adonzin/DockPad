@@ -55,9 +55,9 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
 
     private MaterialCardView setupCard;
     private LinearLayout setupSteps, controllersList, shortcutsList, controllerSettings, appSettings;
-    private com.google.android.material.bottomnavigation.BottomNavigationView tabs;
+    private com.google.android.material.tabs.TabLayout tabs;
     private final int[] pages = {R.id.page_home, R.id.page_controllers, R.id.page_shortcuts, R.id.page_settings};
-    private final int[] tabIds = {R.id.tab_home, R.id.tab_controllers, R.id.tab_shortcuts, R.id.tab_settings};
+    private static final String[] TAB_NAMES = {"Home", "Controllers", "Shortcuts", "Settings"};
     private TextView bridgeTitle, bridgeSubtitle;
     private MaterialButton bridgeButton;
 
@@ -132,15 +132,14 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         controllerSettings = findViewById(R.id.controller_settings_list);
         appSettings = findViewById(R.id.app_settings_list);
         tabs = findViewById(R.id.tabs);
-        tabs.setOnItemSelectedListener(item -> {
-            showPage(item.getItemId());
-            return true;
+        for (String n : TAB_NAMES) tabs.addTab(tabs.newTab().setText(n));
+        tabs.addOnTabSelectedListener(new com.google.android.material.tabs.TabLayout.OnTabSelectedListener() {
+            @Override public void onTabSelected(com.google.android.material.tabs.TabLayout.Tab t) { showPage(t.getPosition()); }
+            @Override public void onTabUnselected(com.google.android.material.tabs.TabLayout.Tab t) { }
+            @Override public void onTabReselected(com.google.android.material.tabs.TabLayout.Tab t) { }
         });
-        if (savedInstanceState != null) {
-            int t = savedInstanceState.getInt("tab", R.id.tab_home);
-            tabs.setSelectedItemId(t);
-            showPage(t);
-        }
+        int startTab = savedInstanceState == null ? 0 : savedInstanceState.getInt("tab", 0);
+        if (startTab > 0) tabs.selectTab(tabs.getTabAt(startTab));
         bridgeTitle = findViewById(R.id.bridge_title);
         bridgeSubtitle = findViewById(R.id.bridge_subtitle);
         bridgeButton = findViewById(R.id.bridge_button);
@@ -206,27 +205,26 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
 
     // ------------------------------------------------------------------ tabs
 
-    private void showPage(int tabId) {
-        for (int i = 0; i < tabIds.length; i++) {
+    private void showPage(int index) {
+        for (int i = 0; i < pages.length; i++) {
             View page = findViewById(pages[i]);
-            page.setVisibility(tabIds[i] == tabId ? View.VISIBLE : View.GONE);
-            if (tabIds[i] == tabId && !page.isInTouchMode()) page.requestFocus();
+            page.setVisibility(i == index ? View.VISIBLE : View.GONE);
+            if (i == index && !page.isInTouchMode()) page.requestFocus();
         }
         findViewById(R.id.scroll).scrollTo(0, 0);
     }
 
     /** L1/R1 move between tabs. */
     private void stepTab(int dir) {
-        int cur = tabs.getSelectedItemId(), idx = 0;
-        for (int i = 0; i < tabIds.length; i++) if (tabIds[i] == cur) idx = i;
-        int next = Math.max(0, Math.min(tabIds.length - 1, idx + dir));
-        if (next != idx) tabs.setSelectedItemId(tabIds[next]);
+        int idx = tabs.getSelectedTabPosition();
+        int next = Math.max(0, Math.min(pages.length - 1, idx + dir));
+        if (next != idx) tabs.selectTab(tabs.getTabAt(next));
     }
 
     @Override
     protected void onSaveInstanceState(Bundle out) {
         super.onSaveInstanceState(out);
-        out.putInt("tab", tabs.getSelectedItemId());
+        out.putInt("tab", tabs.getSelectedTabPosition());
     }
 
     // ------------------------------------------------------------------ controller navigation

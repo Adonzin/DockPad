@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<menu xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:id="@+id/tab_home" android:icon="@drawable/ic_home" android:title="Home" />
-    <item android:id="@+id/tab_controllers" android:icon="@drawable/ic_gamepad" android:title="Controllers" />
-    <item android:id="@+id/tab_shortcuts" android:icon="@drawable/ic_bolt" android:title="Shortcuts" />
-    <item android:id="@+id/tab_settings" android:icon="@drawable/ic_settings" android:title="Settings" />
-</menu>
