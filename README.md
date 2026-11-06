@@ -60,6 +60,7 @@ Docked play on a handheld usually means setting up every emulator again for an e
   - save your own look as a theme and switch between them, including from the quick menu
   - share a theme as one `.dockpadtheme` file, with its pictures, sounds and font packed in
   - **Get themes:** browse the theme catalog with previews and install with one press; [how to make and share themes](docs/THEMES.md)
+  - **PC theme editor:** design themes on a computer with a live preview of the handheld's screen, then import the file into DockPad ([details below](#pc-theme-editor))
 - **Animation and sound:**
   - opening and closing animations (fade, slide, pop, zoom, spin) at three speeds
   - items appearing one after another
@@ -99,6 +100,19 @@ Docked play on a handheld usually means setting up every emulator again for an e
 - Updates itself from inside the app.
 - **Backup & sharing:** save your whole setup (shortcuts, quick menu, controller layouts, settings) to one file, restore it later, or share it with friends.
 - Built-in diagnostics, button checker and rumble test.
+
+## PC theme editor
+
+A theme editor that runs in any desktop browser: [`tools/theme-editor.html`](tools/theme-editor.html). Download that one file and open it; it needs no install and no internet, and nothing you add is uploaded anywhere.
+
+- A live preview of the Retroid Pocket 5's screen with all twelve styles. Move around it with the arrow keys, and put your own game screenshot behind it.
+- Every setting from the handheld: layout, palettes, gradients, colours with see-through, borders, highlight, fonts, header.
+- Drag and drop pictures, GIFs, videos, sounds and `.ttf`/`.otf` fonts. Place decorations by dragging them on the preview and resize them with the mouse wheel. Arrange Freeform items by dragging.
+- Preview the opening and closing animations, highlight motions, sound packs, your own sounds and music.
+- Start from the built-in themes, open any `.dockpadtheme` file, undo and redo, edit the raw `theme.json`, and checks for missing or oversized files.
+- Your work is kept in the browser between visits.
+
+To use a theme you made: press **Save theme file**, copy the `.dockpadtheme` file to the handheld, then in DockPad go to **Quick menu → Theme → Import a theme file**. (If the file ends in `.dockpadtheme.zip`, DockPad imports it just the same.)
 
 ## Install
 
