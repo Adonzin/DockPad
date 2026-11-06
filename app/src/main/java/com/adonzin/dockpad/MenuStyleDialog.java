@@ -356,18 +356,24 @@ final class MenuStyleDialog {
             if (c.equalsIgnoreCase(current)) first = cellView;
         }
         TextView hex = new TextView(a);
-        hex.setText("#…");
+        hex.setText("Custom…");
         hex.setGravity(Gravity.CENTER);
         hex.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_LabelLarge);
-        cell(grid, hex, swatch("#00000000", true), () -> {
+        GridLayout.LayoutParams wide = new GridLayout.LayoutParams(GridLayout.spec(GridLayout.UNDEFINED),
+                GridLayout.spec(GridLayout.UNDEFINED, 2));
+        View customCell = cell(grid, hex, swatch("#00000000", true), () -> {
             dialog[0].dismiss();
-            askHex(current, done);
+            mixColor(current, done);
         });
+        wide.width = dp(86);
+        wide.height = dp(40);
+        wide.setMargins(dp(3), dp(3), dp(3), dp(3));
+        customCell.setLayoutParams(wide);
         LinearLayout col = new LinearLayout(a);
         col.setOrientation(LinearLayout.VERTICAL);
         col.addView(grid);
         TextView tip = new TextView(a);
-        tip.setText("“#…” types any colour, like #FF8800 (or #80FF8800 for see-through).");
+        tip.setText("“Custom…” mixes any colour, see-through ones too.");
         tip.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall);
         tip.setPadding(dp(20), dp(6), dp(20), 0);
         col.addView(tip);
@@ -390,6 +396,131 @@ final class MenuStyleDialog {
         lp.setMargins(dp(3), dp(3), dp(3), dp(3));
         grid.addView(v, lp);
         return v;
+    }
+
+    /** A colour mixer: hue, saturation, brightness and opacity sliders with a live preview. */
+    private void mixColor(String current, StrSet done) {
+        int start = MenuStyle.parse(current, 0xFF3B82F6);
+        float[] hsv = new float[3];
+        android.graphics.Color.colorToHSV(start, hsv);
+        int[] alpha = {android.graphics.Color.alpha(start)};
+        LinearLayout col = new LinearLayout(a);
+        col.setOrientation(LinearLayout.VERTICAL);
+        col.setPadding(dp(24), dp(8), dp(24), 0);
+
+        LinearLayout previewRow = new LinearLayout(a);
+        previewRow.setGravity(Gravity.CENTER_VERTICAL);
+        View big = new View(a);
+        previewRow.addView(big, new LinearLayout.LayoutParams(dp(72), dp(72)));
+        LinearLayout onPanel = new LinearLayout(a);
+        onPanel.setOrientation(LinearLayout.VERTICAL);
+        onPanel.setPadding(dp(16), 0, 0, 0);
+        View strip = new View(a);
+        onPanel.addView(strip, new LinearLayout.LayoutParams(dp(150), dp(30)));
+        TextView code = new TextView(a);
+        code.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_LabelLarge);
+        code.setPadding(0, dp(6), 0, 0);
+        onPanel.addView(code);
+        previewRow.addView(onPanel);
+        col.addView(previewRow);
+
+        View[] bars = new View[4];
+        Slider[] sliders = new Slider[4];
+        String[] names = {"Hue", "Saturation", "Brightness", "Opacity"};
+        Runnable[] refresh = new Runnable[1];
+        for (int i = 0; i < 4; i++) {
+            TextView t = new TextView(a);
+            t.setText(names[i]);
+            t.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyMedium);
+            t.setPadding(0, dp(10), 0, 0);
+            col.addView(t);
+            Slider sl = new Slider(a);
+            sl.setValueFrom(0);
+            sl.setValueTo(i == 0 ? 360 : 100);
+            sl.setStepSize(i == 0 ? 5 : 2);
+            float v = i == 0 ? hsv[0] : i == 1 ? hsv[1] * 100 : i == 2 ? hsv[2] * 100 : alpha[0] / 2.55f;
+            float step = i == 0 ? 5 : 2;
+            sl.setValue(Math.max(0, Math.min(sl.getValueTo(), Math.round(v / step) * step)));
+            sl.setLabelBehavior(com.google.android.material.slider.LabelFormatter.LABEL_GONE);
+            final int which = i;
+            sl.addOnChangeListener((s1, val, user) -> {
+                if (which == 0) hsv[0] = val % 360;
+                else if (which == 1) hsv[1] = val / 100f;
+                else if (which == 2) hsv[2] = val / 100f;
+                else alpha[0] = Math.round(val * 2.55f);
+                refresh[0].run();
+            });
+            col.addView(sl);
+            View bar = new View(a);
+            LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(8));
+            bl.setMargins(dp(14), 0, dp(14), 0);
+            col.addView(bar, bl);
+            bars[i] = bar;
+            sliders[i] = sl;
+        }
+        int panelColor = st.panelColors(st.accent(a))[0] | 0xFF000000;
+        refresh[0] = () -> {
+            int rgb = android.graphics.Color.HSVToColor(hsv);
+            int color = (alpha[0] << 24) | (rgb & 0x00FFFFFF);
+            GradientDrawable b = new GradientDrawable();
+            b.setCornerRadius(dp(14));
+            b.setColor(color);
+            b.setStroke(dp(1), 0x44FFFFFF);
+            big.setBackground(b);
+            GradientDrawable onP = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+                    new int[]{panelColor, panelColor});
+            onP.setCornerRadius(dp(8));
+            android.graphics.drawable.LayerDrawable layered = new android.graphics.drawable.LayerDrawable(
+                    new android.graphics.drawable.Drawable[]{onP, round(color, 8)});
+            layered.setLayerInset(1, dp(6), dp(6), dp(6), dp(6));
+            strip.setBackground(layered);
+            code.setText(alpha[0] == 255 ? String.format("#%06X", rgb & 0xFFFFFF) : String.format("#%08X", color));
+            // the bars show what each slider does from here
+            int[] hues = new int[7];
+            for (int k = 0; k < 7; k++) hues[k] = android.graphics.Color.HSVToColor(new float[]{k * 60f, Math.max(0.6f, hsv[1]), Math.max(0.7f, hsv[2])});
+            bars[0].setBackground(bar(hues));
+            bars[1].setBackground(bar(new int[]{android.graphics.Color.HSVToColor(new float[]{hsv[0], 0, hsv[2]}),
+                    android.graphics.Color.HSVToColor(new float[]{hsv[0], 1, hsv[2]})}));
+            bars[2].setBackground(bar(new int[]{0xFF000000, android.graphics.Color.HSVToColor(new float[]{hsv[0], hsv[1], 1})}));
+            bars[3].setBackground(bar(new int[]{rgb & 0x00FFFFFF | 0x10000000, rgb | 0xFF000000}));
+        };
+        refresh[0].run();
+
+        MaterialButton typed = new MaterialButton(a, null, com.google.android.material.R.attr.materialButtonOutlinedStyle);
+        typed.setText("Type a colour code instead…");
+        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        tl.topMargin = dp(12);
+        col.addView(typed, tl);
+
+        ScrollView sv = new ScrollView(a);
+        sv.addView(col);
+        android.app.Dialog[] dlg = new android.app.Dialog[1];
+        typed.setOnClickListener(v -> {
+            dlg[0].dismiss();
+            askHex(code.getText().toString(), done);
+        });
+        dlg[0] = new DpDialog(a).setTitle("Mix a colour").setView(sv)
+                .setPositiveButton("Use this colour", (d, w) -> {
+                    int rgb = android.graphics.Color.HSVToColor(hsv);
+                    done.set(alpha[0] == 255 ? String.format("#%06X", rgb & 0xFFFFFF)
+                            : String.format("#%08X", (alpha[0] << 24) | (rgb & 0x00FFFFFF)));
+                })
+                .setNegativeButton("Cancel", null).show();
+        sliders[0].post(sliders[0]::requestFocus);
+    }
+
+    private GradientDrawable bar(int[] colors) {
+        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, colors);
+        g.setCornerRadius(dp(4));
+        return g;
+    }
+
+    private GradientDrawable round(int color, int radius) {
+        GradientDrawable g = new GradientDrawable();
+        g.setCornerRadius(dp(radius));
+        g.setColor(color);
+        return g;
     }
 
     private void askHex(String current, StrSet done) {
