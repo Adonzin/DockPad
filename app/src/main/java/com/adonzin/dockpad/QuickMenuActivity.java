@@ -95,9 +95,28 @@ public class QuickMenuActivity extends AppCompatActivity {
         finish(); // the quick menu shortcut again: close
     }
 
+    // keep the controllers list (and on/off states) live while the menu is open
+    private final Runnable poll = new Runnable() {
+        @Override
+        public void run() {
+            // skip if the last check is still running (but never wait more than 3 s on it)
+            if (!refreshing || android.os.SystemClock.uptimeMillis() - refreshStarted > 3000) refreshState();
+            ui.postDelayed(this, 1000);
+        }
+    };
+    private volatile boolean refreshing;
+    private volatile long refreshStarted;
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        ui.postDelayed(poll, 1000);
+    }
+
     @Override
     protected void onPause() {
         super.onPause();
+        ui.removeCallbacks(poll);
         if (!isFinishing()) finish(); // something else came to the front
     }
 
@@ -268,10 +287,18 @@ public class QuickMenuActivity extends AppCompatActivity {
     }
 
     private void refreshState() {
+        refreshing = true;
+        refreshStarted = android.os.SystemClock.uptimeMillis();
         ShizukuLink.connect(() -> runInBackground(b -> {
             bridge = b;
-            JSONObject o = new JSONObject(b.statusJson());
+            JSONObject o;
+            try {
+                o = new JSONObject(b.statusJson());
+            } finally {
+                refreshing = false;
+            }
             ui.post(() -> {
+                if (isFinishing()) return;
                 boolean r = o.optBoolean("running"), c = o.optBoolean("pcMode");
                 boolean ab = o.optBoolean("swapAB"), xy = o.optBoolean("swapXY");
                 boolean tb = o.optBoolean("turbo", true), tc = o.optBoolean("turboConfigured");
