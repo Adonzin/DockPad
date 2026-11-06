@@ -29,6 +29,7 @@ final class MenuTheme {
     static final String[] BAND_LABELS = {"Top", "Middle", "Bottom"};
 
     String name = "Default";
+    String author = "", description = "";
     String layout = "list";
     String position = "left";
     /** Panel width in dp (radial: the ring's diameter). */
@@ -64,6 +65,8 @@ final class MenuTheme {
             JSONObject o = new JSONObject(json);
             t.raw = o;
             t.name = o.optString("name", t.name);
+            t.author = o.optString("author", "");
+            t.description = o.optString("description", "");
             t.style = MenuStyle.parse(o.optJSONObject("style"));
             t.fx = MenuFx.parse(o.optJSONObject("fx"));
             JSONObject media = o.optJSONObject("media");
@@ -106,6 +109,8 @@ final class MenuTheme {
             JSONObject o = new JSONObject(raw.toString());
             o.put("format", FORMAT);
             o.put("name", name);
+            o.put("author", author);
+            o.put("description", description);
             JSONObject l = o.optJSONObject("layout");
             if (l == null) l = new JSONObject();
             l.put("type", layout);

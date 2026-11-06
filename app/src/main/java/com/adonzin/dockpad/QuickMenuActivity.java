@@ -179,7 +179,7 @@ public class QuickMenuActivity extends AppCompatActivity {
             {"dpkeyboard", "Keyboard (DockPad)"}, {"keyboard", "Show keyboard (Moonlight)"}, {"screenshot", "Screenshot"},
             {"forceclose", "Force close the game"}, {"controllers", "Controllers list"}, {"builtinctrl", "Built-in controls in the controllers list"},
             {"pair", "Pair a new controller"},
-            {"power", "Turn DockPad on/off"}, {"openapp", "Open DockPad"}};
+            {"theme", "Switch theme"}, {"power", "Turn DockPad on/off"}, {"openapp", "Open DockPad"}};
 
     private java.util.Set<String> hidden;
     private String section = "";
@@ -226,6 +226,11 @@ public class QuickMenuActivity extends AppCompatActivity {
         add("keyboard", R.drawable.ic_keyboard, "Show keyboard (Moonlight)", null,
                 () -> command(Codes.ACTION_MOONLIGHT_KEYBOARD));
         add("screenshot", R.drawable.ic_camera, "Screenshot", null, () -> command(Codes.ACTION_SCREENSHOT));
+        add("theme", R.drawable.ic_lib_swap, "Switch theme…", "Change the menu's look",
+                () -> ThemesDialog.choose(this, () -> {
+                    theme = MenuTheme.load(this);
+                    rebuild();
+                }));
         add("forceclose", R.drawable.ic_close_app, "Force close the game",
                 "Closes the app that's open right now", () -> command(Codes.ACTION_FORCE_CLOSE));
 
@@ -321,6 +326,7 @@ public class QuickMenuActivity extends AppCompatActivity {
             case "forceclose": return R.drawable.ic_close_app;
             case "pair": return R.drawable.ic_add;
             case "power": return R.drawable.ic_power;
+            case "theme": return R.drawable.ic_lib_swap;
             case "openapp": return R.drawable.ic_open;
             default: return R.drawable.ic_bolt;
         }

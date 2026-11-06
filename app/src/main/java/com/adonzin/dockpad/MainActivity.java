@@ -162,6 +162,18 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         findViewById(R.id.menu_open).setOnClickListener(v ->
                 startActivity(new Intent(this, QuickMenuActivity.class)));
         findViewById(R.id.add_command).setOnClickListener(v -> editor.addCommand());
+        findViewById(R.id.theme_choose).setOnClickListener(v -> ThemesDialog.choose(this, this::showThemeName));
+        findViewById(R.id.theme_save).setOnClickListener(v -> ThemesDialog.saveCurrent(this, this::showThemeName));
+        findViewById(R.id.theme_import).setOnClickListener(v -> ThemesDialog.importFile(this, done -> {
+            themeFileDone = done;
+            try {
+                pickThemeFile.launch(new String[]{"application/zip", "application/octet-stream", "*/*"});
+            } catch (Exception e) {
+                Toast.makeText(this, "No file picker available", Toast.LENGTH_SHORT).show();
+            }
+        }, this::showThemeName));
+        findViewById(R.id.theme_share).setOnClickListener(v -> ThemesDialog.share(this, MenuTheme.load(this).toJson()));
+        showThemeName();
         findViewById(R.id.menu_preview).setOnClickListener(v ->
                 startActivity(new Intent(this, QuickMenuActivity.class)));
         organiser = new MenuOrganizer(this, findViewById(R.id.organiser_list), this::pickMedia);
@@ -213,6 +225,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
     @Override
     protected void onResume() {
         super.onResume();
+        if (findViewById(R.id.theme_name) != null) showThemeName();
         autoStartTried = false; // each visit may try once to bring DockPad back
         Watchdog.schedule(this);
         refreshSetup();
@@ -1006,6 +1019,21 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
     }
 
     // ------------------------------------------------------------------ reset
+
+    // ------------------------------------------------------------------ themes
+
+    private java.util.function.Consumer<android.net.Uri> themeFileDone;
+
+    private final androidx.activity.result.ActivityResultLauncher<String[]> pickThemeFile =
+            registerForActivityResult(new androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+                    uri -> {
+                        if (uri != null && themeFileDone != null) themeFileDone.accept(uri);
+                    });
+
+    private void showThemeName() {
+        ((TextView) findViewById(R.id.theme_name)).setText("In use: " + MenuTheme.load(this).name
+                + ". Changes below change this look; save it as a theme to keep a copy.");
+    }
 
     // ------------------------------------------------------------------ pictures and videos for the quick menu
 

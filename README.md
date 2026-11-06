@@ -55,6 +55,11 @@ Docked play on a handheld usually means setting up every emulator again for an e
   - a background picture, animated GIF or looping video, either behind the whole menu or inside its panel, with fill/fit, blur and darken
   - your own images as icons
   - **decorations:** PNGs and GIFs placed anywhere (corners, edges, centre), sized, nudged, mirrored, behind or in front of the menu, or repeated along an edge
+- **Themes:**
+  - built-in themes (Default, Glass, Retro terminal, Neon ring, Console, Sunset dock)
+  - save your own look as a theme and switch between them, including from the quick menu
+  - share a theme as one `.dockpadtheme` file, with its pictures, sounds and font packed in
+  - install other people's themes; [how to make themes](docs/THEMES.md)
 - **Animation and sound:**
   - opening and closing animations (fade, slide, pop, zoom, spin) at three speeds
   - items appearing one after another
