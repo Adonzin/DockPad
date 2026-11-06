@@ -58,7 +58,7 @@ Docked play on a handheld usually means setting up every emulator again for an e
 - **Animation and sound:**
   - opening and closing animations (fade, slide, pop, zoom, spin) at three speeds
   - items appearing one after another
-  - a bump or wiggle as the highlight moves
+  - highlight motions (bump, hop, wiggle, shake, jelly, flip, spin, flash, or the ongoing pulse, float and sway), with an animation-strength slider
   - sound packs (Soft, Retro, Glass, Clicky) or your own sounds for open, close, move, select and back
   - background music while the menu is open
   - an optional little buzz of the handheld

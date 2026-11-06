@@ -14,8 +14,10 @@ final class MenuFx {
     static final String[] SPEED_LABELS = {"Fast", "Normal", "Slow"};
     static final String[] ITEMS = {"none", "stagger"};
     static final String[] ITEM_LABELS = {"All at once", "One after another"};
-    static final String[] HIGHLIGHTS = {"none", "bump", "wiggle"};
-    static final String[] HIGHLIGHT_LABELS = {"None", "Bump", "Wiggle"};
+    static final String[] HIGHLIGHTS = {"none", "bump", "hop", "wiggle", "shake", "jelly", "flip", "spin", "flash",
+            "pulse", "float", "sway"};
+    static final String[] HIGHLIGHT_LABELS = {"None", "Bump", "Hop", "Wiggle", "Shake", "Jelly", "Flip", "Spin", "Flash",
+            "Pulse (keeps going)", "Float (keeps going)", "Sway (keeps going)"};
     static final String[] HAPTICS = {"off", "select", "all"};
     static final String[] HAPTIC_LABELS = {"Off", "When selecting", "When moving and selecting"};
     static final String[] EVENTS = {"open", "close", "move", "select", "back"};
@@ -25,6 +27,8 @@ final class MenuFx {
 
     String open = "none", close = "none", speed = "normal", items = "none", highlight = "none";
     String pack = "off";
+    /** How strong the animations are, percent (10-200). */
+    int intensity = 100;
     /** event -> "pack:<name>" (that pack's sound), "file:<name>", or "" for silence. Empty map: the pack. */
     final Map<String, String> sounds = new HashMap<>();
     int volume = 70;
@@ -32,6 +36,10 @@ final class MenuFx {
     int musicVolume = 40;
     String haptics = "off";
     int hapticStrength = 50;
+
+    float strength() {
+        return intensity / 100f;
+    }
 
     float speedFactor() {
         return speed.equals("fast") ? 0.6f : speed.equals("slow") ? 1.7f : 1f;
@@ -53,6 +61,7 @@ final class MenuFx {
         f.items = oneOf(o.optString("items", f.items), ITEMS, "none");
         f.highlight = oneOf(o.optString("highlight", f.highlight), HIGHLIGHTS, "none");
         f.pack = oneOf(o.optString("pack", f.pack), PACKS, "off");
+        f.intensity = clamp(o.optInt("intensity", f.intensity), 10, 200);
         JSONObject s = o.optJSONObject("sounds");
         if (s != null) for (Iterator<String> it = s.keys(); it.hasNext(); ) {
             String k = it.next();
@@ -78,6 +87,7 @@ final class MenuFx {
             o.put("items", items);
             o.put("highlight", highlight);
             o.put("pack", pack);
+            o.put("intensity", intensity);
             o.put("sounds", new JSONObject(sounds));
             o.put("volume", volume);
             o.put("music", music);

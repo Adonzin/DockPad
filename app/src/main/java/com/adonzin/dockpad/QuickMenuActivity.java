@@ -420,6 +420,7 @@ public class QuickMenuActivity extends AppCompatActivity {
 
     /** Builds the menu again (keeping the highlight on the same item). */
     private void rebuild() {
+        stopLoop();
         if (renderer != null && selected >= 0 && selected < renderer.selectable.size()) {
             selectedId = renderer.selectable.get(selected).id;
         }
@@ -517,28 +518,120 @@ public class QuickMenuActivity extends AppCompatActivity {
         haptic(false);
         View t = index >= 0 && index < renderer.tiles.size() ? renderer.tiles.get(index) : null;
         if (t == null) return;
+        highlightMotion(t);
+    }
+
+    // ---- highlight motions
+
+    private android.animation.ValueAnimator loop;
+    private Runnable loopReset;
+
+    private void stopLoop() {
+        if (loop != null) loop.cancel();
+        loop = null;
+        if (loopReset != null) loopReset.run();
+        loopReset = null;
+    }
+
+    private void highlightMotion(View t) {
+        stopLoop();
+        float k = theme.fx.strength();
+        // styles that place items by size or position: use motions that don't fight them
         boolean scales = renderer instanceof MenuRender.CarouselRenderer || renderer instanceof MenuStyles.DockRenderer
                 || renderer instanceof MenuStyles.WheelRenderer || theme.style.highlight.equals("grow");
-        switch (theme.fx.highlight) {
+        boolean movesX = renderer instanceof MenuRender.CarouselRenderer || renderer instanceof MenuStyles.DockRenderer;
+        boolean movesY = renderer instanceof MenuStyles.WheelRenderer;
+        String m = theme.fx.highlight;
+        if (scales && (m.equals("bump") || m.equals("jelly"))) m = movesY ? "wiggle" : "hop";
+        if (movesX && m.equals("shake")) m = "wiggle";
+        if (movesY && m.equals("hop")) m = "wiggle";
+        if (movesY && m.equals("float")) m = "sway";
+        switch (m) {
             case "bump":
-                if (scales) t.animate().translationYBy(0).setDuration(0).withEndAction(() -> bounceY(t)).start();
-                else t.animate().scaleX(1.08f).scaleY(1.08f).setDuration(70)
+                t.animate().scaleX(1 + 0.08f * k).scaleY(1 + 0.08f * k).setDuration(70)
                         .withEndAction(() -> t.animate().scaleX(1f).scaleY(1f).setDuration(110).start()).start();
                 break;
+            case "hop": {
+                float base = t.getTranslationY();
+                t.animate().translationY(base - dp(7) * k).setDuration(80)
+                        .withEndAction(() -> t.animate().translationY(base).setDuration(140)
+                                .setInterpolator(new android.view.animation.BounceInterpolator()).start()).start();
+                break;
+            }
             case "wiggle":
-                t.animate().rotation(-3f).setDuration(55).withEndAction(() -> t.animate().rotation(3f).setDuration(80)
-                        .withEndAction(() -> t.animate().rotation(0f).setDuration(55).start()).start()).start();
+                keyframes(t, View.ROTATION, 0, -3 * k, 3 * k, -1.5f * k, 0);
+                break;
+            case "shake": {
+                float base = t.getTranslationX(), d = dp(5) * k;
+                keyframes(t, View.TRANSLATION_X, base, base - d, base + d, base - d * 0.6f, base + d * 0.3f, base);
+                break;
+            }
+            case "jelly": {
+                android.animation.AnimatorSet set = new android.animation.AnimatorSet();
+                set.playTogether(
+                        android.animation.ObjectAnimator.ofFloat(t, View.SCALE_X, 1, 1 + 0.14f * k, 1 - 0.05f * k, 1),
+                        android.animation.ObjectAnimator.ofFloat(t, View.SCALE_Y, 1, 1 - 0.1f * k, 1 + 0.04f * k, 1));
+                set.setDuration(320);
+                set.start();
+                break;
+            }
+            case "flip":
+                t.setRotationY(0);
+                t.animate().rotationY(360).setDuration((long) (380 / Math.max(0.5f, k)))
+                        .withEndAction(() -> t.setRotationY(0)).start();
+                break;
+            case "spin":
+                t.setRotation(0);
+                t.animate().rotation(360).setDuration((long) (420 / Math.max(0.5f, k)))
+                        .withEndAction(() -> t.setRotation(0)).start();
+                break;
+            case "flash": {
+                float a = t.getAlpha();
+                keyframes(t, View.ALPHA, a, Math.max(0.1f, a - 0.5f * k), a, Math.max(0.2f, a - 0.3f * k), a);
+                break;
+            }
+            case "pulse":
+                if (scales) loopOn(t, View.ALPHA, t.getAlpha(), Math.max(0.3f, t.getAlpha() - 0.25f * k), 700);
+                else loopOn(t, View.SCALE_X, 1f, 1 + 0.05f * k, 650);
+                break;
+            case "float":
+                loopOn(t, View.TRANSLATION_Y, t.getTranslationY(), t.getTranslationY() - dp(4) * k, 900);
+                break;
+            case "sway":
+                loopOn(t, View.ROTATION, 0f, 2.5f * k, 800);
                 break;
             default:
         }
     }
 
-    /** A small hop (for styles that already use scaling). */
-    private void bounceY(View t) {
-        float base = t.getTranslationY();
-        t.animate().translationY(base - dp(6)).setDuration(70)
-                .withEndAction(() -> t.animate().translationY(base).setDuration(110).start()).start();
+    private void keyframes(View t, android.util.Property<View, Float> prop, float... values) {
+        android.animation.ObjectAnimator an = android.animation.ObjectAnimator.ofFloat(t, prop, values);
+        an.setDuration(260 + 30L * values.length);
+        an.start();
     }
+
+    /** A motion that keeps going while the item stays highlighted (sways both ways for rotation). */
+    private void loopOn(View t, android.util.Property<View, Float> prop, float from, float to, long ms) {
+        boolean both = prop == View.ROTATION;
+        float start = both ? -to : from;
+        android.animation.ValueAnimator va = android.animation.ValueAnimator.ofFloat(start, to);
+        va.setDuration((long) (ms * theme.fx.speedFactor()));
+        va.setRepeatMode(android.animation.ValueAnimator.REVERSE);
+        va.setRepeatCount(android.animation.ValueAnimator.INFINITE);
+        va.setInterpolator(new android.view.animation.AccelerateDecelerateInterpolator());
+        va.addUpdateListener(an -> {
+            float v = (float) an.getAnimatedValue();
+            prop.set(t, v);
+            if (prop == View.SCALE_X) View.SCALE_Y.set(t, v);
+        });
+        loopReset = () -> {
+            prop.set(t, from);
+            if (prop == View.SCALE_X) View.SCALE_Y.set(t, from);
+        };
+        loop = va;
+        va.start();
+    }
+
 
     /** List, grid and freeform: a panel at the side, centre or full screen. */
     private View sidePanel() {
@@ -769,17 +862,21 @@ public class QuickMenuActivity extends AppCompatActivity {
         switch (kind) {
             case "slide": {
                 String frame = theme.frame();
-                if (frame.equals("band")) fromY = theme.band.equals("top") ? -h : h;
+                float k = Math.min(1f, theme.fx.strength());
+                if (frame.equals("band")) fromY = (theme.band.equals("top") ? -h : h) * k;
                 else if (frame.equals("side") || frame.equals("rail")) {
-                    fromX = theme.position.equals("right") ? w : theme.position.equals("left") ? -w : 0;
-                    if (fromX == 0) fromY = dp(80);
-                } else fromY = dp(80);
+                    fromX = (theme.position.equals("right") ? w : theme.position.equals("left") ? -w : 0) * k;
+                    if (fromX == 0) fromY = dp(80) * theme.fx.strength();
+                } else fromY = dp(80) * theme.fx.strength();
                 fromAlpha = 0.2f;
                 break;
             }
-            case "pop": fromScale = 0.85f; break;
-            case "zoom": fromScale = 1.25f; break;
-            case "spin": fromScale = 0.6f; fromRot = -90; break;
+            case "pop": fromScale = Math.max(0.2f, 1 - 0.15f * theme.fx.strength()); break;
+            case "zoom": fromScale = 1 + 0.25f * theme.fx.strength(); break;
+            case "spin":
+                fromScale = Math.max(0.15f, 1 - 0.4f * theme.fx.strength());
+                fromRot = -90 * theme.fx.strength();
+                break;
             default: // fade
         }
         android.view.ViewPropertyAnimator an = p.animate().setDuration(ms);

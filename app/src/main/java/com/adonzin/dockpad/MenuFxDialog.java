@@ -84,6 +84,8 @@ final class MenuFxDialog {
         radios(MenuFx.ITEM_LABELS, indexOf(MenuFx.ITEMS, fx.items), i -> fx.items = MenuFx.ITEMS[i]);
         label("When the highlight moves");
         radios(MenuFx.HIGHLIGHT_LABELS, indexOf(MenuFx.HIGHLIGHTS, fx.highlight), i -> fx.highlight = MenuFx.HIGHLIGHTS[i]);
+        slider("Animation strength", 10, 200, 10, fx.intensity, v -> fx.intensity = v,
+                v -> v + "%" + (v < 60 ? " (subtle)" : v > 140 ? " (wild)" : ""));
 
         label("Sounds");
         small("Pick a pack, then change any single sound if you like. Selecting a sound plays it.");
