@@ -67,6 +67,11 @@ final class MenuRender {
             return spatial(cur, dir, fresh);
         }
 
+        /** L1/R1 (delta -1/+1): rings, tabs...; -1 = nothing. */
+        int shoulder(int cur, int delta) {
+            return -1;
+        }
+
         /** Radial: the item the stick points at, or -1. */
         int aim(float x, float y, int cur) {
             return -1;
@@ -92,7 +97,7 @@ final class MenuRender {
             int best = -1;
             double bestScore = Double.MAX_VALUE;
             for (int i = 0; i < tiles.size(); i++) {
-                if (i == cur) continue;
+                if (i == cur || !tiles.get(i).isShown()) continue;
                 float[] p = center(tiles.get(i));
                 float dx = p[0] - from[0], dy = p[1] - from[1];
                 float primary = dir == UP ? -dy : dir == DOWN ? dy : dir == LEFT ? -dx : dx;
@@ -108,7 +113,7 @@ final class MenuRender {
             // wrap: the farthest tile the other way, closest in line
             double far = -Double.MAX_VALUE;
             for (int i = 0; i < tiles.size(); i++) {
-                if (i == cur) continue;
+                if (i == cur || !tiles.get(i).isShown()) continue;
                 float[] p = center(tiles.get(i));
                 float dx = p[0] - from[0], dy = p[1] - from[1];
                 float back = dir == UP ? dy : dir == DOWN ? -dy : dir == LEFT ? dx : -dx;
@@ -162,6 +167,63 @@ final class MenuRender {
         /** A tile: icon over the title, or (when small) the title over a faded icon. */
         View tile(Item it, boolean big) {
             return new SmartTile(c, it, false, color(androidx.appcompat.R.attr.colorPrimary), tileBackground(false));
+        }
+
+        /** Rows of equal tiles (grid, tabs). */
+        LinearLayout gridOf(List<Item> items, int cols, int tileH) {
+            LinearLayout list = new LinearLayout(c);
+            list.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout row = null;
+            int inRow = 0;
+            for (Item it : items) {
+                if (it.action == null) continue;
+                if (row == null || inRow == cols) {
+                    padRow(row, inRow, cols, tileH);
+                    row = new LinearLayout(c);
+                    row.setOrientation(LinearLayout.HORIZONTAL);
+                    list.addView(row);
+                    inRow = 0;
+                }
+                View t = tile(it, true);
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, tileH, 1);
+                lp.setMargins(dp(4), dp(4), dp(4), dp(4));
+                row.addView(t, lp);
+                selectable(t, it);
+                inRow++;
+            }
+            padRow(row, inRow, cols, tileH);
+            return list;
+        }
+
+        void padRow(LinearLayout row, int inRow, int cols, int tileH) {
+            if (row == null) return;
+            for (int i = inRow; i < cols; i++) {
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, tileH, 1);
+                lp.setMargins(dp(4), dp(4), dp(4), dp(4));
+                row.addView(new View(c), lp);
+            }
+        }
+
+        /** An icon-only square tile (dock, rail). */
+        View iconTile(Item it, int size) {
+            android.widget.FrameLayout t = new android.widget.FrameLayout(c);
+            t.setBackground(tileBackground(false));
+            t.setForeground(c.getDrawable(R.drawable.focus_ring));
+            ImageView icon = new ImageView(c);
+            if (it.icon != 0) icon.setImageResource(it.icon);
+            icon.setImageTintList(ColorStateList.valueOf(color(androidx.appcompat.R.attr.colorPrimary)));
+            int s = (int) (size * 0.55f);
+            t.addView(icon, new android.widget.FrameLayout.LayoutParams(s, s, Gravity.CENTER));
+            if (it.badge != null) {
+                TextView b = new TextView(c);
+                b.setText(it.badge);
+                b.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_LabelSmall);
+                b.setBackgroundResource(R.drawable.badge_bg);
+                b.setPadding(dp(5), 0, dp(5), 0);
+                t.addView(b, new android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM | Gravity.END));
+            }
+            return t;
         }
 
         android.graphics.drawable.Drawable tileBackground(boolean round) {
@@ -577,7 +639,8 @@ final class MenuRender {
         }
 
         /** L1/R1: inner/outer ring. */
-        int ring(int cur, int delta) {
+        @Override
+        int shoulder(int cur, int delta) {
             if (slots.isEmpty()) return -1;
             return move(cur < 0 ? 0 : cur, delta > 0 ? UP : DOWN, true);
         }
@@ -820,6 +883,13 @@ final class MenuRender {
             case "radial": return new RadialRenderer(c, t);
             case "freeform": return new FreeRenderer(c, t);
             case "carousel": return new CarouselRenderer(c, t);
+            case "xmb": return new MenuStyles.XmbRenderer(c, t);
+            case "dock": return new MenuStyles.DockRenderer(c, t);
+            case "arc": return new MenuStyles.ArcRenderer(c, t);
+            case "wheel": return new MenuStyles.WheelRenderer(c, t);
+            case "tabs": return new MenuStyles.TabsRenderer(c, t);
+            case "honeycomb": return new MenuStyles.HoneyRenderer(c, t);
+            case "rail": return new MenuStyles.RailRenderer(c, t);
             default: return new ListRenderer(c, t, false);
         }
     }

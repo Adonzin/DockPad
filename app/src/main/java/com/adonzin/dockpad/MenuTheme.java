@@ -19,8 +19,10 @@ import java.util.Map;
 final class MenuTheme {
     static final int FORMAT = 1;
 
-    static final String[] LAYOUTS = {"list", "compact", "grid", "carousel", "radial", "freeform"};
-    static final String[] LAYOUT_LABELS = {"List", "Compact list", "Grid of tiles", "Carousel", "Radial (ring)", "Freeform"};
+    static final String[] LAYOUTS = {"list", "compact", "grid", "carousel", "xmb", "dock", "wheel", "tabs",
+            "honeycomb", "rail", "radial", "arc", "freeform"};
+    static final String[] LAYOUT_LABELS = {"List", "Compact list", "Grid of tiles", "Carousel", "XMB (cross bar)",
+            "Dock", "Wheel (vertical drum)", "Tabs", "Honeycomb", "Rail", "Radial (ring)", "Edge arc", "Freeform"};
     static final String[] POSITIONS = {"left", "right", "center", "full"};
     static final String[] POSITION_LABELS = {"Left side", "Right side", "Centre", "Full screen"};
     static final String[] BANDS = {"top", "middle", "bottom"};
@@ -114,6 +116,26 @@ final class MenuTheme {
 
     void save(Context c) {
         c.getSharedPreferences("dockpad", Context.MODE_PRIVATE).edit().putString("menuTheme", toJson()).apply();
+    }
+
+    /** Whether items are grouped (and kept) by section in this layout. */
+    boolean bySection() {
+        switch (layout) {
+            case "xmb": case "tabs": return true;
+            case "radial": case "arc": case "freeform": case "honeycomb": case "dock": case "rail": return false;
+            default: return sections;
+        }
+    }
+
+    /** Where the panel goes: "side" panels, a "band" strip, or the whole "screen". */
+    String frame() {
+        switch (layout) {
+            case "carousel": case "dock": return "band";
+            case "xmb": case "arc": return "screen";
+            case "radial": return "ring";
+            case "rail": return "rail";
+            default: return "side";
+        }
     }
 
     float sizeFraction() {

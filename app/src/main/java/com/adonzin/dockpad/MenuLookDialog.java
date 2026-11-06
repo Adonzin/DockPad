@@ -85,35 +85,32 @@ final class MenuLookDialog {
 
         Runnable refresh = () -> {
             String lay = MenuTheme.LAYOUTS[checked(layouts)];
-            boolean radial = lay.equals("radial"), carousel = lay.equals("carousel");
-            switch (lay) {
-                case "compact": layoutHelp.setText("Smaller rows without descriptions: more fits on screen."); break;
-                case "grid": layoutHelp.setText("Large tiles; the D-pad moves in all four directions."); break;
-                case "radial": layoutHelp.setText("Items on a ring in the middle. Aim with the stick, or go around with "
-                        + "the D-pad. Many items make several rings (D-pad up/down between them)."); break;
-                case "freeform": layoutHelp.setText("Every item sits where you put it, at the size you choose."); break;
-                case "carousel": layoutHelp.setText("Big cards in a row; the highlighted one in the middle with its "
-                        + "description below. Left/right browse, up/down jump between sections."); break;
-                default: layoutHelp.setText("The classic list, with a description under each item.");
-            }
-            boolean side = !radial && !carousel;
-            posLabel.setVisibility(side ? View.VISIBLE : View.GONE);
-            positions.setVisibility(side ? View.VISIBLE : View.GONE);
-            bandLabel.setVisibility(carousel ? View.VISIBLE : View.GONE);
-            bands.setVisibility(carousel ? View.VISIBLE : View.GONE);
-            sizeLabel.setVisibility(side ? View.GONE : View.VISIBLE);
-            size.setVisibility(side ? View.GONE : View.VISIBLE);
-            sizeLabel.setText((radial ? "Ring size: " : "Card size: ") + Math.round(size.getValue()) + "% of the screen");
+            layoutHelp.setText(help(lay));
+            boolean usesPosition = in(lay, "list", "compact", "grid", "freeform", "wheel", "tabs", "honeycomb", "rail", "arc");
+            boolean edgeOnly = in(lay, "rail", "arc");
+            boolean usesBand = in(lay, "carousel", "dock");
+            boolean usesSize = in(lay, "carousel", "dock", "radial", "arc", "xmb", "rail");
+            boolean usesCols = in(lay, "grid", "freeform", "tabs", "honeycomb");
+            boolean usesSections = in(lay, "list", "compact", "grid", "wheel", "carousel");
+            posLabel.setText(edgeOnly ? "Side (left or right)" : "Position");
+            posLabel.setVisibility(usesPosition ? View.VISIBLE : View.GONE);
+            positions.setVisibility(usesPosition ? View.VISIBLE : View.GONE);
+            bandLabel.setVisibility(usesBand ? View.VISIBLE : View.GONE);
+            bands.setVisibility(usesBand ? View.VISIBLE : View.GONE);
+            sizeLabel.setVisibility(usesSize ? View.VISIBLE : View.GONE);
+            size.setVisibility(usesSize ? View.VISIBLE : View.GONE);
+            sizeLabel.setText((lay.equals("radial") || lay.equals("arc") ? "Ring size: "
+                    : lay.equals("carousel") ? "Card size: " : "Icon size: ") + Math.round(size.getValue()) + "%");
             boolean full = MenuTheme.POSITIONS[checked(positions)].equals("full");
-            widthLabel.setVisibility(side && !full ? View.VISIBLE : View.GONE);
-            width.setVisibility(side && !full ? View.VISIBLE : View.GONE);
+            boolean usesWidth = usesPosition && !edgeOnly && !full;
+            widthLabel.setVisibility(usesWidth ? View.VISIBLE : View.GONE);
+            width.setVisibility(usesWidth ? View.VISIBLE : View.GONE);
             widthLabel.setText("Panel width: " + Math.round(width.getValue()) + " dp");
-            boolean usesCols = lay.equals("grid") || lay.equals("freeform");
             colsLabel.setVisibility(usesCols ? View.VISIBLE : View.GONE);
             cols.setVisibility(usesCols ? View.VISIBLE : View.GONE);
             colsLabel.setText((lay.equals("freeform") ? "Starting columns (for items you haven't placed): "
                     : "Columns: ") + Math.round(cols.getValue()));
-            sections.setVisibility(radial || carousel || lay.equals("freeform") ? View.GONE : View.VISIBLE);
+            sections.setVisibility(usesSections ? View.VISIBLE : View.GONE);
         };
         refresh.run();
         layouts.setOnCheckedChangeListener((g, id) -> refresh.run());
@@ -149,6 +146,35 @@ final class MenuLookDialog {
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
+    }
+
+    private static boolean in(String v, String... options) {
+        for (String o : options) if (o.equals(v)) return true;
+        return false;
+    }
+
+    private static String help(String layout) {
+        switch (layout) {
+            case "compact": return "Smaller rows without descriptions: more fits on screen.";
+            case "grid": return "Large tiles; the D-pad moves in all four directions.";
+            case "carousel": return "Big cards in a row; the highlighted one in the middle with its description below. "
+                    + "Left/right browse, up/down jump between sections.";
+            case "xmb": return "Sections across the top as icons, the chosen section's items running down below it, "
+                    + "like a console home screen. Left/right: sections, up/down: items.";
+            case "dock": return "A row of icons that grow as the highlight passes, with the name above. Small and out "
+                    + "of the way.";
+            case "wheel": return "Items on a vertical drum: the middle one is big, the others curve away. Up/down turn "
+                    + "it, left/right jump between sections.";
+            case "tabs": return "One tab per section (L1/R1 or the row's edge switch tabs), with that section's tiles below.";
+            case "honeycomb": return "Hexagon tiles in a beehive pattern.";
+            case "rail": return "A thin column of icons at the edge; the highlighted one shows its name beside it.";
+            case "radial": return "Items on a ring in the middle. Aim with the stick, or go around with the D-pad. Many "
+                    + "items make several rings (D-pad up/down or L1/R1 between them).";
+            case "arc": return "A half-ring along the left or right edge, around your thumb. Aim with the stick or move "
+                    + "along it with up/down; L1/R1 or left/right switch rings.";
+            case "freeform": return "Every item sits where you put it, at the size you choose.";
+            default: return "The classic list, with a description under each item.";
+        }
     }
 
     private static int indexOf(String[] arr, String v) {

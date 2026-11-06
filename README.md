@@ -40,15 +40,22 @@ Docked play on a handheld usually means setting up every emulator again for an e
 - Opens over any game with a button combo, and is fully navigable with a controller.
 - Has Home, Back, Cursor mode, an on-screen keyboard, rapid fire, face-button swaps, screenshot, force close, your own commands, live controllers list (with battery and disconnect), and pairing.
 - You choose which items it shows.
-- **Six layouts:**
+- **Thirteen styles:**
   - list
   - compact list
-  - grid of tiles
+  - grid
   - **carousel** (big cards sliding past the middle)
-  - **radial** (aim with the stick; large menus get several rings, switched with L1/R1)
+  - **XMB** (console-style cross bar: sections across, items down)
+  - **dock** (icons that magnify as you pass)
+  - **wheel** (a vertical drum)
+  - **tabs** (one per section, L1/R1)
+  - **honeycomb** (hexagon tiles)
+  - **rail** (a thin icon column with a name bubble)
+  - **radial** (aim with the stick; several rings, L1/R1)
+  - **edge arc** (a half-ring along the side, around your thumb)
   - **freeform** (put every item anywhere, at any size)
 - Small tiles show the item's name over a faded icon, so they stay readable.
-- Side panels go left, right, centre or full screen, at any width. The carousel strip goes at the top, middle or bottom, and the radial ring and carousel cards are sized as a share of the screen.
+- Side panels go left, right, centre or full screen, at any width. Strips (carousel, dock) go at the top, middle or bottom, and rings, cards and icons are sized as a share of the screen.
 - **Arrange it from the menu itself:** press Y to move items, or in Freeform to move and resize them with the stick, D-pad or touch.
 
 **Cursor mode**

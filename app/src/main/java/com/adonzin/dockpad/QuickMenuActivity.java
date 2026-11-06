@@ -262,7 +262,7 @@ public class QuickMenuActivity extends AppCompatActivity {
         List<String> sections = new ArrayList<>();
         for (MenuRender.Item it : in) if (!sections.contains(it.section)) sections.add(it.section);
         List<MenuRender.Item> out = new ArrayList<>(in);
-        boolean bySection = theme.sections && !theme.layout.equals("radial") && !theme.layout.equals("freeform");
+        boolean bySection = theme.bySection();
         // stable sort: section first (if shown), then the user's rank, then the default order
         List<MenuRender.Item> original = new ArrayList<>(in);
         out.sort((a, b) -> {
@@ -287,9 +287,29 @@ public class QuickMenuActivity extends AppCompatActivity {
         renderer = MenuRender.create(this, theme);
         renderer.build(list);
         root.removeAllViews();
-        boolean radial = theme.layout.equals("radial"), carousel = theme.layout.equals("carousel");
-        root.setBackgroundColor(radial ? 0x99000000 : carousel ? 0x66000000 : 0);
-        View panel = radial ? radialPanel() : carousel ? carouselPanel() : sidePanel();
+        String frame = theme.frame();
+        View panel;
+        switch (frame) {
+            case "ring":
+                root.setBackgroundColor(0x99000000);
+                panel = radialPanel();
+                break;
+            case "band":
+                root.setBackgroundColor(0x66000000);
+                panel = carouselPanel();
+                break;
+            case "screen":
+                root.setBackgroundColor(theme.layout.equals("xmb") ? 0xCC0B0D10 : 0x44000000);
+                panel = screenPanel();
+                break;
+            case "rail":
+                root.setBackgroundColor(0);
+                panel = railPanel();
+                break;
+            default:
+                root.setBackgroundColor(0);
+                panel = sidePanel();
+        }
         root.addView(panel);
         for (int i = 0; i < renderer.tiles.size(); i++) {
             int index = i;
@@ -316,8 +336,8 @@ public class QuickMenuActivity extends AppCompatActivity {
     private void select(int index) {
         if (renderer == null || index < 0 || index >= renderer.tiles.size()) return;
         selected = index;
+        renderer.onSelected(index); // first: some styles reveal the item here (tabs, XMB)
         renderer.tiles.get(index).requestFocus();
-        renderer.onSelected(index);
     }
 
     /** List, grid and freeform: a panel at the side, centre or full screen. */
@@ -336,7 +356,7 @@ public class QuickMenuActivity extends AppCompatActivity {
         status.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall);
         status.setPadding(0, 0, 0, dp(8));
         panel.addView(status);
-        boolean free = theme.layout.equals("freeform");
+        boolean free = theme.layout.equals("freeform") || theme.layout.equals("wheel");
         if (free) {
             panel.addView(renderer.view, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
         } else {
@@ -413,6 +433,49 @@ public class QuickMenuActivity extends AppCompatActivity {
         return column;
     }
 
+    /** XMB and edge arc: the style uses the whole screen. */
+    private View screenPanel() {
+        FrameLayout f = new FrameLayout(this);
+        noHighlight(f);
+        f.setClickable(!theme.layout.equals("arc")); // arc: taps away from it close the menu
+        f.addView(renderer.view, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+        status = new TextView(this);
+        status.setText("DockPad · " + statusText);
+        status.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_LabelMedium);
+        status.setPadding(dp(20), dp(14), dp(20), 0);
+        f.addView(status, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT, theme.layout.equals("arc") && !theme.position.equals("right")
+                ? Gravity.TOP | Gravity.END : Gravity.TOP | Gravity.START));
+        hint = new TextView(this);
+        hint.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_LabelSmall);
+        hint.setPadding(dp(20), 0, dp(20), dp(10));
+        f.addView(hint, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL));
+        updateHint();
+        f.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+        return f;
+    }
+
+    /** Rail: a thin column at the side, with the name bubble beside it. */
+    private View railPanel() {
+        LinearLayout col = new LinearLayout(this);
+        col.setOrientation(LinearLayout.VERTICAL);
+        noHighlight(col);
+        col.setClipChildren(false);
+        col.addView(renderer.view, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, 0, 1));
+        hint = new TextView(this);
+        hint.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_LabelSmall);
+        hint.setPadding(dp(10), dp(4), dp(10), dp(8));
+        col.addView(hint);
+        updateHint();
+        status = null;
+        col.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.MATCH_PARENT, theme.position.equals("right") ? Gravity.END : Gravity.START));
+        return col;
+    }
+
     /** Carousel: a full-width strip at the top, middle or bottom. */
     private View carouselPanel() {
         LinearLayout band = new LinearLayout(this);
@@ -451,10 +514,18 @@ public class QuickMenuActivity extends AppCompatActivity {
                     : "ARRANGING · D-pad: move this item · A or Y: done");
             hint.setTextColor(0xFFFFD54F);
         } else {
-            boolean carousel = theme.layout.equals("carousel");
-            hint.setText(radial ? "Stick: aim · D-pad ◀▶: around · ▲▼ or L1/R1: rings · Y: arrange · B: close"
-                    : carousel ? "◀▶: browse · ▲▼: sections · Y: arrange · B: close"
-                    : "Y: arrange items · B: close");
+            String h;
+            switch (theme.layout) {
+                case "radial": h = "Stick: aim · D-pad ◀▶: around · ▲▼ or L1/R1: rings · Y: arrange · B: close"; break;
+                case "arc": h = "Stick: aim · ▲▼: along · ◀▶ or L1/R1: rings · Y: arrange · B: close"; break;
+                case "carousel": h = "◀▶: browse · ▲▼: sections · Y: arrange · B: close"; break;
+                case "dock": h = "◀▶: browse · Y: arrange · B: close"; break;
+                case "xmb": h = "◀▶: sections · ▲▼: items · Y: arrange · B: close"; break;
+                case "wheel": h = "▲▼: turn · ◀▶: sections · Y: arrange · B: close"; break;
+                case "tabs": h = "L1/R1: tabs · D-pad: tiles · Y: arrange · B: close"; break;
+                default: h = "Y: arrange items · B: close";
+            }
+            hint.setText(h);
             hint.setTextColor(0xB3FFFFFF);
         }
     }
@@ -484,7 +555,7 @@ public class QuickMenuActivity extends AppCompatActivity {
         String g = renderer.selectable.get(selected).group;
         int from = groups.indexOf(g);
         int to = Math.max(0, Math.min(groups.size() - 1, from + step));
-        boolean bySection = theme.sections && !theme.layout.equals("radial") && !theme.layout.equals("freeform");
+        boolean bySection = theme.bySection();
         if (bySection) {
             // stay inside the section
             String sec = groupSections.get(from);
@@ -570,8 +641,8 @@ public class QuickMenuActivity extends AppCompatActivity {
             boolean grow = kc == KeyEvent.KEYCODE_BUTTON_R1;
             if (down && arranging && renderer instanceof MenuRender.FreeRenderer && selected >= 0) {
                 ((MenuRender.FreeRenderer) renderer).nudge(selected, 0, 0, grow ? 1.1f : 0.9f);
-            } else if (fresh && !arranging && renderer instanceof MenuRender.RadialRenderer) {
-                int i = ((MenuRender.RadialRenderer) renderer).ring(selected, grow ? 1 : -1);
+            } else if (fresh && !arranging && renderer != null) {
+                int i = renderer.shoulder(selected, grow ? 1 : -1);
                 if (i >= 0) select(i);
             }
             return true;
@@ -661,7 +732,7 @@ public class QuickMenuActivity extends AppCompatActivity {
                 }
                 return true;
             }
-            if (renderer instanceof MenuRender.RadialRenderer) {
+            if (renderer instanceof MenuRender.RadialRenderer || renderer instanceof MenuStyles.ArcRenderer) {
                 readHat(e);
                 if (!arranging && mag > 0.55f) {
                     int i = renderer.aim(x, y, selected);
