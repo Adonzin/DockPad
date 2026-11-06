@@ -1,0 +1,35 @@
+{
+  "format": 1,
+  "themes": [
+    {
+      "id": "railway",
+      "name": "Railway",
+      "author": "DockPad",
+      "description": "Forest greens, train tracks down the side and a little puffing train.",
+      "layout": "list",
+      "file": "catalog/railway/railway.dockpadtheme",
+      "preview": "catalog/railway/preview.png",
+      "size": 7012
+    },
+    {
+      "id": "robot-buddy",
+      "name": "Robot buddy",
+      "author": "DockPad",
+      "description": "Candy colours, a carousel along the bottom and a friendly robot waving hello.",
+      "layout": "carousel",
+      "file": "catalog/robot-buddy/robot-buddy.dockpadtheme",
+      "preview": "catalog/robot-buddy/preview.png",
+      "size": 7475
+    },
+    {
+      "id": "starfield",
+      "name": "Starfield",
+      "author": "DockPad",
+      "description": "A glowing neon ring floating over drifting, twinkling stars.",
+      "layout": "radial",
+      "file": "catalog/starfield/starfield.dockpadtheme",
+      "preview": "catalog/starfield/preview.png",
+      "size": 29526
+    }
+  ]
+}

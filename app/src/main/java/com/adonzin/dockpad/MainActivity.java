@@ -162,6 +162,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         findViewById(R.id.menu_open).setOnClickListener(v ->
                 startActivity(new Intent(this, QuickMenuActivity.class)));
         findViewById(R.id.add_command).setOnClickListener(v -> editor.addCommand());
+        findViewById(R.id.theme_get).setOnClickListener(v -> CatalogDialog.show(this, this::showThemeName));
         findViewById(R.id.theme_choose).setOnClickListener(v -> ThemesDialog.choose(this, this::showThemeName));
         findViewById(R.id.theme_save).setOnClickListener(v -> ThemesDialog.saveCurrent(this, this::showThemeName));
         findViewById(R.id.theme_import).setOnClickListener(v -> ThemesDialog.importFile(this, done -> {

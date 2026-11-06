@@ -59,7 +59,7 @@ Docked play on a handheld usually means setting up every emulator again for an e
   - built-in themes (Default, Glass, Retro terminal, Neon ring, Console, Sunset dock)
   - save your own look as a theme and switch between them, including from the quick menu
   - share a theme as one `.dockpadtheme` file, with its pictures, sounds and font packed in
-  - install other people's themes; [how to make themes](docs/THEMES.md)
+  - **Get themes:** browse the theme catalog with previews and install with one press; [how to make and share themes](docs/THEMES.md)
 - **Animation and sound:**
   - opening and closing animations (fade, slide, pop, zoom, spin) at three speeds
   - items appearing one after another

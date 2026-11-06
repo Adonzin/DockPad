@@ -176,3 +176,18 @@ The **background** can be a picture, GIF or video:
 - Sounds should be short (under half a second) except `open` and `close`.
 - Test with the controller, and on the style's opposite side (`left`/`right`).
 - Pictures, sounds and fonts must be yours to share.
+
+## Sharing in the catalog
+
+DockPad's **Get themes…** button (Quick menu tab → Theme) shows the theme catalog. It lives in this repository, in [`catalog/`](../catalog). To add yours:
+
+1. Make and save your theme in DockPad, then use **Share it…** to get the `.dockpadtheme` file.
+2. Take a screenshot of the quick menu with your theme over a game (landscape, 16:9 is best) to use as its preview.
+3. Either:
+   - **open an issue** on this repository with the theme file and the screenshot attached, or
+   - **open a pull request** that adds:
+     - `catalog/<your-theme-id>/<your-theme-id>.dockpadtheme`
+     - `catalog/<your-theme-id>/preview.png`
+     - an entry in `catalog/index.json` with `id`, `name`, `author`, `description`, `layout`, `file`, `preview` and `size` (in bytes)
+
+Every theme is checked before it's added. Only share pictures, sounds and fonts you're allowed to share.
