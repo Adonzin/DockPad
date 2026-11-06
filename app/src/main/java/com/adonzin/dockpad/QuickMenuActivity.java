@@ -285,8 +285,9 @@ public class QuickMenuActivity extends AppCompatActivity {
         renderer = MenuRender.create(this, theme);
         renderer.build(list);
         root.removeAllViews();
-        boolean radial = theme.layout.equals("radial");
-        View panel = radial ? radialPanel() : sidePanel();
+        boolean radial = theme.layout.equals("radial"), carousel = theme.layout.equals("carousel");
+        root.setBackgroundColor(radial ? 0x99000000 : carousel ? 0x66000000 : 0);
+        View panel = radial ? radialPanel() : carousel ? carouselPanel() : sidePanel();
         root.addView(panel);
         for (int i = 0; i < renderer.tiles.size(); i++) {
             int index = i;
@@ -382,11 +383,11 @@ public class QuickMenuActivity extends AppCompatActivity {
 
     /** Radial: a ring in the middle of the screen, the game dimmed behind it. */
     private View radialPanel() {
-        root.setBackgroundColor(0x99000000);
         FrameLayout holder = new FrameLayout(this);
         noHighlight(holder);
-        int size = Math.min(dp(theme.width + 200), Math.min(getResources().getDisplayMetrics().widthPixels,
-                getResources().getDisplayMetrics().heightPixels) - dp(16));
+        int avail = Math.min(getResources().getDisplayMetrics().widthPixels,
+                getResources().getDisplayMetrics().heightPixels) - dp(40); // leave room for the hint
+        int size = (int) (avail * theme.sizeFraction());
         GradientDrawable bg = new GradientDrawable();
         bg.setShape(GradientDrawable.OVAL);
         bg.setColor(0xE6121519);
@@ -410,6 +411,36 @@ public class QuickMenuActivity extends AppCompatActivity {
         return column;
     }
 
+    /** Carousel: a full-width strip at the top, middle or bottom. */
+    private View carouselPanel() {
+        LinearLayout band = new LinearLayout(this);
+        band.setOrientation(LinearLayout.VERTICAL);
+        band.setPadding(0, dp(12), 0, dp(10));
+        band.setClickable(true);
+        noHighlight(band);
+        band.setClipChildren(false);
+        band.setClipToPadding(false);
+        status = new TextView(this);
+        status.setText("DockPad · " + statusText);
+        status.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_LabelMedium);
+        status.setPadding(dp(20), 0, 0, dp(4));
+        band.addView(status);
+        band.addView(renderer.view);
+        hint = new TextView(this);
+        hint.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_LabelSmall);
+        hint.setGravity(Gravity.CENTER);
+        hint.setPadding(0, dp(6), 0, 0);
+        band.addView(hint);
+        updateHint();
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(0xE6121519);
+        band.setBackground(bg);
+        int g = theme.band.equals("top") ? Gravity.TOP : theme.band.equals("middle") ? Gravity.CENTER_VERTICAL : Gravity.BOTTOM;
+        band.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT, g));
+        return band;
+    }
+
     private void updateHint() {
         if (hint == null) return;
         boolean free = theme.layout.equals("freeform"), radial = theme.layout.equals("radial");
@@ -418,7 +449,9 @@ public class QuickMenuActivity extends AppCompatActivity {
                     : "ARRANGING · D-pad: move this item · A or Y: done");
             hint.setTextColor(0xFFFFD54F);
         } else {
-            hint.setText(radial ? "Stick: aim · D-pad: around / between rings · Y: arrange · B: close"
+            boolean carousel = theme.layout.equals("carousel");
+            hint.setText(radial ? "Stick: aim · D-pad ◀▶: around · ▲▼ or L1/R1: rings · Y: arrange · B: close"
+                    : carousel ? "◀▶: browse · ▲▼: sections · Y: arrange · B: close"
                     : "Y: arrange items · B: close");
             hint.setTextColor(0xB3FFFFFF);
         }
@@ -526,41 +559,27 @@ public class QuickMenuActivity extends AppCompatActivity {
             if (fresh) toggleArranging();
             return true;
         }
-        if (arranging) {
-            if (kc == KeyEvent.KEYCODE_BUTTON_A || kc == KeyEvent.KEYCODE_DPAD_CENTER || kc == KeyEvent.KEYCODE_ENTER
-                    || kc == KeyEvent.KEYCODE_BUTTON_B || kc == KeyEvent.KEYCODE_BACK) {
-                if (fresh) toggleArranging();
-                return true;
-            }
-            int dir = direction(kc);
-            if (renderer instanceof MenuRender.FreeRenderer) {
-                MenuRender.FreeRenderer f = (MenuRender.FreeRenderer) renderer;
-                if (down && selected >= 0) {
-                    float step = e.getRepeatCount() > 6 ? 0.025f : 0.012f;
-                    if (dir >= 0) f.nudge(selected, dir == MenuRender.LEFT ? -step : dir == MenuRender.RIGHT ? step : 0,
-                            dir == MenuRender.UP ? -step : dir == MenuRender.DOWN ? step : 0, 1f);
-                    if (kc == KeyEvent.KEYCODE_BUTTON_L1) f.nudge(selected, 0, 0, 0.9f);
-                    if (kc == KeyEvent.KEYCODE_BUTTON_R1) f.nudge(selected, 0, 0, 1.1f);
-                }
-                return true;
-            }
-            if (dir >= 0) {
-                if (down) arrangeBy(renderer.arrangeStep(dir));
-                return true;
-            }
-            return true; // nothing else while arranging
+        if (arranging && (kc == KeyEvent.KEYCODE_BUTTON_A || kc == KeyEvent.KEYCODE_DPAD_CENTER
+                || kc == KeyEvent.KEYCODE_ENTER || kc == KeyEvent.KEYCODE_BUTTON_B || kc == KeyEvent.KEYCODE_BACK)) {
+            if (fresh) toggleArranging();
+            return true;
         }
-        int dir = direction(kc);
-        if (dir >= 0 && renderer != null) {
-            if (down) {
-                if (getCurrentFocus() == null && selected < 0) select(0);
-                else {
-                    int next = renderer.move(selected, dir, fresh);
-                    if (next >= 0) select(next);
-                }
+        if (kc == KeyEvent.KEYCODE_BUTTON_L1 || kc == KeyEvent.KEYCODE_BUTTON_R1) {
+            boolean grow = kc == KeyEvent.KEYCODE_BUTTON_R1;
+            if (down && arranging && renderer instanceof MenuRender.FreeRenderer && selected >= 0) {
+                ((MenuRender.FreeRenderer) renderer).nudge(selected, 0, 0, grow ? 1.1f : 0.9f);
+            } else if (fresh && !arranging && renderer instanceof MenuRender.RadialRenderer) {
+                int i = ((MenuRender.RadialRenderer) renderer).ring(selected, grow ? 1 : -1);
+                if (i >= 0) select(i);
             }
             return true;
         }
+        int dir = direction(kc);
+        if (dir >= 0 && renderer != null) {
+            if (down) onDirection(dir, fresh, e.getRepeatCount());
+            return true;
+        }
+        if (arranging) return true; // nothing else while arranging
         // make sure something is highlighted as soon as a controller is used
         if (down && getCurrentFocus() == null && renderer != null && !renderer.tiles.isEmpty()
                 && DpDialog.Controller.isFromController(e) && kc != KeyEvent.KEYCODE_BUTTON_B
@@ -573,6 +592,44 @@ public class QuickMenuActivity extends AppCompatActivity {
             return true;
         }
         return super.dispatchKeyEvent(e);
+    }
+
+    /** One step of the D-pad (keys, or the hat read directly). */
+    private void onDirection(int dir, boolean fresh, int repeat) {
+        if (renderer == null) return;
+        if (arranging) {
+            if (renderer instanceof MenuRender.FreeRenderer) {
+                if (selected < 0) return;
+                float step = repeat > 6 ? 0.025f : 0.012f;
+                ((MenuRender.FreeRenderer) renderer).nudge(selected,
+                        dir == MenuRender.LEFT ? -step : dir == MenuRender.RIGHT ? step : 0,
+                        dir == MenuRender.UP ? -step : dir == MenuRender.DOWN ? step : 0, 1f);
+            } else {
+                arrangeBy(renderer.arrangeStep(dir));
+            }
+            return;
+        }
+        if (getCurrentFocus() == null && selected < 0) {
+            select(0);
+            return;
+        }
+        int next = renderer.move(selected, dir, fresh);
+        if (next >= 0) select(next);
+    }
+
+    private float hatX, hatY;
+
+    /** The handheld's D-pad arrives as a hat (motion), not keys: read it ourselves where we take the stick. */
+    private void readHat(MotionEvent e) {
+        float hx = e.getAxisValue(MotionEvent.AXIS_HAT_X), hy = e.getAxisValue(MotionEvent.AXIS_HAT_Y);
+        int dir = -1;
+        if (hx < -0.5f && hatX >= -0.5f) dir = MenuRender.LEFT;
+        else if (hx > 0.5f && hatX <= 0.5f) dir = MenuRender.RIGHT;
+        else if (hy < -0.5f && hatY >= -0.5f) dir = MenuRender.UP;
+        else if (hy > 0.5f && hatY <= 0.5f) dir = MenuRender.DOWN;
+        hatX = hx;
+        hatY = hy;
+        if (dir >= 0) onDirection(dir, true, 0);
     }
 
     private static int direction(int kc) {
@@ -596,13 +653,15 @@ public class QuickMenuActivity extends AppCompatActivity {
             float x = e.getAxisValue(MotionEvent.AXIS_X), y = e.getAxisValue(MotionEvent.AXIS_Y);
             float mag = (float) Math.hypot(x, y);
             if (arranging && renderer instanceof MenuRender.FreeRenderer) {
+                readHat(e);
                 if (mag > 0.25f && selected >= 0) {
                     ((MenuRender.FreeRenderer) renderer).nudge(selected, x * 0.02f, y * 0.02f, 1f);
                 }
                 return true;
             }
-            if (!arranging && renderer instanceof MenuRender.RadialRenderer) {
-                if (mag > 0.55f) {
+            if (renderer instanceof MenuRender.RadialRenderer) {
+                readHat(e);
+                if (!arranging && mag > 0.55f) {
                     int i = renderer.aim(x, y, selected);
                     if (i >= 0 && i != selected) select(i);
                 }

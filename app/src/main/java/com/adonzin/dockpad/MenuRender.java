@@ -159,40 +159,9 @@ final class MenuRender {
             selectable.add(it);
         }
 
-        /** A tile: icon over a short title (grid, freeform). */
+        /** A tile: icon over the title, or (when small) the title over a faded icon. */
         View tile(Item it, boolean big) {
-            LinearLayout t = new LinearLayout(c);
-            t.setOrientation(LinearLayout.VERTICAL);
-            t.setGravity(Gravity.CENTER);
-            t.setPadding(dp(6), dp(8), dp(6), dp(8));
-            t.setBackground(tileBackground(false));
-            t.setForeground(c.getDrawable(R.drawable.focus_ring));
-            ImageView icon = new ImageView(c);
-            icon.setImageResource(it.icon);
-            icon.setImageTintList(ColorStateList.valueOf(color(androidx.appcompat.R.attr.colorPrimary)));
-            t.addView(icon, new LinearLayout.LayoutParams(dp(big ? 32 : 26), dp(big ? 32 : 26)));
-            TextView title = new TextView(c);
-            title.setText(it.title);
-            title.setGravity(Gravity.CENTER);
-            title.setMaxLines(2);
-            title.setEllipsize(TextUtils.TruncateAt.END);
-            title.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_LabelLarge);
-            LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT);
-            tl.topMargin = dp(6);
-            t.addView(title, tl);
-            if (it.badge != null) {
-                TextView b = new TextView(c);
-                b.setText(it.badge);
-                b.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_LabelSmall);
-                b.setBackgroundResource(R.drawable.badge_bg);
-                b.setPadding(dp(8), dp(2), dp(8), dp(2));
-                LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
-                        ViewGroup.LayoutParams.WRAP_CONTENT);
-                bl.topMargin = dp(4);
-                t.addView(b, bl);
-            }
-            return t;
+            return new SmartTile(c, it, false, color(androidx.appcompat.R.attr.colorPrimary), tileBackground(false));
         }
 
         android.graphics.drawable.Drawable tileBackground(boolean round) {
@@ -569,21 +538,7 @@ final class MenuRender {
         }
 
         private View radialTile(Item it) {
-            LinearLayout t = new LinearLayout(c);
-            t.setOrientation(LinearLayout.VERTICAL);
-            t.setGravity(Gravity.CENTER);
-            t.setBackground(tileBackground(true));
-            ImageView icon = new ImageView(c);
-            icon.setImageResource(it.icon);
-            icon.setImageTintList(ColorStateList.valueOf(color(androidx.appcompat.R.attr.colorPrimary)));
-            t.addView(icon, new LinearLayout.LayoutParams(dp(26), dp(26)));
-            if (it.badge != null) {
-                TextView b = new TextView(c);
-                b.setText(it.badge);
-                b.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_LabelSmall);
-                t.addView(b);
-            }
-            return t;
+            return new SmartTile(c, it, true, color(androidx.appcompat.R.attr.colorPrimary), tileBackground(true));
         }
 
         @Override
@@ -621,6 +576,12 @@ final class MenuRender {
             return indexOf(ring, (int) Math.round(angle * count) % count);
         }
 
+        /** L1/R1: inner/outer ring. */
+        int ring(int cur, int delta) {
+            if (slots.isEmpty()) return -1;
+            return move(cur < 0 ? 0 : cur, delta > 0 ? UP : DOWN, true);
+        }
+
         @Override
         int aim(float x, float y, int cur) {
             if (slots.isEmpty()) return -1;
@@ -634,12 +595,231 @@ final class MenuRender {
         }
     }
 
+
+    // ------------------------------------------------------------------ tiles
+
+    /**
+     * A menu tile that adapts to its size: roomy tiles show the icon above the name; small ones show
+     * the name on top of a large, faded icon, so the text is always readable.
+     */
+    static final class SmartTile extends android.widget.FrameLayout {
+        final ImageView icon;
+        final TextView title, badge;
+        final boolean alwaysOverlay;
+        private Boolean overlay;
+
+        SmartTile(Context c, Item it, boolean alwaysOverlay, int tint, android.graphics.drawable.Drawable bg) {
+            super(c);
+            this.alwaysOverlay = alwaysOverlay;
+            setBackground(bg);
+            setForeground(c.getDrawable(R.drawable.focus_ring));
+            icon = new ImageView(c);
+            if (it.icon != 0) icon.setImageResource(it.icon);
+            icon.setImageTintList(ColorStateList.valueOf(tint));
+            addView(icon);
+            title = new TextView(c);
+            title.setText(it.title);
+            title.setGravity(Gravity.CENTER);
+            title.setMaxLines(3);
+            title.setEllipsize(TextUtils.TruncateAt.END);
+            title.setTypeface(Typeface.DEFAULT_BOLD);
+            title.setTextColor(0xFFFFFFFF);
+            title.setShadowLayer(4, 0, 1, 0xCC000000);
+            title.setAutoSizeTextTypeUniformWithConfiguration(8, 16, 1, TypedValue.COMPLEX_UNIT_SP);
+            addView(title);
+            badge = new TextView(c);
+            if (it.badge != null) {
+                badge.setText(it.badge);
+                badge.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_LabelSmall);
+                badge.setBackgroundResource(R.drawable.badge_bg);
+                badge.setPadding(dp(6), dp(1), dp(6), dp(1));
+            } else {
+                badge.setVisibility(GONE);
+            }
+            addView(badge);
+        }
+
+        private int dp(float v) {
+            return (int) (v * getResources().getDisplayMetrics().density + 0.5f);
+        }
+
+        @Override
+        protected void onSizeChanged(int w, int h, int ow, int oh) {
+            super.onSizeChanged(w, h, ow, oh);
+            boolean small = alwaysOverlay || w < dp(88) || h < dp(84);
+            if (overlay != null && overlay == small && w == ow && h == oh) return;
+            overlay = small;
+            post(() -> arrange(w, h, small));
+        }
+
+        private void arrange(int w, int h, boolean small) {
+            int pad = Math.max(dp(4), Math.min(w, h) / 12);
+            if (small) {
+                int s = (int) (Math.min(w, h) * 0.72f);
+                icon.setLayoutParams(new LayoutParams(s, s, Gravity.CENTER));
+                icon.setAlpha(0.22f);
+                LayoutParams tl = new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT, Gravity.CENTER);
+                tl.setMargins(pad, pad, pad, badge.getVisibility() == VISIBLE ? pad + dp(14) : pad);
+                title.setLayoutParams(tl);
+            } else {
+                int s = Math.min(dp(36), h / 3);
+                LayoutParams il = new LayoutParams(s, s, Gravity.CENTER_HORIZONTAL | Gravity.TOP);
+                il.topMargin = (int) (h * 0.14f);
+                icon.setLayoutParams(il);
+                icon.setAlpha(1f);
+                LayoutParams tl = new LayoutParams(LayoutParams.MATCH_PARENT, (int) (h * 0.42f),
+                        Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+                tl.setMargins(pad, 0, pad, badge.getVisibility() == VISIBLE ? pad + dp(14) : pad);
+                title.setLayoutParams(tl);
+            }
+            LayoutParams bl = new LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT,
+                    Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+            bl.bottomMargin = Math.max(dp(2), pad / 2);
+            badge.setLayoutParams(bl);
+        }
+    }
+
+    // ------------------------------------------------------------------ carousel
+
+    /** Cards in a row; the selected one sits in the middle, the others slide past it. */
+    static final class CarouselCanvas extends ViewGroup {
+        int card, selected;
+        final List<View> cards = new ArrayList<>();
+
+        CarouselCanvas(Context c) {
+            super(c);
+        }
+
+        @Override
+        protected void onMeasure(int w, int h) {
+            int W = MeasureSpec.getSize(w);
+            for (View ch : cards) {
+                ch.measure(MeasureSpec.makeMeasureSpec(card, MeasureSpec.EXACTLY),
+                        MeasureSpec.makeMeasureSpec(card, MeasureSpec.EXACTLY));
+            }
+            setMeasuredDimension(W, (int) (card * 1.12f));
+        }
+
+        @Override
+        protected void onLayout(boolean changed, int l, int t, int r, int b) {
+            int cx = (r - l) / 2, cy = (b - t) / 2;
+            for (View ch : cards) ch.layout(cx - card / 2, cy - card / 2, cx + card / 2, cy + card / 2);
+            place(false);
+        }
+
+        void place(boolean animate) {
+            int n = cards.size();
+            float spacing = card * 0.92f;
+            for (int i = 0; i < n; i++) {
+                View ch = cards.get(i);
+                int d = i - selected;
+                if (n > 2) { // the shortest way round, so the strip wraps
+                    if (d > n / 2) d -= n;
+                    if (d < -n / 2) d += n;
+                }
+                int ad = Math.abs(d);
+                float tx = d * spacing, scale = d == 0 ? 1.08f : Math.max(0.6f, 0.86f - 0.06f * (ad - 1));
+                float alpha = ad > 3 ? 0f : d == 0 ? 1f : 0.75f - 0.15f * (ad - 1);
+                boolean jump = Math.abs(ch.getTranslationX() - tx) > spacing * 2.5f; // wrapping: don't fly across
+                if (animate && !jump) {
+                    ch.animate().translationX(tx).scaleX(scale).scaleY(scale).alpha(alpha).setDuration(160).start();
+                } else {
+                    ch.animate().cancel();
+                    ch.setTranslationX(tx);
+                    ch.setScaleX(scale);
+                    ch.setScaleY(scale);
+                    ch.setAlpha(alpha);
+                }
+                ch.setTranslationZ(d == 0 ? 8 : 0);
+            }
+        }
+    }
+
+    static final class CarouselRenderer extends Renderer {
+        CarouselCanvas canvas;
+        TextView caption, captionSub;
+
+        CarouselRenderer(Context c, MenuTheme t) {
+            super(c, t);
+        }
+
+        @Override
+        void build(List<Item> items) {
+            LinearLayout column = new LinearLayout(c);
+            column.setOrientation(LinearLayout.VERTICAL);
+            canvas = new CarouselCanvas(c);
+            canvas.setClipChildren(false);
+            int screen = Math.min(c.getResources().getDisplayMetrics().widthPixels,
+                    c.getResources().getDisplayMetrics().heightPixels);
+            canvas.card = (int) (screen * theme.sizeFraction() * 0.42f);
+            for (Item it : items) {
+                if (it.action == null) continue;
+                View card = new SmartTile(c, it, false, color(androidx.appcompat.R.attr.colorPrimary), tileBackground(false));
+                canvas.cards.add(card);
+                canvas.addView(card);
+                selectable(card, it);
+            }
+            column.addView(canvas, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT));
+            caption = new TextView(c);
+            caption.setGravity(Gravity.CENTER);
+            caption.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleMedium);
+            captionSub = new TextView(c);
+            captionSub.setGravity(Gravity.CENTER);
+            captionSub.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall);
+            column.addView(caption);
+            column.addView(captionSub);
+            view = column;
+        }
+
+        @Override
+        void onSelected(int index) {
+            if (index < 0 || index >= selectable.size()) return;
+            canvas.selected = index;
+            canvas.place(true);
+            Item it = selectable.get(index);
+            caption.setText(it.title + (it.badge != null ? "  ·  " + it.badge : ""));
+            captionSub.setText(it.subtitle == null ? "" : it.subtitle);
+        }
+
+        @Override
+        int move(int cur, int dir, boolean fresh) {
+            int n = tiles.size();
+            if (n == 0) return -1;
+            if (cur < 0) return 0;
+            if (dir == LEFT) return (cur - 1 + n) % n;
+            if (dir == RIGHT) return (cur + 1) % n;
+            // up/down: the first item of the previous/next section
+            String sec = selectable.get(cur).section;
+            if (dir == DOWN) {
+                for (int k = 1; k < n; k++) {
+                    int i = (cur + k) % n;
+                    if (!selectable.get(i).section.equals(sec)) return i;
+                }
+            } else {
+                int start = cur;
+                while (start > 0 && selectable.get(start - 1).section.equals(sec)) start--;
+                int prev = (start - 1 + n) % n;
+                String ps = selectable.get(prev).section;
+                while (prev > 0 && selectable.get(prev - 1).section.equals(ps)) prev--;
+                return prev == cur ? -1 : prev;
+            }
+            return -1;
+        }
+
+        @Override
+        int arrangeStep(int dir) {
+            return dir == LEFT ? -1 : dir == RIGHT ? 1 : 0;
+        }
+    }
+
     static Renderer create(Context c, MenuTheme t) {
         switch (t.layout) {
             case "compact": return new ListRenderer(c, t, true);
             case "grid": return new GridRenderer(c, t);
             case "radial": return new RadialRenderer(c, t);
             case "freeform": return new FreeRenderer(c, t);
+            case "carousel": return new CarouselRenderer(c, t);
             default: return new ListRenderer(c, t, false);
         }
     }

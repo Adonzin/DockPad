@@ -19,10 +19,12 @@ import java.util.Map;
 final class MenuTheme {
     static final int FORMAT = 1;
 
-    static final String[] LAYOUTS = {"list", "compact", "grid", "radial", "freeform"};
-    static final String[] LAYOUT_LABELS = {"List", "Compact list", "Grid of tiles", "Radial (ring)", "Freeform"};
+    static final String[] LAYOUTS = {"list", "compact", "grid", "carousel", "radial", "freeform"};
+    static final String[] LAYOUT_LABELS = {"List", "Compact list", "Grid of tiles", "Carousel", "Radial (ring)", "Freeform"};
     static final String[] POSITIONS = {"left", "right", "center", "full"};
     static final String[] POSITION_LABELS = {"Left side", "Right side", "Centre", "Full screen"};
+    static final String[] BANDS = {"top", "middle", "bottom"};
+    static final String[] BAND_LABELS = {"Top", "Middle", "Bottom"};
 
     String name = "Default";
     String layout = "list";
@@ -30,6 +32,10 @@ final class MenuTheme {
     /** Panel width in dp (radial: the ring's diameter). */
     int width = 340;
     boolean sections = true;
+    /** Carousel: where the strip sits. */
+    String band = "bottom";
+    /** Radial and carousel: size as a percentage of the screen (40-100). */
+    int size = 80;
     int columns = 3;
     /** Freeform: item id -> {x, y, w, h} as fractions of the panel. */
     final Map<String, float[]> free = new HashMap<>();
@@ -56,6 +62,9 @@ final class MenuTheme {
                 if (Arrays.asList(POSITIONS).contains(pos)) t.position = pos;
                 t.width = Math.max(200, Math.min(1200, l.optInt("width", t.width)));
                 t.sections = l.optBoolean("sections", t.sections);
+                String band = l.optString("band", t.band);
+                if (Arrays.asList(BANDS).contains(band)) t.band = band;
+                t.size = Math.max(40, Math.min(100, l.optInt("size", t.size)));
                 t.columns = Math.max(2, Math.min(8, l.optInt("columns", t.columns)));
                 JSONObject f = l.optJSONObject("free");
                 if (f != null) for (java.util.Iterator<String> it = f.keys(); it.hasNext(); ) {
@@ -86,6 +95,8 @@ final class MenuTheme {
             l.put("position", position);
             l.put("width", width);
             l.put("sections", sections);
+            l.put("band", band);
+            l.put("size", size);
             l.put("columns", columns);
             JSONObject f = new JSONObject();
             for (Map.Entry<String, float[]> e : free.entrySet()) {
@@ -103,6 +114,10 @@ final class MenuTheme {
 
     void save(Context c) {
         c.getSharedPreferences("dockpad", Context.MODE_PRIVATE).edit().putString("menuTheme", toJson()).apply();
+    }
+
+    float sizeFraction() {
+        return size / 100f;
     }
 
     static float clamp(float v) {
