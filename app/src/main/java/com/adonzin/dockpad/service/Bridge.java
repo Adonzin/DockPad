@@ -633,6 +633,80 @@ final class Bridge {
         return null;
     }
 
+    // ---------------------------------------------------------------- "Check buttons"
+
+    private volatile StringBuffer recording;
+
+    /**
+     * Lists everything every input device reports for a few seconds: devices DockPad uses (it
+     * holds them, so only it can see their events) and every other device (via getevent).
+     */
+    String recordAllInput(int ms) throws Exception {
+        StringBuilder out = new StringBuilder();
+        List<EvdevDevice> devs = EvdevDevice.parse(run("getevent", "-i"));
+        Map<String, String> names = new java.util.HashMap<>();
+        out.append("Input devices:\n");
+        for (EvdevDevice d : devs) {
+            names.put(d.path, d.name);
+            out.append("  ").append(d.path).append("  ").append(d.name).append(" [").append(d.id()).append("]")
+                    .append(d.isGamepad() ? " gamepad" : d.isKeyboard() ? " keyboard" : "").append('\n');
+        }
+        StringBuffer rec = new StringBuffer();
+        recording = rec;
+        java.lang.Process p = new ProcessBuilder("getevent", "-l").redirectErrorStream(true).start();
+        StringBuilder raw = new StringBuilder();
+        Thread reader = new Thread(() -> {
+            try (java.io.BufferedReader r = new java.io.BufferedReader(new java.io.InputStreamReader(p.getInputStream()))) {
+                String line;
+                while ((line = r.readLine()) != null) {
+                    if (line.contains("EV_SYN") || line.startsWith("add device") || line.startsWith("  name:")
+                            || line.startsWith("could not")) continue;
+                    synchronized (raw) {
+                        raw.append(line).append('\n');
+                    }
+                }
+            } catch (IOException ignored) {
+            }
+        });
+        reader.setDaemon(true);
+        reader.start();
+        Thread.sleep(ms);
+        recording = null;
+        p.destroy();
+        reader.join(500);
+
+        out.append("\nEvents from controllers DockPad is using:\n");
+        out.append(rec.length() == 0 ? "  (none)\n" : rec.toString());
+        out.append("\nEvents from every other device:\n");
+        String other;
+        synchronized (raw) {
+            other = raw.toString();
+        }
+        if (other.trim().isEmpty()) {
+            out.append("  (none)\n");
+        } else {
+            for (String line : other.split("\n")) {
+                int colon = line.indexOf(':');
+                String path = colon > 0 ? line.substring(0, colon).trim() : "";
+                String name = names.get(path);
+                out.append("  ").append(name == null ? path : name).append(" —").append(colon > 0 ? line.substring(colon + 1) : line).append('\n');
+            }
+        }
+        return out.toString();
+    }
+
+    private void recordEvent(String device, int type, int code, int value) {
+        StringBuffer r = recording;
+        if (r == null || type == Codes.EV_SYN) return;
+        if (type == Codes.EV_ABS && Math.abs(value) < 2 && code < 0x10) return; // stick noise
+        r.append("  ").append(device).append(" — ")
+                .append(type == Codes.EV_KEY ? "button " + Codes.keyName(code) + String.format(" (0x%x)", code)
+                        + (value == 1 ? " pressed" : value == 0 ? " released" : " held")
+                        : type == Codes.EV_ABS ? String.format("axis 0x%x = %d", code, value)
+                        : String.format("type %d code 0x%x value %d", type, code, value))
+                .append('\n');
+    }
+
     // "press a button on the built-in controls"
     private final Object identifyLock = new Object();
     private volatile boolean identifying;
@@ -903,6 +977,7 @@ final class Bridge {
                         int value = bb.getInt(p + off + 4);
                         eventsRead.incrementAndGet();
                         if (builtIn) observeBuiltInDpad(type, code, value);
+                        if (recording != null && wantGrab) recordEvent(dev.name, type, code, value);
                         synchronized (this) {
                             if (!alive) break;
                             if (type == Codes.EV_KEY) {

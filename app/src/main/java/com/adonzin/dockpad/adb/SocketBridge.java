@@ -183,4 +183,10 @@ public final class SocketBridge implements IBridge {
     public void typeCombo(String csv) throws RemoteException {
         rc("typeCombo", csv);
     }
+
+    @Override
+    public String recordAllInput(int ms) throws RemoteException {
+        Object r = rcTimeout("recordAllInput", ms + 10000, ms);
+        return r == null ? "" : r.toString();
+    }
 }

@@ -18,6 +18,29 @@ public final class ControllerLayout {
     /** raw button -> button it should act as (custom changes, applied after the swaps) */
     public final LinkedHashMap<Integer, Integer> custom = new LinkedHashMap<>();
 
+    /**
+     * Controllers labelled the Nintendo way (B at the bottom, A on the right), so their labels
+     * match an Xbox-style layout only with A/B and X/Y swapped.
+     */
+    public static boolean hasNintendoLabels(String name) {
+        String n = name.toLowerCase();
+        return n.contains("pro controller") || n.contains("joy-con") || n.contains("joycon") || n.contains("nintendo")
+                || n.contains("switch") || n.contains("sf30") || n.contains("sn30") || n.contains("snes")
+                || n.contains("n64") || n.contains("gamecube") || n.contains("famicom") || n.contains("nes ");
+    }
+
+    /** Auto-map: make the button labelled A act as A (and so on), keeping custom changes. */
+    public void autoMapByLabels() {
+        boolean nintendo = hasNintendoLabels(device);
+        swapAB = nintendo;
+        swapXY = nintendo;
+    }
+
+    public void reset() {
+        swapAB = swapXY = false;
+        custom.clear();
+    }
+
     public boolean isEmpty() {
         return !swapAB && !swapXY && custom.isEmpty();
     }

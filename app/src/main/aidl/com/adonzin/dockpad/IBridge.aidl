@@ -23,4 +23,5 @@ interface IBridge {
     String pollKeyboard() = 19;
     void typeKey(int code, boolean shift) = 20;
     void typeCombo(String csv) = 21;
+    String recordAllInput(int ms) = 22;
 }

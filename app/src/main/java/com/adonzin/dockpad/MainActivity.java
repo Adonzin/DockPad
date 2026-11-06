@@ -873,6 +873,24 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         addSwitch("Turn off Wireless debugging once started",
                 "DockPad only needs Wireless debugging for a moment while starting. Turning it off afterwards is safer.",
                 prefs.turnOffWirelessDebugging(), prefs::turnOffWirelessDebugging);
+        View resetRow = getLayoutInflater().inflate(R.layout.item_row, settingsList, false);
+        ((ImageView) resetRow.findViewById(R.id.row_icon)).setImageResource(R.drawable.ic_gamepad);
+        ((TextView) resetRow.findViewById(R.id.row_title)).setText("Reset all controller layouts");
+        ((TextView) resetRow.findViewById(R.id.row_subtitle)).setText(
+                "Clears every controller's button swaps and changes (shortcuts stay).");
+        resetRow.setFocusable(true);
+        resetRow.setClickable(true);
+        resetRow.setOnClickListener(v -> new DpDialog(this)
+                .setTitle("Reset all controller layouts?")
+                .setMessage("Every controller goes back to the standard layout.")
+                .setPositiveButton("Reset", (d, w) -> {
+                    prefs.layouts(new java.util.LinkedHashMap<>());
+                    layoutsChanged();
+                    Toast.makeText(this, "All controller layouts reset", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("Cancel", null)
+                .show());
+        settingsList.addView(resetRow);
         addSwitch("Touchpad as a button",
                 "On controllers with a touchpad (DualShock 4, DualSense), pressing the pad becomes a button you can use in shortcuts instead of a mouse.",
                 prefs.touchpadAsButton(), v -> {
@@ -995,9 +1013,63 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
                         .setTitle("Diagnostics")
                         .setView(sv)
                         .setPositiveButton("Close", null)
+                        .setNegativeButton("Check buttons", (d, w) -> checkButtons())
                         .setNeutralButton("Copy", (d, w) -> {
                             ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
                             cm.setPrimaryClip(ClipData.newPlainText("DockPad diagnostics", text));
+                            Toast.makeText(this, "Copied", Toast.LENGTH_SHORT).show();
+                        })
+                        .show();
+            });
+        });
+    }
+
+    /** Records everything every input device reports for 10 seconds. */
+    private void checkButtons() {
+        IBridge b = bridge;
+        if (b == null || !lastRunning) {
+            Toast.makeText(this, "Turn DockPad on first.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        com.google.android.material.progressindicator.LinearProgressIndicator progress =
+                new com.google.android.material.progressindicator.LinearProgressIndicator(this);
+        progress.setIndeterminate(true);
+        LinearLayout wrap = new LinearLayout(this);
+        wrap.setPadding(dp(24), dp(8), dp(24), 0);
+        wrap.addView(progress, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+        androidx.appcompat.app.AlertDialog waiting = new DpDialog(this).ignoreControllerButtons()
+                .setTitle("Press the buttons to check")
+                .setMessage("For the next 10 seconds, press the buttons you want to check, one at a time, "
+                        + "on any controller. Everything every device reports is recorded.")
+                .setView(wrap)
+                .setCancelable(false)
+                .show();
+        bg.execute(() -> {
+            String r;
+            try {
+                r = b.recordAllInput(10000);
+            } catch (Exception e) {
+                r = "Couldn't record: " + e;
+            }
+            String text = "DockPad " + BuildConfig.VERSION_NAME + " — button check\n" + r;
+            ui.post(() -> {
+                waiting.dismiss();
+                TextView tv = new TextView(this);
+                tv.setText(text);
+                tv.setTypeface(Typeface.MONOSPACE);
+                tv.setTextSize(11);
+                tv.setTextIsSelectable(true);
+                tv.setPadding(dp(24), dp(8), dp(24), 0);
+                android.widget.ScrollView sv = new android.widget.ScrollView(this);
+                sv.addView(tv);
+                new DpDialog(this)
+                        .setTitle("Button check")
+                        .setView(sv)
+                        .setPositiveButton("Close", null)
+                        .setNeutralButton("Copy", (d, w) -> {
+                            ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                            cm.setPrimaryClip(ClipData.newPlainText("DockPad button check", text));
                             Toast.makeText(this, "Copied", Toast.LENGTH_SHORT).show();
                         })
                         .show();

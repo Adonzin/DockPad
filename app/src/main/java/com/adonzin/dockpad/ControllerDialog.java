@@ -6,6 +6,7 @@ import android.os.Looper;
 import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
 
@@ -59,6 +60,24 @@ final class ControllerDialog {
         xy.setText("Swap X and Y");
         xy.setChecked(layout.swapXY);
         box.addView(xy);
+
+        MaterialButton auto = new MaterialButton(activity, null,
+                com.google.android.material.R.attr.materialButtonOutlinedStyle);
+        auto.setText("Auto-map: match the button labels");
+        box.addView(auto);
+        TextView autoHint = text(ControllerLayout.hasNintendoLabels(device)
+                ? "This looks like a Nintendo-style controller (B at the bottom, A on the right). Auto-map swaps "
+                + "A/B and X/Y so the button labelled A acts as A. The default matches buttons by position instead."
+                : "This looks like an Xbox or PlayStation-style controller: the standard layout already matches.", true);
+        box.addView(autoHint);
+        auto.setOnClickListener(v -> {
+            layout.autoMapByLabels();
+            ab.setChecked(layout.swapAB);
+            xy.setChecked(layout.swapXY);
+            save(layout);
+            Toast.makeText(activity, layout.swapAB ? "A/B and X/Y swapped to match the labels"
+                    : "Standard layout (already matches)", Toast.LENGTH_SHORT).show();
+        });
 
         TextView customTitle = text("Changed buttons", false);
         customTitle.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleSmall);
@@ -124,10 +143,10 @@ final class ControllerDialog {
                 .setTitle(device)
                 .setView(sv)
                 .setPositiveButton("Done", null)
-                .setNeutralButton("Reset", (d, w) -> {
-                    layout.swapAB = layout.swapXY = false;
-                    layout.custom.clear();
+                .setNeutralButton("Reset to default", (d, w) -> {
+                    layout.reset();
                     save(layout);
+                    Toast.makeText(activity, "Back to the standard layout", Toast.LENGTH_SHORT).show();
                 })
                 .show();
     }

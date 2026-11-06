@@ -129,4 +129,13 @@ public class BridgeService extends IBridge.Stub {
     public void typeCombo(String csv) {
         bridge.typeCombo(csv);
     }
+
+    @Override
+    public String recordAllInput(int ms) {
+        try {
+            return bridge.recordAllInput(ms);
+        } catch (Exception e) {
+            return "Couldn't record: " + e;
+        }
+    }
 }
