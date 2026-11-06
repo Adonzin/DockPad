@@ -706,6 +706,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
 
     private View addInfoRow(ViewGroup parent, int icon, String title, String subtitle) {
         View row = getLayoutInflater().inflate(R.layout.item_row, parent, false);
+        row.setDefaultFocusHighlightEnabled(false); // we draw our own outline
         ((ImageView) row.findViewById(R.id.row_icon)).setImageResource(icon);
         ((TextView) row.findViewById(R.id.row_title)).setText(title);
         TextView sub = row.findViewById(R.id.row_subtitle);

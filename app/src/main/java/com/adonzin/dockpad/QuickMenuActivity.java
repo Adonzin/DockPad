@@ -50,6 +50,13 @@ public class QuickMenuActivity extends AppCompatActivity {
         ScrollView scroll = new ScrollView(this);
         scroll.setBackgroundResource(R.drawable.menu_panel);
         scroll.setClickable(true); // taps on the panel don't close it
+        // these layers take taps, but must never be what a controller highlights
+        for (View v : new View[]{root, scroll}) {
+            v.setFocusable(false);
+            v.setFocusableInTouchMode(false);
+            v.setDefaultFocusHighlightEnabled(false);
+        }
+        scroll.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(340), ViewGroup.LayoutParams.MATCH_PARENT);
         lp.gravity = Gravity.START;
         root.addView(scroll, lp);
@@ -75,6 +82,10 @@ public class QuickMenuActivity extends AppCompatActivity {
         setContentView(root);
         build();
         refreshState();
+        // start on the first item, so the first press already moves through the menu
+        ui.post(() -> {
+            if (firstRow != null) firstRow.requestFocus();
+        });
     }
 
     @Override
@@ -206,6 +217,7 @@ public class QuickMenuActivity extends AppCompatActivity {
         else sub.setText(subtitle);
         r.setFocusable(true);
         r.setClickable(true);
+        r.setDefaultFocusHighlightEnabled(false); // we draw our own outline
         r.setOnClickListener(v -> action.run());
         list.addView(r);
         if (firstRow == null) firstRow = r;
