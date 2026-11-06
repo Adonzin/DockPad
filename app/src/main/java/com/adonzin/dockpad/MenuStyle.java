@@ -30,6 +30,8 @@ final class MenuStyle {
     int corners = 24;   // dp
     int border = 0;     // dp
     String borderColor = "";
+    int edgeOpacity = 100; // border and glowing edge, percent
+    String backdrop = "";  // colour around the menu (empty: black)
     boolean glow = false;
     int textSize = 100; // percent
     String font = "default";
@@ -94,6 +96,8 @@ final class MenuStyle {
         s.corners = clamp(o.optInt("corners", s.corners), 0, 48);
         s.border = clamp(o.optInt("border", s.border), 0, 8);
         s.borderColor = color(o.optString("borderColor", ""));
+        s.edgeOpacity = clamp(o.optInt("edgeOpacity", s.edgeOpacity), 0, 100);
+        s.backdrop = color(o.optString("backdrop", ""));
         s.glow = o.optBoolean("glow", s.glow);
         s.textSize = clamp(o.optInt("textSize", s.textSize), 70, 160);
         String f = o.optString("font", s.font);
@@ -123,6 +127,8 @@ final class MenuStyle {
             o.put("corners", corners);
             o.put("border", border);
             o.put("borderColor", borderColor);
+            o.put("edgeOpacity", edgeOpacity);
+            o.put("backdrop", backdrop);
             o.put("glow", glow);
             o.put("textSize", textSize);
             o.put("font", font);
@@ -244,12 +250,21 @@ final class MenuStyle {
             for (int i = 0; i < 8; i++) r[i] = dp(c, radiiAt24[i] * k);
             d.setCornerRadii(r);
         }
-        if (border > 0) d.setStroke(dp(c, border), parse(borderColor, accent(c)));
-        else if (glow) {
-            int a = accent(c);
-            d.setStroke(dp(c, 3), Color.argb(150, Color.red(a), Color.green(a), Color.blue(a)));
-        }
+        if (border > 0) d.setStroke(dp(c, border), edge(parse(borderColor, accent(c)), 255));
+        else if (glow) d.setStroke(dp(c, 3), edge(accent(c), 150));
         return d;
+    }
+
+    /** A border colour at the edge opacity (on top of the colour's own transparency). */
+    private int edge(int color, int baseAlpha) {
+        int a = Math.round(Math.min(Color.alpha(color), baseAlpha) * edgeOpacity / 100f);
+        return Color.argb(a, Color.red(color), Color.green(color), Color.blue(color));
+    }
+
+    /** The colour around the menu, at {@code percent} opacity. */
+    int backdrop(int percent) {
+        int b = parse(backdrop, 0xFF000000);
+        return Color.argb(Math.round(percent * 2.55f), Color.red(b), Color.green(b), Color.blue(b));
     }
 
     static GradientDrawable.Orientation orientation(int angle) {

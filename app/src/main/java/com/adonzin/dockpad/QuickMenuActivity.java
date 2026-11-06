@@ -67,6 +67,7 @@ public class QuickMenuActivity extends AppCompatActivity {
         wl.layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
         getWindow().setAttributes(wl);
         setContentView(root);
+        getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND); // the look's backdrop does this
         hideSystemBars();
         theme = MenuTheme.load(this);
         rebuild();
@@ -388,30 +389,31 @@ public class QuickMenuActivity extends AppCompatActivity {
         root.removeAllViews();
         String frame = theme.frame();
         View panel;
+        int defaultDim; // how dark the game gets behind each style, unless the look says otherwise
         switch (frame) {
             case "ring":
-                root.setBackgroundColor(0x99000000);
+                defaultDim = 70;
                 panel = radialPanel();
                 break;
             case "band":
-                root.setBackgroundColor(0x66000000);
+                defaultDim = 55;
                 panel = carouselPanel();
                 break;
             case "screen":
-                root.setBackgroundColor(theme.layout.equals("xmb") ? 0x66000000 : 0x44000000);
+                defaultDim = theme.layout.equals("xmb") ? 60 : 50;
                 panel = screenPanel();
                 break;
             case "rail":
-                root.setBackgroundColor(0);
+                defaultDim = 35;
                 panel = railPanel();
                 break;
             default:
-                root.setBackgroundColor(0);
+                defaultDim = 35;
                 panel = sidePanel();
         }
+        root.setBackgroundColor(theme.style.backdrop(theme.style.dim >= 0 ? theme.style.dim : defaultDim));
         root.addView(panel);
         applyStyle(panel);
-        if (theme.style.dim >= 0) root.setBackgroundColor(android.graphics.Color.argb(Math.round(theme.style.dim * 2.55f), 0, 0, 0));
         for (int i = 0; i < renderer.tiles.size(); i++) {
             int index = i;
             View t = renderer.tiles.get(i);

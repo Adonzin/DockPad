@@ -46,8 +46,8 @@ Docked play on a handheld usually means setting up every emulator again for an e
 - Covers the whole screen, hiding the status and navigation bars while it's open.
 - **Its own look:**
   - palettes (Midnight, Ocean, Sunset, Neon, Retro terminal, Candy and more), or your own colours, including linear, radial and sweep gradients
-  - transparency, and how dark the game behind it gets
-  - corner roundness, borders and a glowing edge
+  - panel transparency, and a backdrop over the game (any colour, any strength)
+  - corner roundness, borders and a glowing edge, with their own colour and opacity
   - text size and font, including your own imported `.ttf` / `.otf` fonts
   - highlight style (filled, outline, glow, grow or underline)
   - an optional clock and handheld battery in the header

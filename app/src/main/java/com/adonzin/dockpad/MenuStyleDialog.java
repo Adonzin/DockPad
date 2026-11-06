@@ -96,7 +96,11 @@ final class MenuStyleDialog {
             if (st.gradient.equals("linear")) slider("Direction", 0, 315, 45, st.angle, v -> st.angle = v, v -> v + "°");
         }
         slider("Panel opacity", 10, 100, 5, st.opacity, v -> st.opacity = v, v -> v + "%");
-        slider("Darken the game behind", -5, 95, 5, st.dim, v -> st.dim = v < 0 ? -1 : v,
+
+        label("Backdrop (around the menu)");
+        small("The colour laid over the game behind the menu, and how strongly.");
+        colorRow("Backdrop colour", st.backdrop, "#000000", c -> st.backdrop = c);
+        slider("Backdrop opacity", -5, 95, 5, st.dim, v -> st.dim = v < 0 ? -1 : v,
                 v -> v < 0 ? "the style's own" : v + "%");
 
         label("Colours");
@@ -108,7 +112,8 @@ final class MenuStyleDialog {
         slider("Corner roundness", 0, 48, 2, st.corners, v -> st.corners = v, v -> v == 0 ? "square" : v + " dp");
         slider("Border", 0, 8, 1, st.border, v -> st.border = v, v -> v == 0 ? "none" : v + " dp");
         if (st.border > 0) colorRow("Border colour", st.borderColor, "", c -> st.borderColor = c);
-        toggle("Glowing edge", st.glow, v -> st.glow = v);
+        toggle("Glowing edge (when there's no border)", st.glow, v -> st.glow = v);
+        slider("Border and glow opacity", 0, 100, 5, st.edgeOpacity, v -> st.edgeOpacity = v, v -> v + "%");
 
         label("Text");
         slider("Size", 70, 160, 10, st.textSize, v -> st.textSize = v, v -> v + "%");
@@ -192,7 +197,7 @@ final class MenuStyleDialog {
         to.palette = p.palette; to.panel1 = p.panel1; to.panel2 = p.panel2; to.panel3 = p.panel3;
         to.gradient = p.gradient; to.angle = p.angle; to.accent = p.accent; to.text = p.text; to.tile = p.tile;
         to.opacity = p.opacity; to.dim = p.dim; to.corners = p.corners; to.border = p.border;
-        to.borderColor = p.borderColor; to.glow = p.glow; to.textSize = p.textSize; to.font = p.font;
+        to.borderColor = p.borderColor; to.glow = p.glow; to.edgeOpacity = p.edgeOpacity; to.backdrop = p.backdrop; to.textSize = p.textSize; to.font = p.font;
         to.highlight = p.highlight; to.showTitle = p.showTitle; to.showStatus = p.showStatus;
         to.showClock = p.showClock; to.showBattery = p.showBattery;
     }
