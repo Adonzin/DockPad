@@ -61,10 +61,30 @@ public class QuickMenuActivity extends AppCompatActivity {
             if (!arranging) finish(); // tap outside the panel
         });
         noHighlight(root);
+        // over the whole screen: behind the status bar, the gesture bar and any cutout
+        getWindow().setDecorFitsSystemWindows(false);
+        android.view.WindowManager.LayoutParams wl = getWindow().getAttributes();
+        wl.layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+        getWindow().setAttributes(wl);
         setContentView(root);
+        hideSystemBars();
         theme = MenuTheme.load(this);
         rebuild();
         refreshState();
+    }
+
+    /** Hides the status and navigation bars while the menu is open (a swipe from the edge shows them briefly). */
+    private void hideSystemBars() {
+        android.view.WindowInsetsController ic = getWindow().getInsetsController();
+        if (ic == null) return;
+        ic.setSystemBarsBehavior(android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+        ic.hide(android.view.WindowInsets.Type.systemBars());
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) hideSystemBars();
     }
 
     private static void noHighlight(View v) {

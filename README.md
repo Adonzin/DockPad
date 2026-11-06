@@ -40,7 +40,8 @@ Docked play on a handheld usually means setting up every emulator again for an e
 - Opens over any game with a button combo, and is fully navigable with a controller.
 - Has Home, Back, Cursor mode, an on-screen keyboard, rapid fire, face-button swaps, screenshot, force close, your own commands, live controllers list (with battery and disconnect), and pairing.
 - You choose which items it shows.
-- **Organise it your way:** rename sections and items (e.g. "Tools" → "Utilities"), move any item or command to another section, make your own sections and put them in any order.
+- **Organise it your way** in its own Quick menu tab: show or hide items, put them in order, move any item or command to another section, rename sections and items (e.g. "Tools" → "Utilities"), and make your own sections.
+- Covers the whole screen, hiding the status and navigation bars while it's open.
 - **Twelve styles:**
   - list
   - compact list
@@ -69,7 +70,7 @@ Docked play on a handheld usually means setting up every emulator again for an e
 - Starts by itself after a restart and survives sleep.
 - Can switch Wireless debugging off again once it has started.
 - Quick Settings tiles for DockPad and Cursor mode.
-- The whole app can be used with a controller (L1/R1 switch tabs).
+- The whole app can be used with a controller. Its tabs (Home, Controllers, Shortcuts, Quick menu, Settings) switch with L1/R1.
 - Updates itself from inside the app.
 - **Backup & sharing:** save your whole setup (shortcuts, quick menu, controller layouts, settings) to one file, restore it later, or share it with friends.
 - Built-in diagnostics, button checker and rumble test.

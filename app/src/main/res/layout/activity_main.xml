@@ -240,7 +240,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:text="A panel over any game: Home, Back, Cursor mode, keyboard, rapid fire, screenshot and your own commands. Set it up in the Shortcuts tab."
+                    android:text="A panel over any game: Home, Back, Cursor mode, keyboard, rapid fire, screenshot and your own commands. Set it up in the Quick menu tab."
                     android:textAppearance="?attr/textAppearanceBodySmall"
                     android:textColor="?attr/colorOnSurfaceVariant" />
                 <com.google.android.material.button.MaterialButton
@@ -373,6 +373,13 @@
                     app:icon="@drawable/ic_add" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/page_quickmenu"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:visibility="gone">
         <com.google.android.material.card.MaterialCardView
             style="?attr/materialCardViewOutlinedStyle"
             android:layout_width="match_parent"
@@ -387,14 +394,14 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Quick menu"
+                    android:text="Opening it"
                     android:textAppearance="?attr/textAppearanceTitleMedium" />
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:text="Opens over any game with a button combo. B closes it."
+                    android:text="A panel over any game, opened with a button combo. B closes it."
                     android:textAppearance="?attr/textAppearanceBodySmall"
                     android:textColor="?attr/colorOnSurfaceVariant" />
 
@@ -405,7 +412,7 @@
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/menu_combo"
-                        style="@style/DockPad.Button.Tonal"
+                    style="@style/DockPad.Button.Tonal"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
@@ -413,48 +420,121 @@
                         android:text="Set combo to open" />
 
                     <com.google.android.material.button.MaterialButton
-                        android:id="@+id/menu_items"
-                        style="?attr/materialButtonOutlinedStyle"
+                        android:id="@+id/menu_preview"
+                    style="?attr/materialButtonOutlinedStyle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
-                        android:text="Choose what's in it" />
+                        android:layout_marginEnd="8dp"
+                        android:text="Preview" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/menu_look"
+                    style="?attr/materialButtonOutlinedStyle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:layout_marginEnd="8dp"
+                        android:text="Look &amp; layout…" />
                 </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+        <com.google.android.material.card.MaterialCardView
+            style="?attr/materialCardViewOutlinedStyle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp">
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/menu_look"
-                    style="?attr/materialButtonOutlinedStyle"
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+                <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:text="Look &amp; layout…" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/menu_organise"
-                    style="?attr/materialButtonOutlinedStyle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:text="Organise sections &amp; names…" />
+                    android:text="Sections &amp; items"
+                    android:textAppearance="?attr/textAppearanceTitleMedium" />
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
+                    android:layout_marginTop="4dp"
+                    android:text="Show or hide items, put them in order, move them between sections and rename anything. The quick menu follows this list."
+                    android:textAppearance="?attr/textAppearanceBodySmall"
+                    android:textColor="?attr/colorOnSurfaceVariant" />
+
+                <LinearLayout
+                    android:id="@+id/organiser_list"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="vertical" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/new_section"
+                    style="@style/DockPad.Button.Tonal"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:layout_marginEnd="8dp"
+                        android:text="New section"
+                        app:icon="@drawable/ic_add" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/reset_sections"
+                    style="?attr/materialButtonOutlinedStyle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:layout_marginEnd="8dp"
+                        android:text="Reset names, sections and order" />
+                </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+        <com.google.android.material.card.MaterialCardView
+            style="?attr/materialCardViewOutlinedStyle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
                     android:text="My commands"
-                    android:textAppearance="?attr/textAppearanceTitleSmall" />
+                    android:textAppearance="?attr/textAppearanceTitleMedium" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Your own entries for the quick menu: any action, keyboard key, app or macro."
+                    android:textAppearance="?attr/textAppearanceBodySmall"
+                    android:textColor="?attr/colorOnSurfaceVariant" />
 
                 <LinearLayout
                     android:id="@+id/commands_list"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical" />
+
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/add_command"
                     style="@style/DockPad.Button.Tonal"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
+                    android:layout_marginEnd="8dp"
                     android:text="Add command"
                     app:icon="@drawable/ic_add" />
             </LinearLayout>
