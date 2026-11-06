@@ -40,7 +40,8 @@ Docked play on a handheld usually means setting up every emulator again for an e
 - Opens over any game with a button combo, and is fully navigable with a controller.
 - Has Home, Back, Cursor mode, an on-screen keyboard, rapid fire, face-button swaps, screenshot, force close, your own commands, live controllers list (with battery and disconnect), and pairing.
 - You choose which items it shows.
-- **Organise it your way** in its own Quick menu tab: show or hide items, put them in order, move any item or command to another section, rename sections and items (e.g. "Tools" → "Utilities"), and make your own sections.
+- **Organise it your way** in its own Quick menu tab: show or hide items, put them in order, move any item or command to another section, rename sections and items (e.g. "Tools" → "Utilities"), give them icons from a built-in library, and make your own sections.
+- Volume, brightness and media commands keep the menu open, so you can press them again and again.
 - Covers the whole screen, hiding the status and navigation bars while it's open.
 - **Twelve styles:**
   - list

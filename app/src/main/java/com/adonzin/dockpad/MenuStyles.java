@@ -140,7 +140,8 @@ final class MenuStyles {
                 h.setOrientation(LinearLayout.VERTICAL);
                 h.setGravity(Gravity.CENTER_HORIZONTAL);
                 ImageView icon = new ImageView(c);
-                icon.setImageResource(selectable.get(secs.get(k).get(0)).icon);
+                Integer own = MenuRender.sectionIcons.get(names.get(k));
+                icon.setImageResource(own != null ? own : selectable.get(secs.get(k).get(0)).icon);
                 icon.setImageTintList(android.content.res.ColorStateList.valueOf(color(androidx.appcompat.R.attr.colorPrimary)));
                 int hs = (int) (dp(64) * (0.6f + theme.sizeFraction() * 0.6f));
                 h.addView(icon, new LinearLayout.LayoutParams(hs, hs));
@@ -646,6 +647,14 @@ final class MenuStyles {
             for (int g = 0; g < groups.size(); g++) {
                 TextView tab = new TextView(c);
                 tab.setText(names.get(g));
+                Integer own = MenuRender.sectionIcons.get(names.get(g));
+                if (own != null) {
+                    android.graphics.drawable.Drawable d = c.getDrawable(own).mutate();
+                    d.setTint(color(androidx.appcompat.R.attr.colorPrimary));
+                    d.setBounds(0, 0, dp(18), dp(18));
+                    tab.setCompoundDrawables(d, null, null, null);
+                    tab.setCompoundDrawablePadding(dp(6));
+                }
                 tab.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_LabelLarge);
                 tab.setPadding(dp(14), dp(8), dp(14), dp(8));
                 tabs.addView(tab);

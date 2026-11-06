@@ -21,6 +21,8 @@ import java.util.List;
 /** Draws the quick menu's items in each layout, and moves the highlight between them. */
 final class MenuRender {
     static final int UP = 0, DOWN = 1, LEFT = 2, RIGHT = 3;
+    /** Icons chosen for sections (shown name -> drawable), for styles that show section icons. */
+    static final java.util.Map<String, Integer> sectionIcons = new java.util.HashMap<>();
 
     private MenuRender() {
     }

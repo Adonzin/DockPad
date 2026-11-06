@@ -117,6 +117,15 @@ final class MenuOrganizer {
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(0, dp(14), 0, dp(2));
+        int sIcon = IconLibrary.resolve(mc.sectionIcon.get(key));
+        row.addView(iconButton(sIcon != 0 ? sIcon : R.drawable.ic_lib_apps, sIcon == 0, "sec:" + key + ":icon",
+                () -> pickIcon("Icon for “" + mc.sectionName(key) + "” (XMB and tabs show it)", mc.sectionIcon.get(key), name -> {
+                    MenuCustom m = MenuCustom.load(a);
+                    if (name == null) m.sectionIcon.remove(key);
+                    else m.sectionIcon.put(key, name);
+                    m.save(a);
+                    render();
+                })));
         TextView name = new TextView(a);
         String shown = mc.sectionName(key);
         name.setText(shown.toUpperCase() + (shown.equals(key) || mc.isExtra(key) ? "" : "   (was " + key + ")"));
@@ -166,6 +175,16 @@ final class MenuOrganizer {
             title(row).setAlpha(on ? 1f : 0.5f);
         });
         row.addView(show);
+        if (!id.equals("controllers")) {
+            row.addView(iconButton(mc.iconOf(id, QuickMenuActivity.defaultIcon(id)), false, "item:" + id + ":icon",
+                    () -> pickIcon("Icon for “" + mc.titleOf(id, it[1]) + "”", mc.itemIcon.get(id), name -> {
+                        MenuCustom m = MenuCustom.load(a);
+                        if (name == null) m.itemIcon.remove(id);
+                        else m.itemIcon.put(id, name);
+                        m.save(a);
+                        render();
+                    })));
+        }
         TextView title = new TextView(a);
         String t = mc.titleOf(id, it[1]);
         title.setText(t + (t.equals(it[1]) ? "" : "   (" + it[1] + ")"));
@@ -213,6 +232,91 @@ final class MenuOrganizer {
             action.run();
         });
         return b;
+    }
+
+    /** A small square button showing an icon; selecting it opens the icon picker. */
+    private View iconButton(int icon, boolean faded, String tag, Runnable action) {
+        android.widget.ImageView v = new android.widget.ImageView(a);
+        v.setImageResource(icon);
+        v.setImageTintList(android.content.res.ColorStateList.valueOf(color(androidx.appcompat.R.attr.colorPrimary)));
+        v.setAlpha(faded ? 0.45f : 1f);
+        v.setPadding(dp(8), dp(8), dp(8), dp(8));
+        v.setBackgroundResource(R.drawable.focus_ring);
+        v.setFocusable(true);
+        v.setClickable(true);
+        v.setTag(tag);
+        v.setContentDescription("Change icon");
+        v.setOnClickListener(x -> {
+            focusTag = tag;
+            action.run();
+        });
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(40), dp(40));
+        lp.setMarginEnd(dp(6));
+        v.setLayoutParams(lp);
+        return v;
+    }
+
+    interface Picked {
+        void icon(String name); // null: the original
+    }
+
+    private void pickIcon(String title, String current, Picked done) {
+        android.widget.GridLayout grid = new android.widget.GridLayout(a);
+        grid.setColumnCount(8);
+        grid.setPadding(dp(16), dp(8), dp(16), 0);
+        android.app.Dialog[] dialog = new android.app.Dialog[1];
+        View first = null;
+        // the original first
+        TextView original = new TextView(a);
+        original.setText("Original");
+        original.setGravity(Gravity.CENTER);
+        original.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_LabelSmall);
+        cell(grid, original, current == null, () -> {
+            dialog[0].dismiss();
+            done.icon(null);
+        });
+        first = original;
+        for (int i = 0; i < IconLibrary.NAMES.length; i++) {
+            String name = IconLibrary.NAMES[i][0];
+            android.widget.ImageView v = new android.widget.ImageView(a);
+            v.setImageResource(IconLibrary.IDS[i]);
+            v.setImageTintList(android.content.res.ColorStateList.valueOf(color(androidx.appcompat.R.attr.colorPrimary)));
+            v.setPadding(dp(10), dp(10), dp(10), dp(10));
+            v.setContentDescription(IconLibrary.NAMES[i][1]);
+            View c = cell(grid, v, name.equals(current), () -> {
+                dialog[0].dismiss();
+                done.icon(name);
+            });
+            if (name.equals(current)) first = c;
+        }
+        android.widget.ScrollView sv = new android.widget.ScrollView(a);
+        sv.addView(grid);
+        dialog[0] = new DpDialog(a).setTitle(title).setView(sv).setNegativeButton("Cancel", null).show();
+        View start = first;
+        grid.post(start::requestFocus);
+    }
+
+    private View cell(android.widget.GridLayout grid, View v, boolean current, Runnable pick) {
+        v.setFocusable(true);
+        v.setClickable(true);
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setCornerRadius(dp(12));
+        bg.setColor(current ? color(com.google.android.material.R.attr.colorPrimaryContainer) : 0x14FFFFFF);
+        v.setBackground(bg);
+        v.setForeground(a.getDrawable(R.drawable.focus_ring));
+        v.setOnClickListener(x -> pick.run());
+        android.widget.GridLayout.LayoutParams lp = new android.widget.GridLayout.LayoutParams();
+        lp.width = dp(48);
+        lp.height = dp(48);
+        lp.setMargins(dp(3), dp(3), dp(3), dp(3));
+        grid.addView(v, lp);
+        return v;
+    }
+
+    private int color(int attr) {
+        android.util.TypedValue tv = new android.util.TypedValue();
+        a.getTheme().resolveAttribute(attr, tv, true);
+        return tv.data;
     }
 
     // ------------------------------------------------------------------ changes

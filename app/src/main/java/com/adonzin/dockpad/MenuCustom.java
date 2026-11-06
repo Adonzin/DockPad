@@ -25,6 +25,10 @@ final class MenuCustom {
     final Map<String, String> itemSection = new HashMap<>();
     /** Item id -> shown name. */
     final Map<String, String> itemTitle = new HashMap<>();
+    /** Item id -> icon name (IconLibrary). */
+    final Map<String, String> itemIcon = new HashMap<>();
+    /** Section key -> icon name. */
+    final Map<String, String> sectionIcon = new HashMap<>();
     /** Section keys in the user's order. */
     final List<String> sectionOrder = new ArrayList<>();
     /** Sections the user made. */
@@ -38,6 +42,8 @@ final class MenuCustom {
             readMap(o.optJSONObject("sectionNames"), m.sectionNames);
             readMap(o.optJSONObject("itemSection"), m.itemSection);
             readMap(o.optJSONObject("itemTitle"), m.itemTitle);
+            readMap(o.optJSONObject("itemIcon"), m.itemIcon);
+            readMap(o.optJSONObject("sectionIcon"), m.sectionIcon);
             readList(o.optJSONArray("sectionOrder"), m.sectionOrder);
             readList(o.optJSONArray("extraSections"), m.extraSections);
         } catch (Exception ignored) {
@@ -51,6 +57,8 @@ final class MenuCustom {
             o.put("sectionNames", new JSONObject(sectionNames));
             o.put("itemSection", new JSONObject(itemSection));
             o.put("itemTitle", new JSONObject(itemTitle));
+            o.put("itemIcon", new JSONObject(itemIcon));
+            o.put("sectionIcon", new JSONObject(sectionIcon));
             o.put("sectionOrder", new JSONArray(sectionOrder));
             o.put("extraSections", new JSONArray(extraSections));
             c.getSharedPreferences("dockpad", Context.MODE_PRIVATE).edit().putString("menuCustom", o.toString()).apply();
@@ -117,6 +125,11 @@ final class MenuCustom {
         return t;
     }
 
+    int iconOf(String id, int original) {
+        int r = IconLibrary.resolve(itemIcon.get(id));
+        return r != 0 ? r : original;
+    }
+
     void moveSection(String key, int delta) {
         List<String> all = sections();
         int i = all.indexOf(key), j = i + delta;
@@ -132,6 +145,7 @@ final class MenuCustom {
         extraSections.remove(key);
         sectionOrder.remove(key);
         sectionNames.remove(key);
+        sectionIcon.remove(key);
         itemSection.values().removeIf(v -> v.equals(key)); // its items go back to their own sections
     }
 }

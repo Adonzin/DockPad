@@ -193,7 +193,12 @@ public class QuickMenuActivity extends AppCompatActivity {
         section = "My commands";
         for (Shortcut c : new Prefs(this).menuCommands()) {
             String id = commandId(c);
+            boolean stay = isAdjustment(c);
             items.add(new MenuRender.Item(id, id, section, R.drawable.ic_bolt, c.device, c.actionLabel(), null, () -> {
+                if (stay) { // volume, brightness, media: keep the menu, so it can be pressed again
+                    runInBackground(b -> b.runCommand(c.encode(), 0));
+                    return;
+                }
                 finish();
                 runInBackground(b -> b.runCommand(c.encode(), 350));
             }));
@@ -226,20 +231,58 @@ public class QuickMenuActivity extends AppCompatActivity {
         MenuCustom mc = MenuCustom.load(this);
         List<String> keys = mc.sections();
         sectionRank.clear();
+        MenuRender.sectionIcons.clear();
         List<MenuRender.Item> out = new ArrayList<>();
         for (MenuRender.Item it : in) {
             String key = mc.sectionOf(it.group, it.section);
             String shown = mc.sectionName(key);
             if (!sectionRank.containsKey(shown)) sectionRank.put(shown, Math.max(0, keys.indexOf(key)));
             String title = it.group.equals("controllers") ? it.title : mc.titleOf(it.id, it.title);
-            out.add(new MenuRender.Item(it.id, it.group, shown, it.icon, title, it.subtitle, it.badge, it.action));
+            int icon = it.group.equals("controllers") ? it.icon : mc.iconOf(it.id, it.icon);
+            out.add(new MenuRender.Item(it.id, it.group, shown, icon, title, it.subtitle, it.badge, it.action));
+            int sIcon = IconLibrary.resolve(mc.sectionIcon.get(key));
+            if (sIcon != 0) MenuRender.sectionIcons.put(shown, sIcon);
         }
         items = out;
         return out;
     }
 
+    /** Commands that only adjust something (volume, brightness, media): the menu stays open for them. */
+    static boolean isAdjustment(Shortcut c) {
+        if (c.steps.isEmpty()) return false;
+        for (int[] step : c.steps) {
+            for (int code : step) {
+                boolean ok = code == Codes.ACTION_BRIGHTNESS_UP || code == Codes.ACTION_BRIGHTNESS_DOWN
+                        || code == Codes.ACTION_MUTE || code == Codes.ACTION_PLAY_PAUSE
+                        || code == Codes.ACTION_NEXT_TRACK || code == Codes.ACTION_PREVIOUS_TRACK
+                        || code == Codes.KEY_VOLUMEUP || code == Codes.KEY_VOLUMEDOWN
+                        || code == Codes.KB + Codes.KEY_VOLUMEUP || code == Codes.KB + Codes.KEY_VOLUMEDOWN
+                        || code == Codes.KB + 113 /* KEY_MUTE */;
+                if (!ok) return false;
+            }
+        }
+        return true;
+    }
+
     static String commandId(Shortcut c) {
         return "cmd:" + Integer.toHexString(c.encode().hashCode());
+    }
+
+    /** Each built-in item's own icon (for the organiser). */
+    static int defaultIcon(String id) {
+        switch (id) {
+            case "home": return R.drawable.ic_home;
+            case "back": return R.drawable.ic_back;
+            case "dpkeyboard": case "keyboard": return R.drawable.ic_keyboard;
+            case "cursor": return R.drawable.ic_mouse;
+            case "nintendo": case "swapab": case "swapxy": case "controllers": return R.drawable.ic_gamepad;
+            case "screenshot": return R.drawable.ic_camera;
+            case "forceclose": return R.drawable.ic_close_app;
+            case "pair": return R.drawable.ic_add;
+            case "power": return R.drawable.ic_power;
+            case "openapp": return R.drawable.ic_open;
+            default: return R.drawable.ic_bolt;
+        }
     }
 
     /** Which section each built-in item starts in (for the organiser). */
