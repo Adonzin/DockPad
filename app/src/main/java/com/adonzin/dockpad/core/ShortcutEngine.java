@@ -16,9 +16,12 @@ import java.util.Set;
  *   That last button is kept from the game; the earlier ones reach it as normal.
  * - "When pressed" with a single-step action behaves like a remap: the outputs stay
  *   pressed as long as the button is held.
- * - "When held" fires after half a second. If the same buttons also have a "when pressed"
+ * - "When held" fires after its hold time. If the same buttons also have a "when pressed"
  *   shortcut, a short press runs that one instead; otherwise a short press goes to the
  *   game as normal.
+ * - Several "when held" shortcuts on the same buttons (different hold times): each hold time
+ *   arms the next one, and letting go runs the last one armed. The longest runs as soon as it
+ *   is reached.
  * - Multi-step actions are played as a macro: each step is tapped in turn.
  *
  * Not thread-safe: the caller serializes calls (including scheduled callbacks).
@@ -31,6 +34,10 @@ public final class ShortcutEngine {
         void output(int code, boolean down, Shortcut from);
         /** Let a button press through to the game as if no shortcut existed. */
         void forward(int code, boolean down);
+
+        /** With several hold times: this one runs if the buttons are let go now. */
+        default void armed(Shortcut s) {
+        }
     }
 
     public interface Scheduler {
@@ -51,9 +58,11 @@ public final class ShortcutEngine {
     private final List<Runnable> macroTimers = new ArrayList<>();
 
     private Integer pendingKey;
-    private Shortcut pendingPress, pendingHold;
-    private Runnable pendingTimer;
+    private Shortcut pendingPress;
+    private List<Shortcut> pendingHolds = new ArrayList<>();
+    private final List<Runnable> pendingTimers = new ArrayList<>();
     private boolean pendingFired;
+    private int armed = -1;
 
     public ShortcutEngine(List<Shortcut> all, String deviceName, Out out, Scheduler scheduler) {
         this.out = out;
@@ -74,7 +83,8 @@ public final class ShortcutEngine {
         if (!triggerKeys.contains(code)) return false;
         if (isDown) {
             if (!down.add(code)) return consumed.contains(code);
-            Shortcut press = null, hold = null;
+            Shortcut press = null;
+            List<Shortcut> holds = new ArrayList<>();
             int best = 0;
             for (Shortcut s : shortcuts) {
                 if (!contains(s.trigger, code) || !down.containsAll(asList(s.trigger))) continue;
@@ -82,31 +92,39 @@ public final class ShortcutEngine {
                 if (n < best) continue;
                 if (n > best) {
                     best = n;
-                    press = hold = null;
+                    press = null;
+                    holds.clear();
                 }
-                if (s.hold) {
-                    if (hold == null) hold = s;
-                } else if (press == null) {
-                    press = s;
-                }
+                if (s.hold) holds.add(s);
+                else if (press == null) press = s;
             }
-            if (press == null && hold == null) return false;
+            if (press == null && holds.isEmpty()) return false;
             consumed.add(code);
-            if (hold == null) {
+            if (holds.isEmpty()) {
                 start(code, press);
             } else {
                 cancelPending();
+                holds.sort((a, b) -> Long.compare(a.holdMs, b.holdMs));
                 pendingKey = code;
                 pendingPress = press;
-                pendingHold = hold;
+                pendingHolds = holds;
                 pendingFired = false;
-                final Shortcut h = hold;
-                pendingTimer = scheduler.schedule(() -> {
-                    if (pendingKey != null && pendingKey == code && !pendingFired) {
-                        pendingFired = true;
-                        start(code, h);
-                    }
-                }, Math.max(100, h.holdMs));
+                armed = -1;
+                for (int k = 0; k < holds.size(); k++) {
+                    final int step = k;
+                    final Shortcut h = holds.get(k);
+                    final boolean last = k == holds.size() - 1;
+                    pendingTimers.add(scheduler.schedule(() -> {
+                        if (pendingKey == null || pendingKey != code || pendingFired) return;
+                        if (last) {
+                            pendingFired = true;
+                            start(code, h);
+                        } else {
+                            armed = step;
+                            out.armed(h);
+                        }
+                    }, Math.max(100, h.holdMs)));
+                }
             }
             return true;
         } else {
@@ -115,9 +133,11 @@ public final class ShortcutEngine {
             if (pendingKey != null && pendingKey == code) {
                 boolean fired = pendingFired;
                 Shortcut press = pendingPress;
+                Shortcut armedHold = armed >= 0 && armed < pendingHolds.size() ? pendingHolds.get(armed) : null;
                 cancelPending();
                 if (!fired) {
-                    if (press != null) playMacro(press); // short press of a press+hold pair
+                    if (armedHold != null) playMacro(armedHold); // let go after a shorter hold time
+                    else if (press != null) playMacro(press); // short press of a press+hold pair
                     else {
                         out.forward(code, true);
                         out.forward(code, false);
@@ -175,11 +195,13 @@ public final class ShortcutEngine {
     }
 
     private void cancelPending() {
-        if (pendingTimer != null) pendingTimer.run();
-        pendingTimer = null;
+        for (Runnable r : pendingTimers) r.run();
+        pendingTimers.clear();
         pendingKey = null;
-        pendingPress = pendingHold = null;
+        pendingPress = null;
+        pendingHolds = new ArrayList<>();
         pendingFired = false;
+        armed = -1;
     }
 
     /** Releases everything (controller disconnected or shortcuts changed). */

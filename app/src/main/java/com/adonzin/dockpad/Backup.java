@@ -29,7 +29,7 @@ final class Backup {
             "Controller layouts (button fixes, rapid fire, fine-tuning)", "Settings"};
     private static final String[][] SECTION_KEYS = {
             {"shortcuts"},
-            {"menuCommands", "menuHidden", "menuTheme", "menuOrder"},
+            {"menuCommands", "menuHidden", "menuTheme", "menuOrder", "menuCustom"},
             {"layouts"},
             {"multiplayer", "joinByPress", "touchpadAsButton", "rumble", "includeBuiltIn", "autoStart", "turnOffWD",
                     "pcSpeed", "pcPointerLeft", "autoUpdateCheck"},

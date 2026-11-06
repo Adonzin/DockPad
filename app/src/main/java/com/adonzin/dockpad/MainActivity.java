@@ -168,6 +168,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         findViewById(R.id.check_updates).setOnClickListener(v -> checkUpdates(true));
         findViewById(R.id.backup_save).setOnClickListener(v -> saveBackup());
         findViewById(R.id.menu_look).setOnClickListener(v -> MenuLookDialog.show(this));
+        findViewById(R.id.menu_organise).setOnClickListener(v -> MenuOrganizer.show(this));
         findViewById(R.id.backup_restore).setOnClickListener(v -> {
             try {
                 pickBackup.launch(new String[]{"application/json", "application/octet-stream", "text/plain", "*/*"});

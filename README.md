@@ -33,13 +33,14 @@ Docked play on a handheld usually means setting up every emulator again for an e
   - a keyboard key
   - a system action: screenshot, clear recent apps, force close the game, previous app, brightness, media keys, sleep, open an app…
   - a recorded sequence of presses
-- Adjustable hold time per shortcut.
+- Adjustable hold time per shortcut, and **several hold times on one button** (e.g. tap Select for Select, hold 1 s for Back, hold 3 s for Home). Letting go runs the last one reached, and a small message shows which is ready.
 - DualShock 4 / DualSense touchpad click as a button.
 
 **Quick menu overlay**
 - Opens over any game with a button combo, and is fully navigable with a controller.
 - Has Home, Back, Cursor mode, an on-screen keyboard, rapid fire, face-button swaps, screenshot, force close, your own commands, live controllers list (with battery and disconnect), and pairing.
 - You choose which items it shows.
+- **Organise it your way:** rename sections and items (e.g. "Tools" → "Utilities"), move any item or command to another section, make your own sections and put them in any order.
 - **Twelve styles:**
   - list
   - compact list

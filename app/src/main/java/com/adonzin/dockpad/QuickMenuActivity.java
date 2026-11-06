@@ -172,7 +172,7 @@ public class QuickMenuActivity extends AppCompatActivity {
 
         section = "My commands";
         for (Shortcut c : new Prefs(this).menuCommands()) {
-            String id = "cmd:" + Integer.toHexString(c.encode().hashCode());
+            String id = commandId(c);
             items.add(new MenuRender.Item(id, id, section, R.drawable.ic_bolt, c.device, c.actionLabel(), null, () -> {
                 finish();
                 runInBackground(b -> b.runCommand(c.encode(), 350));
@@ -195,7 +195,41 @@ public class QuickMenuActivity extends AppCompatActivity {
             startActivity(new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             finish();
         });
-        return items;
+        return organise(items);
+    }
+
+    /** Section of each section name, for ordering. */
+    private final Map<String, Integer> sectionRank = new HashMap<>();
+
+    /** The user's own section names, sections and item names (DockPad → Organise sections & names). */
+    private List<MenuRender.Item> organise(List<MenuRender.Item> in) {
+        MenuCustom mc = MenuCustom.load(this);
+        List<String> keys = mc.sections();
+        sectionRank.clear();
+        List<MenuRender.Item> out = new ArrayList<>();
+        for (MenuRender.Item it : in) {
+            String key = mc.sectionOf(it.group, it.section);
+            String shown = mc.sectionName(key);
+            if (!sectionRank.containsKey(shown)) sectionRank.put(shown, Math.max(0, keys.indexOf(key)));
+            String title = it.group.equals("controllers") ? it.title : mc.titleOf(it.id, it.title);
+            out.add(new MenuRender.Item(it.id, it.group, shown, it.icon, title, it.subtitle, it.badge, it.action));
+        }
+        items = out;
+        return out;
+    }
+
+    static String commandId(Shortcut c) {
+        return "cmd:" + Integer.toHexString(c.encode().hashCode());
+    }
+
+    /** Which section each built-in item starts in (for the organiser). */
+    static String defaultSection(String id) {
+        switch (id) {
+            case "home": case "back": return "Navigation";
+            case "controllers": case "pair": return "Controllers";
+            case "power": case "openapp": return "DockPad";
+            default: return id.startsWith("cmd:") ? "My commands" : "Tools";
+        }
     }
 
     private JSONArray lastControllers;
@@ -267,7 +301,8 @@ public class QuickMenuActivity extends AppCompatActivity {
         List<MenuRender.Item> original = new ArrayList<>(in);
         out.sort((a, b) -> {
             if (bySection) {
-                int s = Integer.compare(sections.indexOf(a.section), sections.indexOf(b.section));
+                int s = Integer.compare(sectionRank.getOrDefault(a.section, sections.indexOf(a.section) + 100),
+                        sectionRank.getOrDefault(b.section, sections.indexOf(b.section) + 100));
                 if (s != 0) return s;
             }
             int ra = rank.containsKey(a.group) ? rank.get(a.group) : Integer.MAX_VALUE;

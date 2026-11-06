@@ -1389,6 +1389,11 @@ final class Bridge {
                 public void forward(int code, boolean down) {
                     if (mapper != null) deliver(Codes.EV_KEY, code, down ? 1 : 0);
                 }
+
+                @Override
+                public void armed(Shortcut s) {
+                    Actions.toast("Let go for: " + s.actionLabel());
+                }
             }, (r, ms) -> {
                 ScheduledFuture<?> f = timer.schedule(() -> {
                     synchronized (Source.this) {

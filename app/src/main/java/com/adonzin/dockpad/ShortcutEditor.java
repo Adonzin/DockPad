@@ -330,7 +330,9 @@ final class ShortcutEditor {
                 h.append("In a combo, the earlier buttons still reach the game; the last one you press "
                         + "triggers the shortcut instead. ");
             }
-            if (s.hold) h.append("A quick press still works as normal. ");
+            if (s.hold) h.append("A quick press still works as normal. You can give the same buttons more "
+                    + "hold shortcuts with other hold times (e.g. 1 s for Back, 3 s for Home): letting go runs the "
+                    + "last one reached. ");
             else if (s.steps.size() == 1) h.append("The action stays pressed for as long as you hold the button. ");
             if (s.steps.size() > 1) h.append("Macro steps are pressed one after another. ");
             hint.setText(h.toString().trim());

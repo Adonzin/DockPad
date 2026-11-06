@@ -35,7 +35,8 @@ public final class Shortcut {
         int[] a = trigger.clone(), b = o.trigger.clone();
         Arrays.sort(a);
         Arrays.sort(b);
-        return device.equals(o.device) && hold == o.hold && Arrays.equals(a, b);
+        // hold shortcuts on the same buttons may coexist at different hold times
+        return device.equals(o.device) && hold == o.hold && Arrays.equals(a, b) && (!hold || holdMs == o.holdMs);
     }
 
     public boolean appliesTo(String deviceName) {
