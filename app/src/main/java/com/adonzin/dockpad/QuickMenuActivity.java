@@ -306,8 +306,13 @@ public class QuickMenuActivity extends AppCompatActivity {
                     runInBackground(b -> {
                         String err = b.disconnectController(name);
                         ui.post(() -> {
-                            android.widget.Toast.makeText(app, err == null || err.isEmpty()
-                                    ? name + " disconnected" : err, android.widget.Toast.LENGTH_LONG).show();
+                            if (err == null || err.isEmpty()) {
+                                android.widget.Toast.makeText(app, name + " disconnected",
+                                        android.widget.Toast.LENGTH_SHORT).show();
+                            } else if (!isFinishing()) {
+                                new DpDialog(this).setTitle("Didn't disconnect").setMessage(err)
+                                        .setPositiveButton("OK", null).show();
+                            }
                             refreshState();
                         });
                     });
