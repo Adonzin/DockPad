@@ -76,6 +76,7 @@ Already use [Shizuku](https://shizuku.rikka.app/)? DockPad can use it instead of
 - **Player 1** goes into the built-in controls, so there's nothing to set up. **Players 2–4** appear as "DockPad Controller 2–4". Set those up once in each emulator's multiplayer settings.
 - Some controller buttons and features never reach Android on Retroid devices. For example, the 8BitDo SF30 Pro's Home and Star buttons, its battery level and its rumble are not passed along. Use shortcuts for missing buttons. **Controllers → Test controllers** shows what each controller sends.
 - Games rumble player 1 through the handheld's own motor. DockPad copies that to your controller, so the handheld may buzz too unless you turn device vibration off in the emulator.
+- On Retroid devices, the **first Bluetooth controller** you connect is replaced by the system's own copy, which has no rumble. Controllers connected after it keep their rumble. The Controllers tab's **Rumble test** shows which of your controllers can rumble.
 - Stopping DockPad or restarting the device releases every controller.
 
 ## How it works

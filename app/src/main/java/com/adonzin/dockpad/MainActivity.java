@@ -931,7 +931,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
                     pushSettings();
                 });
         addSwitch(controllerSettings, "Rumble",
-                "Passes game rumble to your controllers (those that have rumble, like PlayStation and Xbox pads). Player 1's rumble is copied from the handheld's own motor, so the handheld still buzzes too unless you turn its vibration off in the emulator.",
+                "Passes game rumble to your controllers (those that have rumble, like PlayStation and Xbox pads). Player 1's rumble is copied from the handheld's own motor, so the handheld still buzzes too unless you turn its vibration off in the emulator. On Retroid devices the first Bluetooth controller you connect loses its rumble (the system replaces it with its own copy); controllers connected after it keep theirs.",
                 prefs.rumble(), v -> {
                     prefs.rumble(v);
                     pushSettings();
