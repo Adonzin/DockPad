@@ -116,6 +116,7 @@ It needs no install, and nothing you add is uploaded anywhere: it all stays in y
 - **Picture buttons:** use your own pictures as the items' buttons, with a different picture for the highlighted one, sharp edges on any size (nine-slice), per-item buttons and icons, hidden names, and a pointer picture (like a hand or arrow) that follows the highlight.
 - Preview the opening and closing animations, highlight motions, sound packs, your own sounds and music.
 - Start from the built-in themes, open any `.dockpadtheme` file, undo and redo, edit the raw `theme.json`, and checks for missing or oversized files.
+- **Share to the catalog** straight from the editor: it makes the preview picture and sends the theme in (a GitHub pull request) without going through the handheld.
 - Your work is kept in the browser between visits.
 
 To use a theme you made: press **Save theme file**, copy the `.dockpadtheme` file to the handheld, then in DockPad go to **Quick menu → Theme → Import a theme file**. (If the file ends in `.dockpadtheme.zip`, DockPad imports it just the same.)

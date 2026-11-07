@@ -213,6 +213,10 @@ Item ids: `home`, `back`, `cursor`, `turbo`, `turboedit`, `nintendo`, `swapab`, 
 
 DockPad's **Get themes…** button (Quick menu tab → Theme) shows the theme catalog. It lives in this repository, in [`catalog/`](../catalog). To add yours:
 
+**The quick way: from the [PC theme editor](https://adonzin.github.io/DockPad/tools/theme-editor.html).** Press **Share to catalog…**, check the name and the preview picture (it's taken from the editor's preview; set the screen up how you want it shown and press Retake, or use your own picture), paste a GitHub token, and press **Share it**. The editor sends the theme in as a pull request for you; nothing needs to go through the handheld. To make the token, use the link in that window: a free GitHub account, a "classic" token with only `public_repo` ticked. (Sharing works from the editor's GitHub page or a downloaded copy, not from inside claude.ai.)
+
+Or by hand:
+
 1. Make and save your theme in DockPad, then use **Share it…** to get the `.dockpadtheme` file.
 2. Take a screenshot of the quick menu with your theme over a game (landscape, 16:9 is best) to use as its preview.
 3. Either:

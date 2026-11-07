@@ -122,6 +122,7 @@ kbd{background:var(--bg3);border:1px solid var(--line);border-radius:4px;padding
   <button id="btnRedo" title="Redo (Ctrl+Y)">↷</button>
   <span class="sp"></span>
   <button id="btnJson" class="small">theme.json</button>
+  <button id="btnShare">Share to catalog…</button>
   <button id="btnExport" class="primary">Save theme file</button>
   <input id="fileOpen" type="file" accept=".dockpadtheme,.zip,.json" hidden>
   <input id="fileAdd" type="file" multiple accept="image/*,video/*,audio/*,.ttf,.otf" hidden>
@@ -1519,15 +1520,161 @@ async function saveBlob(name, blob, fallbackExt) {
   const a = el("a", {href: URL.createObjectURL(blob), download: name}); document.body.append(a); a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
 }
-$("#btnExport").onclick = async () => {
+async function buildTheme() {
   const theme = sanitize(T), enc = new TextEncoder(), files = [{name: "theme.json", data: enc.encode(JSON.stringify(theme, null, 2))}];
   for (const n of used()) {
     const m = media.get(n); if (!m) continue;
     files.push({name: (m.kind === "font" ? "fonts/" : "media/") + n, data: new Uint8Array(await m.blob.arrayBuffer())});
   }
-  const blob = await makeZip(files);
-  saveBlob(slug(theme.name) + ".dockpadtheme", blob, ".zip");
+  return makeZip(files);
+}
+$("#btnExport").onclick = async () => saveBlob(slug(sanitize(T).name) + ".dockpadtheme", await buildTheme(), ".zip");
+
+/* ------------------------------ preview picture (for the catalog) ------------------------------ */
+const toDataUrl = blob => new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => res(""); r.readAsDataURL(blob); });
+/** A 1536×864 PNG of the preview screen, as it looks right now. */
+async function previewPng() {
+  const live = $("#screen"), clone = live.cloneNode(true);
+  clone.style.transform = "none"; clone.removeAttribute("tabindex");
+  clone.querySelectorAll(".pv-grip,.pv-rot").forEach(e => e.remove());
+  clone.querySelectorAll(".sel").forEach(e => e.classList.remove("sel"));
+  const urls = new Map();
+  for (const m of media.values()) if (m.kind === "image") urls.set(m.url, await toDataUrl(m.blob));
+  if (gameUrl) { try { urls.set(gameUrl, await toDataUrl(await (await fetch(gameUrl)).blob())); } catch (e) {} }
+  const swap = v => { for (const [u, d] of urls) v = v.split(u).join(d); return v; };
+  clone.querySelectorAll("img").forEach(i => { i.setAttribute("src", swap(i.getAttribute("src") || "")); });
+  clone.querySelectorAll("[style]").forEach(e => e.setAttribute("style", swap(e.getAttribute("style"))));
+  // videos: their current frame
+  const vids = live.querySelectorAll("video"), cvids = clone.querySelectorAll("video");
+  vids.forEach((v, k) => {
+    try { const c = document.createElement("canvas"); c.width = v.videoWidth || 640; c.height = v.videoHeight || 360; c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
+      const im = document.createElement("img"); im.setAttribute("src", c.toDataURL("image/jpeg", .85)); im.setAttribute("style", cvids[k].getAttribute("style") || ""); cvids[k].replaceWith(im); }
+    catch (e) { cvids[k].remove(); }
+  });
+  let fontCss = "";
+  for (const [n, m] of media) if (m.kind === "font") fontCss += `@font-face{font-family:"${fontFamily(n)}";src:url(${await toDataUrl(m.blob)})}`;
+  const css = document.querySelector("style").textContent + fontCss;
+  const xhtml = new XMLSerializer().serializeToString(clone);
+  const svgText = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml" style="font:14px/1.4 system-ui,sans-serif;color:#e8ecf2"><style>${css.replace(/</g, "\\3c ")}</style>${xhtml}</div></foreignObject></svg>`;
+  const img = new Image();
+  await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error("couldn't draw the preview")); img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgText); });
+  const c = document.createElement("canvas"); c.width = W * 2; c.height = H * 2;
+  const g = c.getContext("2d"); g.scale(2, 2); g.drawImage(img, 0, 0);
+  return new Promise((res, rej) => { try { c.toBlob(b => b ? res(b) : rej(new Error("couldn't make the picture")), "image/png"); } catch (e) { rej(e); } });
+}
+
+/* ------------------------------ share to the catalog (a GitHub pull request) ------------------------------ */
+const REPO = "Adonzin/DockPad";
+async function gh(token, path, opts = {}) {
+  const r = await fetch("https://api.github.com" + path, {method: opts.method || "GET", headers: {Authorization: "Bearer " + token,
+    Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", ...(opts.body ? {"Content-Type": "application/json"} : {})},
+    body: opts.body ? JSON.stringify(opts.body) : undefined});
+  const txt = await r.text(); let data = null; try { data = txt ? JSON.parse(txt) : null; } catch (e) {}
+  if (!r.ok) { const e = new Error((data && data.message) || ("GitHub said " + r.status)); e.status = r.status; throw e; }
+  return data;
+}
+const b64 = async blob => { const d = await toDataUrl(blob); return d.slice(d.indexOf(",") + 1); };
+const b64text = t => btoa(unescape(encodeURIComponent(t)));
+const fromB64 = s => decodeURIComponent(escape(atob(s.replace(/\n/g, ""))));
+
+$("#btnShare").onclick = () => {
+  const theme = sanitize(T);
+  let token = ""; try { token = localStorage.getItem("dockpad-gh-token") || ""; } catch (e) {}
+  const id = el("input", {type: "text", value: slug(theme.name), maxlength: 30});
+  const nm = el("input", {type: "text", value: theme.name, maxlength: 40});
+  const au = el("input", {type: "text", value: theme.author, maxlength: 40, placeholder: "Your name"});
+  const de = el("input", {type: "text", value: theme.description, maxlength: 160, placeholder: "One line about it"});
+  const tk = el("input", {type: "password", value: token, placeholder: "GitHub token", autocomplete: "off"});
+  const remember = el("input", {type: "checkbox", checked: !!token});
+  const pv = el("img", {style: {width: "100%", borderRadius: "8px", border: "1px solid var(--line)", background: "#000", minHeight: "120px"}});
+  const status = el("div", {class: "note"});
+  let pvBlob = null;
+  const shoot = async () => { status.textContent = "Making the preview…"; try { pvBlob = await previewPng(); pv.src = URL.createObjectURL(pvBlob); status.textContent = ""; } catch (e) { status.textContent = "Couldn't make the preview automatically: choose a picture instead."; } };
+  const own = el("input", {type: "file", accept: "image/png,image/jpeg", hidden: true, onchange: () => { const f = own.files[0]; if (f) { pvBlob = f; pv.src = URL.createObjectURL(f); } }});
+  const send = el("button", {class: "primary", onclick: async () => {
+    const t = tk.value.trim(), themeId = slug(id.value);
+    if (!t) return status.textContent = "Add your GitHub token first (see the link above).";
+    if (!pvBlob) return status.textContent = "The theme needs a preview picture.";
+    try { if (remember.checked) localStorage.setItem("dockpad-gh-token", t); else localStorage.removeItem("dockpad-gh-token"); } catch (e) {}
+    T.name = nm.value.trim() || T.name; T.author = au.value.trim(); T.description = de.value.trim(); changed(); $("#themeName").value = T.name;
+    send.disabled = true;
+    try { await shareToCatalog(t, themeId, pvBlob, s => status.textContent = s, link); }
+    catch (e) {
+      status.textContent = e instanceof TypeError ? "Couldn't reach GitHub from this page. Open the editor from its GitHub page (adonzin.github.io/DockPad/tools/theme-editor.html) and share from there."
+        : e.status === 401 ? "GitHub didn't accept the token. Make a new one with the link above." : "Didn't work: " + e.message;
+    }
+    send.disabled = false;
+  }}, "Share it");
+  const link = el("div", {style: {marginTop: "8px"}});
+  modal("Share to the catalog", el("div", {},
+    el("p", {class: "note"}, "Adds your theme to the catalog everyone sees in DockPad (Quick menu tab → Theme → Get themes…). It goes in as a suggestion (a pull request) that's checked before it appears. Share only pictures, sounds and fonts you're allowed to share."),
+    row("Theme id", id), row("Name", nm), row("Made by", au), row("One line about it", de),
+    el("div", {class: "note", style: {marginTop: "10px"}}, "Preview (the screen as it looks now: set it up how you want it shown, then press Retake)"), pv,
+    el("div", {style: {display: "flex", gap: "8px", margin: "6px 0 10px"}}, el("button", {class: "small", onclick: shoot}, "Retake"), el("button", {class: "small", onclick: () => own.click()}, "Use my own picture…"),
+      el("button", {class: "small", onclick: () => pvBlob && saveBlob("preview.png", pvBlob)}, "Save picture"), own),
+    el("div", {class: "note"}, "A free GitHub account sends it. ", el("a", {href: "https://github.com/settings/tokens/new?scopes=public_repo&description=DockPad%20theme%20editor", target: "_blank", style: {color: "var(--acc)"}}, "Make a token"),
+      " (tick only “public_repo”), then paste it here. It's only sent to GitHub."),
+    row("GitHub token", tk), el("label", {class: "note", style: {display: "flex", gap: "6px", alignItems: "center"}}, remember, "Remember it on this computer"),
+    el("div", {style: {display: "flex", gap: "8px", marginTop: "10px"}}, send, el("button", {onclick: closeModal}, "Close")), status, link));
+  shoot();
 };
+
+async function shareToCatalog(token, id, pvBlob, say, linkBox) {
+  if (!/^[a-z0-9][a-z0-9-]{1,29}$/.test(id)) throw new Error("the id needs 2–30 letters, numbers or dashes");
+  say("Packing the theme…");
+  const themeBlob = await buildTheme();
+  if (themeBlob.size > 50e6) throw new Error("catalog themes can be up to 50 MB; this one is " + kb(themeBlob.size));
+  say("Signing in to GitHub…");
+  const me = await gh(token, "/user");
+  const repo = await gh(token, "/repos/" + REPO);
+  const canPush = !!(repo.permissions && repo.permissions.push);
+  let target = REPO;
+  if (!canPush) {
+    say("Making your copy of the catalog…");
+    const fork = await gh(token, "/repos/" + REPO + "/forks", {method: "POST", body: {default_branch_only: true}});
+    target = fork.full_name;
+    for (let i = 0; i < 20; i++) { try { await gh(token, "/repos/" + target + "/git/ref/heads/" + repo.default_branch); break; } catch (e) { await new Promise(r => setTimeout(r, 1500)); } }
+  }
+  const base = repo.default_branch;
+  const head = await gh(token, "/repos/" + REPO + "/git/ref/heads/" + base);
+  const baseCommit = await gh(token, "/repos/" + REPO + "/git/commits/" + head.object.sha);
+  // the catalog list, with this theme added (or updated)
+  const cur = await gh(token, "/repos/" + REPO + "/contents/catalog/index.json?ref=" + base);
+  const index = JSON.parse(fromB64(cur.content));
+  const theme = sanitize(T);
+  const entry = {id, name: theme.name, author: theme.author || me.login, description: theme.description, layout: theme.layout.type,
+    file: `catalog/${id}/${id}.dockpadtheme`, preview: `catalog/${id}/preview.png`, size: themeBlob.size};
+  const at = index.themes.findIndex(x => x.id === id);
+  if (at >= 0 && index.themes[at].author !== entry.author && !canPush) throw new Error(`"${id}" is already in the catalog by someone else: choose another id`);
+  if (at >= 0) index.themes[at] = entry; else index.themes.push(entry);
+  say("Uploading the theme…");
+  const blob = async (content, encoding) => (await gh(token, "/repos/" + target + "/git/blobs", {method: "POST", body: {content, encoding}})).sha;
+  const tree = await gh(token, "/repos/" + target + "/git/trees", {method: "POST", body: {base_tree: baseCommit.tree.sha, tree: [
+    {path: entry.file, mode: "100644", type: "blob", sha: await blob(await b64(themeBlob), "base64")},
+    {path: entry.preview, mode: "100644", type: "blob", sha: await blob(await b64(pvBlob), "base64")},
+    {path: "catalog/index.json", mode: "100644", type: "blob", sha: await blob(b64text(JSON.stringify(index, null, 2) + "\n"), "base64")}]}});
+  const commit = await gh(token, "/repos/" + target + "/git/commits", {method: "POST", body: {message: `Catalog: ${at >= 0 ? "update" : "add"} ${theme.name}`, tree: tree.sha, parents: [head.object.sha]}});
+  const branch = "theme-" + id + "-" + Date.now().toString(36);
+  await gh(token, "/repos/" + target + "/git/refs", {method: "POST", body: {ref: "refs/heads/" + branch, sha: commit.sha}});
+  say("Sending it in…");
+  const pr = await gh(token, "/repos/" + REPO + "/pulls", {method: "POST", body: {title: `Catalog: ${theme.name}`, base,
+    head: canPush ? branch : me.login + ":" + branch,
+    body: `${at >= 0 ? "Updates" : "Adds"} **${theme.name}** by ${entry.author} to the theme catalog.\n\n> ${theme.description || "(no description)"}\n\nLayout: ${entry.layout} · ${kb(themeBlob.size)}\n\nSent from the DockPad theme editor.`}});
+  linkBox.innerHTML = "";
+  linkBox.append(el("a", {href: pr.html_url, target: "_blank", style: {color: "var(--acc)"}}, "See it on GitHub (#" + pr.number + ")"));
+  if (canPush) {
+    say("Sent in. You look after the catalog, so you can publish it now.");
+    linkBox.append(" ", el("button", {class: "small primary", onclick: async e => {
+      e.target.disabled = true;
+      try {
+        try { await gh(token, `/repos/${REPO}/pulls/${pr.number}/merge`, {method: "PUT", body: {merge_method: "squash"}}); }
+        catch (m) { if (m.status !== 405) throw m; await gh(token, `/repos/${REPO}/pulls/${pr.number}/merge`, {method: "PUT", body: {merge_method: "merge"}}); }
+        try { await gh(token, `/repos/${REPO}/git/refs/heads/${branch}`, {method: "DELETE"}); } catch (x) {}
+        say("Published! It shows in DockPad's Get themes… within a few minutes."); }
+      catch (x) { say("Couldn't publish: " + x.message); e.target.disabled = false; }
+    }}, "Publish now"));
+  } else say("Sent in! It appears in the catalog once it's been checked.");
+}
 $("#btnJson").onclick = () => {
   const txt = JSON.stringify(sanitize(T), null, 2);
   const ta = el("textarea", {style: {width: "100%", height: "360px", background: "var(--bg)", color: "var(--fg)", border: "1px solid var(--line)", borderRadius: "8px", font: "12px monospace", padding: "8px"}});
