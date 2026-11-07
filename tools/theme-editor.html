@@ -1243,10 +1243,20 @@ function colorC(path, autoLabel = "auto", custom = true) {
   auto.onchange = () => apply(true);
   return el("div", {class: "colorc"}, sw, pick, alpha, el("label", {class: "note", style: {margin: 0, display: "flex", gap: "4px", alignItems: "center"}}, auto, autoLabel));
 }
+/** Opens the computer's file picker for these kinds, adds the files, and gives the first one's name. */
+function pickFile(kinds, done) {
+  const inp = el("input", {type: "file", accept: kinds.map(k => ({image: "image/*", video: "video/*", audio: "audio/*", font: ".ttf,.otf"})[k]).join(",")});
+  inp.onchange = async () => { const f = inp.files[0]; if (!f) return; const n = await addFile(f, f.name); if (n) done(n); };
+  inp.click();
+}
+const ADD_LABEL = {image: "＋ Add a picture from your computer…", audio: "＋ Add a sound from your computer…", font: "＋ Add a font file…"};
 function fileSelect(path, kinds, emptyLabel, after) {
-  const s = el("select", {onchange: () => { set(path, s.value); if (after) after(); changed(); buildPanel(); }});
+  const s = el("select", {onchange: () => {
+    if (s.value === "__add") { s.value = get(path) || ""; return pickFile(kinds, n => { set(path, n); if (after) after(); changed(); buildPanel(); }); }
+    set(path, s.value); if (after) after(); changed(); buildPanel(); }});
   s.append(el("option", {value: ""}, emptyLabel));
   for (const n of filesOf(kinds)) s.append(el("option", {value: n, selected: get(path) === n}, n));
+  s.append(el("option", {value: "__add"}, kinds.includes("video") ? "＋ Add a picture or video from your computer…" : ADD_LABEL[kinds[0]] || "＋ Add a file…"));
   return s;
 }
 
@@ -1289,7 +1299,8 @@ function buildPanel() {
     p.append(grp("Highlight", chips("style.highlight", HIGHLIGHTS)));
     const fonts = FONTS.concat(filesOf(["font"]).map(n => ["file:" + n, n.replace(/\.(ttf|otf)$/i, "") + " (yours)"]));
     p.append(grp("Text"), row("Size", ...sliderC("style.textSize", 70, 160, 10, v => v + "%")), row("Font", selectC("style.font", fonts)));
-    p.append(el("div", {class: "note"}, "Add a .ttf or .otf file (drop it on the page) to use your own font; it travels inside the theme file."));
+    p.append(el("button", {class: "small", onclick: () => pickFile(["font"], n => { T.style.font = "file:" + n; changed(); buildPanel(); })}, "＋ Use a font file from your computer…"),
+      el("div", {class: "note"}, ".ttf or .otf; it travels inside the theme file."));
     p.append(grp("Header"), row("Title", toggleC("style.showTitle")), row("Status", toggleC("style.showStatus")), row("Clock", toggleC("style.showClock")), row("Battery", toggleC("style.showBattery")));
   } else if (tab === "buttons") {
     const A = T.art;
@@ -1369,12 +1380,15 @@ function buildPanel() {
     p.append(el("button", {class: "small", onclick: () => playOpen(false)}, "▶ Play opening"), " ",
       el("button", {class: "small", onclick: () => { $("#screen").focus(); motion(); }}, "▶ Highlight motion"));
     p.append(grp("Sounds", chips("fx.pack", PACKS, () => { T.fx.sounds = {}; sound("select", "pack:" + T.fx.pack); })));
-    p.append(el("div", {class: "note"}, "Packs are approximated here; they sound right on the handheld. Pick a single sound to change just that one."));
+    p.append(el("div", {class: "note"}, "Packs are approximated here; they sound right on the handheld. To use your own sound for something, open its list and choose “Your own sound from your computer…” (MP3, OGG, WAV, M4A, FLAC). Short sounds work best for moving and selecting."));
     const opts = [["__pack", "From the pack"], ["", "Silent"]].concat(PACKS.slice(1).map(([v, l]) => ["pack:" + v, l + " pack's"])).concat(filesOf(["audio"]).map(n => ["file:" + n, n]));
     for (const [ev, label] of EVENTS) {
-      const s = el("select", {onchange: () => { if (s.value === "__pack") delete T.fx.sounds[ev]; else T.fx.sounds[ev] = s.value; sound(ev); changed(); }});
+      const s = el("select", {onchange: () => {
+        if (s.value === "__add") return pickFile(["audio"], n => { T.fx.sounds[ev] = "file:" + n; changed(); buildPanel(); sound(ev); });
+        if (s.value === "__pack") delete T.fx.sounds[ev]; else T.fx.sounds[ev] = s.value; sound(ev); changed(); }});
       const cur = T.fx.sounds[ev];
       for (const [v, l] of opts) s.append(el("option", {value: v, selected: cur === undefined ? v === "__pack" : cur === v}, l));
+      s.append(el("option", {value: "__add"}, "＋ Your own sound from your computer…"));
       p.append(row(label, el("div", {class: "rng"}, s, el("button", {class: "small", onclick: () => sound(ev)}, "▶"))));
     }
     p.append(row("Volume", ...sliderC("fx.volume", 0, 100, 5, v => v + "%")));
