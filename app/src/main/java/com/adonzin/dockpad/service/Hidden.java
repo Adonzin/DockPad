@@ -112,16 +112,25 @@ final class Hidden {
 
     /** Stamps this device's events with the monotonic clock (System.nanoTime), so delays can be measured. */
     static boolean useMonotonicClock(FileDescriptor fd) {
+        java.util.List<Object[]> targets = new java.util.ArrayList<>();
         try {
-            for (Method m : Class.forName("android.system.Os").getMethods()) {
+            targets.add(new Object[]{null, Class.forName("android.system.Os")});
+            Object os = Class.forName("libcore.io.Libcore").getField("os").get(null);
+            targets.add(new Object[]{os, os.getClass()});
+        } catch (Throwable ignored) {
+        }
+        for (Object[] t : targets) {
+            for (Method m : ((Class<?>) t[1]).getMethods()) {
                 if (!m.getName().equals("ioctlInt")) continue;
                 Class<?>[] p = m.getParameterTypes();
-                if (p.length == 3 && p[0] == FileDescriptor.class && p[1] == int.class) {
-                    m.invoke(null, fd, EVIOCSCLOCKID, newIntRef(p[2])); // CLOCK_MONOTONIC = 1
+                if (p.length != 3 || p[0] != FileDescriptor.class || p[1] != int.class) continue;
+                try {
+                    m.setAccessible(true);
+                    m.invoke(t[0], fd, EVIOCSCLOCKID, newIntRef(p[2])); // CLOCK_MONOTONIC = 1
                     return true;
+                } catch (Throwable ignored) {
                 }
             }
-        } catch (Throwable ignored) {
         }
         return false;
     }

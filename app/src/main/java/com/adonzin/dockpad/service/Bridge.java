@@ -1326,7 +1326,10 @@ final class Bridge {
                 }
             } catch (Throwable t) {
                 // ENODEV just means the controller was disconnected
-                if (running && alive && !String.valueOf(t.getMessage()).contains("ENODEV")) error(dev.name, t);
+                // ENOENT: it went before DockPad could open it (Retroid's firmware swaps the first
+                // Bluetooth controller's device for its own copy right after it connects)
+                String msg = String.valueOf(t.getMessage());
+                if (running && alive && !msg.contains("ENODEV") && !msg.contains("ENOENT")) error(dev.name, t);
             } finally {
                 close();
             }
