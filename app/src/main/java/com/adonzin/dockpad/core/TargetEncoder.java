@@ -73,6 +73,13 @@ public final class TargetEncoder implements Mapper.Sink {
         axisCode[Mapper.HY] = pick(ABS_HAT0Y);
     }
 
+    /** The virtual controller's own stick dead zone ("flat"), as a fraction of full tilt (games see this). */
+    public float stickFlat() {
+        EvdevDevice.AbsInfo a = target.abs.get(ABS_X);
+        if (a == null || a.max == a.min) return 0f;
+        return Math.min(0.15f, Math.max(0f, a.flat * 2f / (a.max - a.min)));
+    }
+
     private void mapKey(int androidKey, int evdev) {
         if (target.hasKey(evdev)) keyOut.put(androidKey, evdev);
     }

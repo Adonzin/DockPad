@@ -45,17 +45,27 @@ public final class Tuning {
         return Math.max(0.02f, pressAt() - 0.08f);
     }
 
-    /** Turns raw normalized axes into what the game should see. {@code prev} is the last output (or null). */
-    public float[] apply(float[] in, float[] prev) {
+    /** No tuning: only the controller's own dead zone is applied. */
+    public static final Tuning NONE = new Tuning();
+
+    /**
+     * Turns raw normalized axes into what the game should see. {@code prev} is the last output (or null).
+     * {@code deadL}/{@code deadR}: the controller's own stick dead zones (used when this tuning sets none);
+     * {@code lift}: where the game's own dead zone ends, so a stick leaving ours moves in the game at once.
+     */
+    public float[] apply(float[] in, float[] prev, float deadL, float deadR, float lift) {
         float[] o = in.clone();
         if (swapSticks) {
             o[Mapper.LX] = in[Mapper.RX];
             o[Mapper.LY] = in[Mapper.RY];
             o[Mapper.RX] = in[Mapper.LX];
             o[Mapper.RY] = in[Mapper.LY];
+            float d = deadL;
+            deadL = deadR;
+            deadR = d;
         }
-        shape(o, Mapper.LX, Mapper.LY);
-        shape(o, Mapper.RX, Mapper.RY);
+        shape(o, Mapper.LX, Mapper.LY, deadZone > 0 ? deadZone / 100f : deadL, lift);
+        shape(o, Mapper.RX, Mapper.RY, deadZone > 0 ? deadZone / 100f : deadR, lift);
         if (invertLeftY) o[Mapper.LY] = -o[Mapper.LY];
         if (invertRightY) o[Mapper.RY] = -o[Mapper.RY];
         if (leftStickDpad) {
@@ -79,11 +89,14 @@ public final class Tuning {
         return v > on ? 1f : v < -on ? -1f : 0f;
     }
 
-    private void shape(float[] o, int xi, int yi) {
-        if (deadZone == 0 && response == 100) return;
+    /**
+     * A round (radial) dead zone that rescales what's outside it, so there's no jump when the stick
+     * leaves it and full tilt still reaches the edge. Small moves stay small: that's what aiming needs.
+     */
+    private void shape(float[] o, int xi, int yi, float dz, float lift) {
+        if (dz <= 0f && response == 100) return;
         float x = o[xi], y = o[yi];
         float mag = (float) Math.hypot(x, y);
-        float dz = deadZone / 100f;
         if (mag <= dz || mag == 0f) {
             o[xi] = 0;
             o[yi] = 0;
@@ -91,6 +104,8 @@ public final class Tuning {
         }
         float m = Math.min(1f, (Math.min(mag, 1f) - dz) / (1f - dz));
         if (response != 100) m = (float) Math.pow(m, response / 100.0);
+        // our dead zone already hides the stick's resting wobble: start just past the game's own one
+        if (dz >= 0.02f && lift > 0f) m = lift + (1f - lift) * m;
         float scale = m / mag;
         o[xi] = clamp(x * scale);
         o[yi] = clamp(y * scale);

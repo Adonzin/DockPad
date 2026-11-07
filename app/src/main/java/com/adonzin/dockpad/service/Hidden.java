@@ -108,6 +108,41 @@ final class Hidden {
         return errors.length() == 0 ? "ioctl not available" : errors.toString();
     }
 
+    private static final int EVIOCSCLOCKID = 0x400445a0;
+
+    /** Stamps this device's events with the monotonic clock (System.nanoTime), so delays can be measured. */
+    static boolean useMonotonicClock(FileDescriptor fd) {
+        try {
+            for (Method m : Class.forName("android.system.Os").getMethods()) {
+                if (!m.getName().equals("ioctlInt")) continue;
+                Class<?>[] p = m.getParameterTypes();
+                if (p.length == 3 && p[0] == FileDescriptor.class && p[1] == int.class) {
+                    m.invoke(null, fd, EVIOCSCLOCKID, newIntRef(p[2])); // CLOCK_MONOTONIC = 1
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    /** Raises a thread's scheduling priority (like the system's input threads). True if it took. */
+    static boolean raisePriority(int tid) {
+        try {
+            if (tid <= 0) android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_DISPLAY);
+            else android.os.Process.setThreadPriority(tid, android.os.Process.THREAD_PRIORITY_URGENT_DISPLAY);
+            return true;
+        } catch (Throwable t) {
+            try { // a smaller step may still be allowed
+                if (tid <= 0) android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_DISPLAY);
+                else android.os.Process.setThreadPriority(tid, android.os.Process.THREAD_PRIORITY_DISPLAY);
+                return true;
+            } catch (Throwable t2) {
+                return false;
+            }
+        }
+    }
+
     private static Object newIntRef(Class<?> type) throws Exception {
         Constructor<?> k = type.getDeclaredConstructor(int.class);
         k.setAccessible(true);

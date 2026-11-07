@@ -86,6 +86,7 @@ final class VirtualPad implements PadOut {
             reader.setDaemon(true);
             reader.start();
             send(registerJson);
+            raiseToolPriority();
             return true;
         } catch (Throwable t) {
             error = "could not start Android's uinput tool: " + t;
@@ -95,6 +96,43 @@ final class VirtualPad implements PadOut {
         }
     }
 
+    /** Whether the uinput tool's threads run at raised priority ("raised", "normal", or "?" while checking). */
+    volatile String priority = "?";
+
+    /** The tool passes every event on: run it ahead of the game's own threads, like Android's input threads. */
+    private void raiseToolPriority() {
+        final Process p = process;
+        Thread t = new Thread(() -> {
+            try {
+                Thread.sleep(600); // its event thread starts after the controller is registered
+                int pid = -1;
+                for (Class<?> c = p.getClass(); c != null && pid < 0; c = c.getSuperclass()) {
+                    try {
+                        java.lang.reflect.Field f = c.getDeclaredField("pid");
+                        f.setAccessible(true);
+                        pid = f.getInt(p);
+                    } catch (NoSuchFieldException ignored) {
+                    }
+                }
+                if (pid <= 0) {
+                    priority = "normal (tool not found)";
+                    return;
+                }
+                String[] tids = new java.io.File("/proc/" + pid + "/task").list();
+                int ok = 0, all = 0;
+                if (tids != null) for (String tid : tids) {
+                    all++;
+                    if (Hidden.raisePriority(Integer.parseInt(tid))) ok++;
+                }
+                priority = ok > 0 && ok == all ? "raised" : ok > 0 ? "partly raised" : "normal (not allowed)";
+            } catch (Throwable e) {
+                priority = "normal (" + e.getClass().getSimpleName() + ")";
+            }
+        }, "DockPad-uinput-priority");
+        t.setDaemon(true);
+        t.start();
+    }
+
     @Override
     public boolean isAlive() {
         return process != null && process.isAlive();
@@ -102,7 +140,7 @@ final class VirtualPad implements PadOut {
 
     @Override
     public String describe() {
-        if (isAlive()) return "active";
+        if (isAlive()) return "active, priority " + priority;
         String out = String.join(" | ", toolOutput);
         return "NOT running" + (error.isEmpty() ? "" : " — " + error) + (out.isEmpty() ? "" : " — " + out);
     }
@@ -118,7 +156,9 @@ final class VirtualPad implements PadOut {
             absInfo.append(absInfo.length() == 0 ? "" : ",")
                     .append("{\"code\":").append(a).append(",\"info\":{\"value\":0")
                     .append(",\"minimum\":").append(i.min).append(",\"maximum\":").append(i.max)
-                    .append(",\"fuzz\":").append(i.fuzz).append(",\"flat\":").append(i.flat)
+                    // no "fuzz": it makes Android and the kernel hold back or average small stick moves
+                    // (fine for the built-in sticks' fine steps, but it eats an external stick's coarser ones)
+                    .append(",\"fuzz\":0").append(",\"flat\":").append(i.flat)
                     .append(",\"resolution\":0}}");
         }
         return "{\"id\":1,\"command\":\"register\",\"name\":\"" + name + "\""

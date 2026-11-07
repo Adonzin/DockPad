@@ -95,8 +95,19 @@ public final class Mapper {
         return info[logical] != null && t != null && t.customTriggerPoint();
     }
 
+    /** The controller's own stick dead zone (from its driver), as a fraction of full tilt. */
+    private float ownDead(int logical) {
+        EvdevDevice.AbsInfo a = info[logical];
+        if (a == null || a.max == a.min) return 0f;
+        return Math.min(0.3f, Math.max(0f, a.flat * 2f / (a.max - a.min)));
+    }
+
+    /** Where the game-side dead zone ends (the virtual controller's own), so ours doesn't stack on it. */
+    private float lift;
+
     public Mapper(EvdevDevice dev, Sink sink) {
         this.sink = sink;
+        if (sink instanceof TargetEncoder) lift = ((TargetEncoder) sink).stickFlat();
         for (int code : dev.keys) {
             Integer kc = STANDARD_KEYS.get(code);
             if (kc != null) keyMap.put(code, kc);
@@ -158,12 +169,8 @@ public final class Mapper {
     static float normalize(EvdevDevice.AbsInfo a, Kind k, int raw) {
         float range = a.max - a.min;
         switch (k) {
-            case STICK: {
-                float v = ((raw - a.min) / range) * 2f - 1f;
-                float dead = Math.max(a.flat * 2f / range, 0f);
-                if (Math.abs(v) <= dead) return 0f;
-                return clamp(v, -1f, 1f);
-            }
+            case STICK: // the dead zone is applied to both directions together, when the report is complete
+                return clamp(((raw - a.min) / range) * 2f - 1f, -1f, 1f);
             case TRIGGER:
                 return clamp((raw - a.min) / range, 0f, 1f);
             default:
@@ -245,7 +252,7 @@ public final class Mapper {
         if (dirty) {
             dirty = false;
             Tuning t = tuning;
-            float[] out = t == null ? axes.clone() : t.apply(axes, lastOut);
+            float[] out = (t == null ? Tuning.NONE : t).apply(axes, lastOut, ownDead(LX), ownDead(RX), lift);
             lastOut = out;
             sink.axes(out.clone());
         }

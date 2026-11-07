@@ -792,6 +792,8 @@ final class Bridge {
                             : s.mapper == null ? "" : s.mapper.layoutDescription).append('\n')
                     .append("    exclusive: ").append(s.hideMethod)
                     .append(", events: ").append(s.eventsRead.get()).append('\n');
+            if (!s.builtIn && !s.touchpad && s.joined) b.append("    ").append(s.latency.summary())
+                    .append(s.fastThread ? "" : " · priority not raised").append('\n');
             if (s.lastKey >= 0) b.append("    last button: ").append(Codes.keyName(s.lastKey))
                     .append(String.format(" (0x%x)", s.lastKey)).append('\n');
         }
@@ -802,7 +804,37 @@ final class Bridge {
 
     // ---------------------------------------------------------------- scanning
 
+    private final Object scanWake = new Object();
+    @SuppressWarnings("deprecation")
+    private android.os.FileObserver devWatch;
+
+    /**
+     * Watches for controllers appearing, so DockPad takes a new one over at once (games only get
+     * the moment between its arrival and then to see it themselves).
+     */
+    @SuppressWarnings("deprecation")
+    private void watchDevices() {
+        try {
+            devWatch = new android.os.FileObserver("/dev/input",
+                    android.os.FileObserver.CREATE | android.os.FileObserver.DELETE) {
+                @Override
+                public void onEvent(int event, String path) {
+                    if (path == null || !path.startsWith("event")) return;
+                    timer.schedule(() -> {
+                        synchronized (scanWake) {
+                            scanWake.notifyAll();
+                        }
+                    }, 60, TimeUnit.MILLISECONDS); // let the system set up the device's permissions
+                }
+            };
+            devWatch.startWatching();
+        } catch (Throwable t) {
+            devWatch = null; // the regular check every 1.5 s still finds it
+        }
+    }
+
     private void scanLoop() {
+        watchDevices();
         while (running) {
             try {
                 String[] names = new File("/dev/input").list();
@@ -821,11 +853,14 @@ final class Bridge {
                 error("scan", t);
             }
             try {
-                Thread.sleep(1500);
+                synchronized (scanWake) {
+                    scanWake.wait(1500);
+                }
             } catch (InterruptedException e) {
                 return;
             }
         }
+        if (devWatch != null) devWatch.stopWatching();
     }
 
     // ---------------------------------------------------------------- built-in controls
@@ -1181,6 +1216,8 @@ final class Bridge {
         volatile boolean alive = true;
         volatile String hideMethod = "pending";
         final AtomicLong eventsRead = new AtomicLong();
+        final LatencyStats latency = new LatencyStats();
+        volatile boolean fastThread;
         private FileInputStream in;
         private int disabledAndroidId = -1;
         volatile int lastKey = -1;
@@ -1206,6 +1243,9 @@ final class Bridge {
         private void readLoop() {
             try {
                 in = new FileInputStream(dev.path);
+                // run ahead of the game's own threads, and stamp events so DockPad's delay can be measured
+                fastThread = Hidden.raisePriority(0);
+                latency.monotonic = Hidden.useMonotonicClock(in.getFD());
                 String grabErr = wantGrab ? Hidden.grab(in.getFD()) : "not taken over";
                 if (!wantGrab) {
                     hideMethod = "no (works as normal)";
@@ -1218,6 +1258,9 @@ final class Bridge {
                         hideMethod = "yes (disabled)";
                     } else {
                         hideMethod = "NO (" + grabErr + ")";
+                        // games could get this controller's input twice (from it and from DockPad): say so
+                        Actions.toast(dev.name + ": DockPad couldn't take it over fully, so games may see its "
+                                + "buttons twice. Reconnecting it usually fixes this.");
                     }
                 }
                 synchronized (this) {
@@ -1243,6 +1286,8 @@ final class Bridge {
                         int code = bb.getShort(p + off + 2) & 0xffff;
                         int value = bb.getInt(p + off + 4);
                         eventsRead.incrementAndGet();
+                        long stampUs = size == 24 ? bb.getLong(p) * 1_000_000L + bb.getLong(p + 8)
+                                : (bb.getInt(p) & 0xffffffffL) * 1_000_000L + (bb.getInt(p + 4) & 0xffffffffL);
                         if (!joined) {
                             if (type == Codes.EV_KEY && value == 1 && isJoinButton(code)) join(this);
                             continue; // the press that joins doesn't reach the game
@@ -1275,6 +1320,7 @@ final class Bridge {
                                 if (turboKey(code, value)) continue;
                             }
                             deliver(type, code, value);
+                            if (type == Codes.EV_SYN && code == 0 && !builtIn && !touchpad) latency.report(stampUs);
                         }
                     }
                 }
