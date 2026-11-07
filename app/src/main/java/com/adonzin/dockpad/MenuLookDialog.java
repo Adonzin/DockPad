@@ -37,6 +37,11 @@ final class MenuLookDialog {
         RadioGroup positions = radios(a, MenuTheme.POSITION_LABELS, indexOf(MenuTheme.POSITIONS, t.position));
         box.addView(positions);
 
+        TextView spotLabel = label(a, "Where the wheel sits");
+        box.addView(spotLabel);
+        RadioGroup spots = radios(a, MenuTheme.SPOT_LABELS, indexOf(MenuTheme.SPOTS, t.spot));
+        box.addView(spots);
+
         TextView bandLabel = label(a, "Where the strip sits");
         box.addView(bandLabel);
         RadioGroup bands = radios(a, MenuTheme.BAND_LABELS, indexOf(MenuTheme.BANDS, t.band));
@@ -98,6 +103,8 @@ final class MenuLookDialog {
             posLabel.setText(edgeOnly ? "Side (left or right)" : "Position");
             posLabel.setVisibility(usesPosition ? View.VISIBLE : View.GONE);
             positions.setVisibility(usesPosition ? View.VISIBLE : View.GONE);
+            spotLabel.setVisibility(lay.equals("radial") ? View.VISIBLE : View.GONE);
+            spots.setVisibility(lay.equals("radial") ? View.VISIBLE : View.GONE);
             bandLabel.setVisibility(usesBand ? View.VISIBLE : View.GONE);
             bands.setVisibility(usesBand ? View.VISIBLE : View.GONE);
             sizeLabel.setVisibility(usesSize ? View.VISIBLE : View.GONE);
@@ -130,6 +137,7 @@ final class MenuLookDialog {
             t.columns = Math.round(cols.getValue());
             t.sections = sections.isChecked();
             t.band = MenuTheme.BANDS[checked(bands)];
+            t.spot = MenuTheme.SPOTS[checked(spots)];
             t.size = Math.round(size.getValue());
             t.save(a);
         };
@@ -171,7 +179,7 @@ final class MenuLookDialog {
             case "tabs": return "One tab per section (L1/R1 or the row's edge switch tabs), with that section's tiles below.";
             case "rail": return "A thin column of icons at the edge; the highlighted one shows its name beside it.";
             case "radial": return "A wheel in the middle: first one slice per section, then that section's items around it, "
-                    + "with the name in the centre. Aim with the stick or go around with the D-pad; A opens a section, "
+                    + "with the name in the centre. Point the stick or D-pad at a slice; A opens a section, "
                     + "B goes back, L1/R1 jump between sections. Without sections, every item is on the wheel.";
             case "arc": return "A half-ring along the left or right edge, around your thumb. Aim with the stick or move "
                     + "along it with up/down; L1/R1 or left/right switch rings.";

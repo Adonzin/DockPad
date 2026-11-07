@@ -532,6 +532,7 @@ public class QuickMenuActivity extends AppCompatActivity {
     }
 
     private boolean selecting;
+    private boolean aHeld; // A went down while the menu was open (not the press that opened it)
 
     /** A move the player made: select, with sound, feedback and highlight motion. */
     private void move(int index) {
@@ -744,8 +745,15 @@ public class QuickMenuActivity extends AppCompatActivity {
         hint.setPadding(0, dp(6), 0, 0);
         column.addView(hint);
         updateHint();
-        column.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
+        // where the wheel sits
+        String spot = theme.spot;
+        int g = (spot.startsWith("top") ? Gravity.TOP : spot.startsWith("bottom") ? Gravity.BOTTOM : Gravity.CENTER_VERTICAL)
+                | (spot.endsWith("left") ? Gravity.START : spot.endsWith("right") ? Gravity.END : Gravity.CENTER_HORIZONTAL);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT, g);
+        int m = dp(20);
+        lp.setMargins(m, m, m, m);
+        column.setLayoutParams(lp);
         return column;
     }
 
@@ -1628,6 +1636,16 @@ public class QuickMenuActivity extends AppCompatActivity {
             }
             return true;
         }
+        if ((kc == KeyEvent.KEYCODE_BUTTON_A || kc == KeyEvent.KEYCODE_DPAD_CENTER || kc == KeyEvent.KEYCODE_ENTER)
+                && !arranging && renderer != null && selected >= 0 && selected < renderer.tiles.size()) {
+            // A acts on the highlighted item itself (styles that swap what's shown can leave Android's focus elsewhere)
+            if (fresh) aHeld = true;
+            else if (e.getAction() == KeyEvent.ACTION_UP && aHeld && !e.isCanceled()) {
+                aHeld = false;
+                renderer.tiles.get(selected).performClick();
+            }
+            return true;
+        }
         int dir = direction(kc);
         if (dir >= 0 && renderer != null) {
             if (down) onDirection(dir, fresh, e.getRepeatCount());
@@ -1681,8 +1699,21 @@ public class QuickMenuActivity extends AppCompatActivity {
         else if (hx > 0.5f && hatX <= 0.5f) dir = MenuRender.RIGHT;
         else if (hy < -0.5f && hatY >= -0.5f) dir = MenuRender.UP;
         else if (hy > 0.5f && hatY <= 0.5f) dir = MenuRender.DOWN;
+        int before = (Math.abs(hatX) > 0.5f ? 1 : 0) + (Math.abs(hatY) > 0.5f ? 1 : 0);
+        int now = (Math.abs(hx) > 0.5f ? 1 : 0) + (Math.abs(hy) > 0.5f ? 1 : 0);
+        // only when a direction is pressed (not while letting go of a diagonal, one half at a time)
+        boolean changedHat = now > before
+                || (now == before && now > 0 && (Math.round(hx) != Math.round(hatX) || Math.round(hy) != Math.round(hatY)));
         hatX = hx;
         hatY = hy;
+        // radial: the D-pad points (diagonals too), like the stick
+        if (renderer instanceof MenuRender.RadialRenderer && !arranging) {
+            if (changedHat && (Math.abs(hx) > 0.5f || Math.abs(hy) > 0.5f)) {
+                int i = renderer.aim(Math.round(hx), Math.round(hy), selected);
+                if (i >= 0 && i != selected) move(i);
+            }
+            return;
+        }
         if (dir >= 0) onDirection(dir, true, 0);
     }
 

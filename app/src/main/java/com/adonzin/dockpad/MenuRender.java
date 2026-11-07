@@ -844,7 +844,7 @@ final class MenuRender {
             boolean switched = lv != level;
             showLevel(lv, switched && level != -2);
             List<Integer> ids = ring();
-            wheel.highlightTo(Math.max(0, ids.indexOf(index)), !switched);
+            wheel.highlightTo(Math.max(0, ids.indexOf(index)), false); // snaps: no sliding round the wheel
             Item it = selectable.get(index);
             centerSection.setText(lv >= 0 && sectionCount > 0 ? sections.get(lv) : "");
             centerSection.setVisibility(lv >= 0 && sectionCount > 0 ? View.VISIBLE : View.GONE);
@@ -861,15 +861,36 @@ final class MenuRender {
             }
         }
 
+        /** D-pad: the slice that way from the highlighted one (by where the slices are on screen). */
         @Override
         int move(int cur, int dir, boolean fresh) {
-            if (tiles.isEmpty()) return -1;
-            if (cur < 0) return 0;
             List<Integer> ids = ring();
+            if (ids.isEmpty()) return -1;
             int p = ids.indexOf(cur);
-            if (p < 0) return ids.isEmpty() ? -1 : ids.get(0);
-            int step = dir == LEFT || dir == UP ? -1 : 1;
-            return ids.get(((p + step) % ids.size() + ids.size()) % ids.size());
+            if (p < 0) return ids.get(0);
+            int n = ids.size();
+            double a0 = 2 * Math.PI * p / n;
+            float x0 = (float) Math.sin(a0), y0 = (float) -Math.cos(a0);
+            float dx = dir == LEFT ? -1 : dir == RIGHT ? 1 : 0, dy = dir == UP ? -1 : dir == DOWN ? 1 : 0;
+            int best = -1;
+            double bestScore = Double.MAX_VALUE;
+            for (int k = 0; k < n; k++) {
+                if (k == p) continue;
+                double a = 2 * Math.PI * k / n;
+                float x = (float) Math.sin(a) - x0, y = (float) -Math.cos(a) - y0;
+                float along = x * dx + y * dy, across = Math.abs(x * dy - y * dx);
+                if (along <= 0.05f) continue;
+                double score = along + across * 2.2;
+                if (score < bestScore) {
+                    bestScore = score;
+                    best = k;
+                }
+            }
+            if (best < 0) {
+                // nothing further that way: point straight at that side of the wheel
+                return aim(dx, dy, cur);
+            }
+            return ids.get(best);
         }
 
         /** L1/R1: the previous/next section (inside a section: straight into it). */

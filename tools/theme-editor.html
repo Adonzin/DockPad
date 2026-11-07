@@ -181,6 +181,7 @@ function toast(msg) { const t = $("#toast"); t.textContent = msg; t.style.opacit
 /* ------------------------------ the format ------------------------------ */
 const LAYOUTS = [["list","List"],["compact","Compact list"],["grid","Grid of tiles"],["carousel","Carousel"],["xmb","XMB (cross bar)"],["dock","Dock"],["wheel","Wheel (vertical drum)"],["tabs","Tabs"],["rail","Rail"],["radial","Radial (ring)"],["arc","Edge arc"],["freeform","Freeform"]];
 const POSITIONS = [["left","Left side"],["right","Right side"],["center","Centre"],["full","Full screen"]];
+const SPOTS = [["center","Centre"],["left","Left"],["right","Right"],["top-left","Top left"],["top-right","Top right"],["bottom-left","Bottom left"],["bottom-right","Bottom right"]];
 const BANDS = [["top","Top"],["middle","Middle"],["bottom","Bottom"]];
 const GRADIENTS = [["none","Solid colour"],["linear","Linear gradient"],["radial","Radial gradient"],["sweep","Sweep gradient"]];
 const HIGHLIGHTS = [["filled","Filled"],["outline","Outline"],["glow","Glow"],["grow","Grow"],["underline","Underline"]];
@@ -218,7 +219,7 @@ const SYSTEM_ACCENT = "#A8C7FA", SYSTEM_FILL = "#284777"; // stand-ins for the h
 function defaults() {
   return {
     format: 1, name: "My theme", author: "", description: "",
-    layout: {type: "list", position: "left", width: 340, sections: true, columns: 3, band: "bottom", size: 80, free: {}},
+    layout: {type: "list", position: "left", width: 340, sections: true, columns: 3, band: "bottom", spot: "center", size: 80, free: {}},
     style: {palette: "system", panel1: "", panel2: "", panel3: "", gradient: "none", angle: 90, accent: "", text: "", tile: "",
       opacity: 90, dim: -1, corners: 24, border: 0, borderColor: "", edgeOpacity: 100, glow: false, backdrop: "",
       textSize: 100, font: "default", highlight: "filled", showTitle: true, showStatus: true, showClock: false, showBattery: false},
@@ -241,7 +242,7 @@ function sanitize(src) {
   const t = d;
   t.name = String(o.name || d.name).slice(0, 40); t.author = String(o.author || "").slice(0, 40); t.description = String(o.description || "").slice(0, 160);
   Object.assign(t.layout, {type: one(L.type, LAYOUTS, "list"), position: one(L.position, POSITIONS, "left"), width: num(L.width, 200, 1200, 340),
-    sections: L.sections !== false, columns: num(L.columns, 2, 8, 3), band: one(L.band, BANDS, "bottom"), size: num(L.size, 40, 100, 80), free: {}});
+    sections: L.sections !== false, columns: num(L.columns, 2, 8, 3), band: one(L.band, BANDS, "bottom"), spot: one(L.spot, SPOTS, "center"), size: num(L.size, 40, 100, 80), free: {}});
   if (L.free && typeof L.free === "object") for (const [k, r] of Object.entries(L.free)) if (Array.isArray(r) && r.length === 4)
     t.layout.free[k] = r.map(x => clamp(Number(x) || 0, 0, 1)).map((x, i) => i === 2 ? Math.max(.04, x) : i === 3 ? Math.max(.03, x) : x);
   const s = t.style;
@@ -839,7 +840,10 @@ function ringPanel() {
   const size = (Math.min(W, H) - 40) * T.layout.size / 100, R = size / 2 - 3, r0 = R * .42, mid = (R + r0) / 2;
   if (radGrouped() && rad.level >= 0) rad.level = SECTIONS.indexOf(SAMPLE[hl].s);
   if (!radGrouped()) rad.level = 0;
-  const p = panel({left: (W - size) / 2 + "px", top: (H - 30 - size) / 2 + "px", width: size + "px", height: size + "px"}, "50%");
+  const sp = T.layout.spot, m = 20;
+  const left = sp.endsWith("left") ? m : sp.endsWith("right") ? W - m - size : (W - size) / 2;
+  const top = sp.startsWith("top") ? m : sp.startsWith("bottom") ? H - m - 22 - size : (H - 22 - size) / 2;
+  const p = panel({left: left + "px", top: top + "px", width: size + "px", height: size + "px"}, "50%");
   const c = p.content, ring = radRing(), n = ring.length, cur = radCur(ring), span = 360 / n;
   const txt = textCol(), lineC = css(txt, .12), acc = css(accent());
   const NS = "http://www.w3.org/2000/svg", sv = document.createElementNS(NS, "svg");
@@ -880,7 +884,7 @@ function ringPanel() {
     now.sub ? el("div", {class: "st", style: {fontSize: "10px", opacity: .75}}, now.sub) : null);
   c.append(ctr);
   const wrapH = el("div", {class: "layer"}); wrapH.append(p);
-  wrapH.append(el("div", {class: "pv-hint", style: {position: "absolute", bottom: "6px", width: "100%", textAlign: "center"}},
+  wrapH.append(el("div", {class: "pv-hint", style: {position: "absolute", top: top + size + 4 + "px", left: left - 100 + "px", width: size + 200 + "px", textAlign: "center"}},
     radGrouped() ? "Stick or D-pad: aim · A: open · L1/R1: sections · B: back" : "Stick or D-pad: aim · A: select · B: close"));
   return wrapH;
 }
@@ -1164,7 +1168,12 @@ $("#screen").addEventListener("keydown", e => {
     const ring = radRing(), cur = radCur(ring), m = ring.length;
     if (e.key === "Enter") { sound("select"); if (radGrouped() && rad.level < 0) radEnter(); else motion(); return; }
     if (e.key === "Escape") { sound("back"); if (radGrouped() && rad.level >= 0) { rad.sec = rad.level; rad.level = -1; render(); } else playOpen(true); return; }
-    const k = (cur + (e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 1) + m) % m;
+    const dx = e.key === "ArrowLeft" ? -1 : e.key === "ArrowRight" ? 1 : 0, dy = e.key === "ArrowUp" ? -1 : e.key === "ArrowDown" ? 1 : 0;
+    const P = j => [Math.sin(2 * Math.PI * j / m), -Math.cos(2 * Math.PI * j / m)], [x0, y0] = P(cur);
+    let k = -1, best = 1e9;
+    for (let j = 0; j < m; j++) { if (j === cur) continue; const [x, y] = P(j), al = (x - x0) * dx + (y - y0) * dy, ac = Math.abs((x - x0) * dy - (y - y0) * dx);
+      if (al > .05 && al + ac * 2.2 < best) { best = al + ac * 2.2; k = j; } }
+    if (k < 0) { let a = Math.atan2(dx, -dy); if (a < 0) a += 2 * Math.PI; k = Math.round(a / (2 * Math.PI) * m) % m; }
     if (radGrouped() && rad.level < 0) rad.sec = k; else hl = ring[k].i;
     render(); sound("move"); motion(); return;
   }
@@ -1251,9 +1260,10 @@ function buildPanel() {
     if (side || edgeOnly) p.append(grp(edgeOnly ? "Side" : "Position", chips("layout.position", edgeOnly ? POSITIONS.slice(0, 2) : POSITIONS)));
     if (side && L.position !== "full") p.append(row("Panel width", ...sliderC("layout.width", 200, 900, 10, v => v + " dp")));
     if (["carousel", "dock"].includes(t)) p.append(grp("Where the strip sits", chips("layout.band", BANDS)));
+    if (t === "radial") p.append(grp("Where the wheel sits", chips("layout.spot", SPOTS)));
     if (["carousel", "dock", "radial", "arc", "xmb", "rail"].includes(t)) p.append(row(t === "radial" || t === "arc" ? "Ring size" : t === "carousel" ? "Card size" : "Icon size", ...sliderC("layout.size", 40, 100, 5, v => v + "%")));
     if (["grid", "freeform", "tabs"].includes(t)) p.append(row(t === "freeform" ? "Start columns" : "Columns", ...sliderC("layout.columns", 2, 8, 1)));
-    if (["list", "compact", "grid", "wheel", "carousel"].includes(t)) p.append(row("Group by section", toggleC("layout.sections")));
+    if (["list", "compact", "grid", "wheel", "carousel", "radial"].includes(t)) p.append(row("Group by section", toggleC("layout.sections")));
     if (t === "freeform") p.append(el("div", {class: "note"}, "Drag items on the preview to place them, and drag the yellow corner to resize. Positions for your own commands are set on the handheld (press Y in the menu)."),
       el("button", {class: "small", onclick: () => { T.layout.free = {}; changed(); }}, "Reset freeform positions"));
   } else if (tab === "colours") {
