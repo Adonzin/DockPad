@@ -569,6 +569,13 @@ function sectionAnim() {
   let targets = items.filter(Boolean);
   if (T.layout.type === "radial") targets = [...$("#screen").querySelectorAll(".pv-content > div[style*='pointer']")];
   const ease = `cubic-bezier(.2, ${(.55 + f.smoothness / 250).toFixed(2)}, .25, 1)`;
+  // XMB: the section icons glide along the bar with the column
+  if (T.layout.type === "xmb") for (const h of $("#screen").querySelectorAll(".xmb-h")) {
+    const hs = +h.dataset.hs, k2 = +h.dataset.k, was = k2 === before.n, on = k2 === now.n;
+    const from = {opacity: was ? 1 : .5, scale: String((was ? 1.15 : .9) / (on ? 1.15 : .9))};
+    if (f.sectionMove !== "fade") from.translate = `${(now.n - before.n) * hs * 2}px 0`;
+    h.animate([from, {opacity: on ? 1 : .5, translate: "0 0", scale: "1"}], {duration: ms, easing: ease});
+  }
   for (const n of targets) {
     let kf;
     if (f.sectionMove === "fade") kf = [{opacity: 0}, {opacity: 1}];
@@ -965,7 +972,7 @@ function xmbPanel() {
   c.append(el("div", {class: "pv-status", style: {position: "absolute", left: "20px", top: "12px"}}, headerText()));
   SECTIONS.forEach((s, k) => {
     const first = SAMPLE.find(x => x.s === s), on = k === k0;
-    const h = el("div", {style: {position: "absolute", left: ax + (k - k0) * hs * 2 - hs + "px", top: top + "px", width: hs * 2 + "px", textAlign: "center",
+    const h = el("div", {class: "xmb-h", "data-k": k, "data-hs": hs, style: {position: "absolute", left: ax + (k - k0) * hs * 2 - hs + "px", top: top + "px", width: hs * 2 + "px", textAlign: "center",
       opacity: on ? 1 : .5, transform: `scale(${on ? 1.15 : .9})`}}, svg(first.i, hs, css(accent())), el("div", {style: {fontSize: "12px"}}, s));
     c.append(h);
   });

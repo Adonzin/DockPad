@@ -78,6 +78,8 @@ final class MenuStyles {
 
         final class XmbCanvas extends ViewGroup {
             int sec, item, first, rowH = 1;
+            /** The section the headers are moving from (-1: not moving). */
+            int movedFrom = -1;
 
             XmbCanvas(Context c) {
                 super(c);
@@ -103,15 +105,33 @@ final class MenuStyles {
             protected void onLayout(boolean changed, int l, int t, int r, int b) {
                 int W = r - l, H = b - t, hs = head();
                 int anchorX = (int) (W * 0.24f), top = (int) (H * 0.12f);
+                long ms = theme.fx.sectionMs();
+                boolean glide = movedFrom >= 0 && movedFrom != sec && ms > 0;
+                boolean fade = theme.fx.sectionMove.equals("fade");
                 for (int k = 0; k < headers.size(); k++) {
                     View v = headers.get(k);
                     int x = anchorX + (k - sec) * hs * 2 - v.getMeasuredWidth() / 2;
                     v.layout(x, top, x + v.getMeasuredWidth(), top + v.getMeasuredHeight());
                     boolean on = k == sec;
-                    v.setAlpha(on ? 1f : 0.5f);
-                    v.setScaleX(on ? 1.15f : 0.9f);
-                    v.setScaleY(on ? 1.15f : 0.9f);
+                    float a = on ? 1f : 0.5f, sc = on ? 1.15f : 0.9f;
+                    v.animate().cancel();
+                    if (glide) {
+                        // start where it was, then glide along the bar with the column
+                        boolean was = k == movedFrom;
+                        v.setTranslationX(fade ? 0f : (sec - movedFrom) * hs * 2f);
+                        v.setAlpha(was ? 1f : 0.5f);
+                        v.setScaleX(was ? 1.15f : 0.9f);
+                        v.setScaleY(was ? 1.15f : 0.9f);
+                        v.animate().translationX(0f).alpha(a).scaleX(sc).scaleY(sc).setDuration(ms)
+                                .setInterpolator(theme.fx.sectionEase()).start();
+                    } else {
+                        v.setTranslationX(0f);
+                        v.setAlpha(a);
+                        v.setScaleX(sc);
+                        v.setScaleY(sc);
+                    }
                 }
+                movedFrom = -1;
                 int y0 = top + hs + dp(34);
                 List<Integer> mine = secs.isEmpty() ? new ArrayList<>() : secs.get(sec);
                 for (int i = 0; i < tiles.size(); i++) {
@@ -183,6 +203,7 @@ final class MenuStyles {
             remembered[Math.min(63, canvas.sec)] = secs.get(canvas.sec).indexOf(index);
             canvas.requestLayout();
             if (wasSec >= 0 && wasSec != canvas.sec) {
+                canvas.movedFrom = wasSec;
                 int dir = canvas.sec > wasSec ? 1 : -1;
                 for (int i : mine) MenuRender.sectionIn(tiles.get(i), theme.fx, dir, dp(50));
             }
