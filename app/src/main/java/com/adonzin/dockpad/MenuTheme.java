@@ -37,6 +37,8 @@ final class MenuTheme {
     /** Panel width in dp (radial: the ring's diameter). */
     int width = 340;
     boolean sections = true;
+    /** Grid, carousel, dock, rail, edge arc: show the sections first, then the chosen section's items. */
+    boolean folders = true;
     /** Carousel: where the strip sits. */
     String band = "bottom";
     /** Radial: where the wheel sits on the screen. */
@@ -89,6 +91,7 @@ final class MenuTheme {
                 if (Arrays.asList(POSITIONS).contains(pos)) t.position = pos;
                 t.width = Math.max(200, Math.min(1200, l.optInt("width", t.width)));
                 t.sections = l.optBoolean("sections", t.sections);
+                t.folders = l.optBoolean("folders", t.folders);
                 String band = l.optString("band", t.band);
                 if (Arrays.asList(BANDS).contains(band)) t.band = band;
                 String spot = l.optString("spot", t.spot);
@@ -126,6 +129,7 @@ final class MenuTheme {
             l.put("position", position);
             l.put("width", width);
             l.put("sections", sections);
+            l.put("folders", folders);
             l.put("band", band);
             l.put("spot", spot);
             l.put("size", size);
@@ -155,6 +159,11 @@ final class MenuTheme {
     }
 
     /** Whether items are grouped (and kept) by section in this layout. */
+    /** Whether this layout shows the sections first (and is one that can). */
+    boolean usesFolders() {
+        return folders && Arrays.asList("grid", "carousel", "dock", "rail", "arc").contains(layout);
+    }
+
     boolean bySection() {
         switch (layout) {
             case "xmb": case "tabs": return true;

@@ -119,6 +119,7 @@ Every part is optional. Anything left out uses the default.
 | `width` | panel width in dp, 200–1200 |
 | `size` | 40–100: ring, card or icon size as a share of the screen (carousel, dock, radial, arc, XMB, rail) |
 | `band` | `top`, `middle`, `bottom` (carousel and dock) |
+| `folders` | `true` / `false` (grid, carousel, dock, rail, edge arc): show one entry per section first, then the chosen section's items; on unless turned off |
 | `spot` | radial: where the wheel sits: `center`, `left`, `right`, `top-left`, `top-right`, `bottom-left`, `bottom-right` |
 | `columns` | 2–8 (grid, tabs, and where unplaced freeform items start) |
 | `sections` | `true` / `false`: group items by section (radial: `true` shows the sections first, then a section's items; `false` puts every item on the wheel) |

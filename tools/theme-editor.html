@@ -220,7 +220,7 @@ const SYSTEM_ACCENT = "#A8C7FA", SYSTEM_FILL = "#284777"; // stand-ins for the h
 function defaults() {
   return {
     format: 1, name: "My theme", author: "", description: "",
-    layout: {type: "list", position: "left", width: 340, sections: true, columns: 3, band: "bottom", spot: "center", size: 80, free: {}},
+    layout: {type: "list", position: "left", width: 340, sections: true, folders: true, columns: 3, band: "bottom", spot: "center", size: 80, free: {}},
     style: {palette: "system", panel1: "", panel2: "", panel3: "", gradient: "none", angle: 90, accent: "", text: "", tile: "",
       opacity: 90, dim: -1, corners: 24, border: 0, borderColor: "", edgeOpacity: 100, glow: false, backdrop: "",
       textSize: 100, font: "default", highlight: "filled", showTitle: true, showStatus: true, showClock: false, showBattery: false},
@@ -243,7 +243,7 @@ function sanitize(src) {
   const t = d;
   t.name = String(o.name || d.name).slice(0, 40); t.author = String(o.author || "").slice(0, 40); t.description = String(o.description || "").slice(0, 160);
   Object.assign(t.layout, {type: one(L.type, LAYOUTS, "list"), position: one(L.position, POSITIONS, "left"), width: num(L.width, 200, 1200, 340),
-    sections: L.sections !== false, columns: num(L.columns, 2, 8, 3), band: one(L.band, BANDS, "bottom"), spot: one(L.spot, SPOTS, "center"), size: num(L.size, 40, 100, 80), free: {}});
+    sections: L.sections !== false, folders: L.folders !== false, columns: num(L.columns, 2, 8, 3), band: one(L.band, BANDS, "bottom"), spot: one(L.spot, SPOTS, "center"), size: num(L.size, 40, 100, 80), free: {}});
   if (L.free && typeof L.free === "object") for (const [k, r] of Object.entries(L.free)) if (Array.isArray(r) && r.length === 4)
     t.layout.free[k] = r.map(x => clamp(Number(x) || 0, 0, 1)).map((x, i) => i === 2 ? Math.max(.04, x) : i === 3 ? Math.max(.03, x) : x);
   const s = t.style;
@@ -476,7 +476,7 @@ const svg = (name, size, col) => {
 };
 
 /* sample menu (what DockPad shows; your own items replace these on the handheld) */
-const SAMPLE = [
+const ALL_ITEMS = [
   {id: "home", s: "Navigation", i: "home", t: "Home"},
   {id: "back", s: "Navigation", i: "back", t: "Back"},
   {id: "dpkeyboard", s: "Tools", i: "keyboard", t: "Keyboard", st: "Type into whatever app is open"},
@@ -490,7 +490,18 @@ const SAMPLE = [
   {id: "pair", s: "Controllers", i: "add", t: "Pair a new controller…"},
   {id: "power", s: "DockPad", i: "power", t: "Turn DockPad off"},
   {id: "openapp", s: "DockPad", i: "open", t: "Open DockPad"}];
-const SECTIONS = [...new Set(SAMPLE.map(x => x.s))];
+const SECTIONS = [...new Set(ALL_ITEMS.map(x => x.s))];
+/* sections first (grid, carousel, dock, rail, arc): one entry per section, then the open section's items */
+const FOLDER_LAYOUTS = ["grid", "carousel", "dock", "rail", "arc"];
+let openSec = null;
+const usesFolders = () => T.layout.folders && FOLDER_LAYOUTS.includes(T.layout.type);
+let SAMPLE = ALL_ITEMS;
+function shownItems() {
+  if (!usesFolders()) { openSec = null; return ALL_ITEMS; }
+  if (openSec) return ALL_ITEMS.filter(x => x.s === openSec);
+  return SECTIONS.map(name => { const f = ALL_ITEMS.find(x => x.s === name), n = ALL_ITEMS.filter(x => x.s === name).length;
+    return {id: "section:" + name, s: name, i: f.i, t: name, st: n + " items", sec: name}; });
+}
 
 /* ------------------------------ preview ------------------------------ */
 const GAMES = {
@@ -507,6 +518,8 @@ function frame() {
 const defaultDim = () => ({ring: 70, band: 55, screen: T.layout.type === "xmb" ? 60 : 50, rail: 35, side: 35})[frame()];
 
 function render() {
+  SAMPLE = shownItems();
+  if (hl >= SAMPLE.length) hl = 0;
   const sc = $("#screen"); sc.innerHTML = "";
   sc.classList.toggle("edit-deco", tab === "media");
   // the game
@@ -557,6 +570,7 @@ function panel(styleBox, radius) {
 function headerText() {
   const s = T.style, parts = [];
   if (frame() !== "side" && s.showTitle) parts.push("DockPad");
+  if (openSec) parts.push(openSec);
   if (s.showStatus) parts.push("On");
   if (s.showClock) parts.push(new Date().toTimeString().slice(0, 5));
   const txt = parts.join("  ·  ");
@@ -619,6 +633,7 @@ function iconNode(it, size, col, on) {
   return svg(it.i, size, col);
 }
 function pickItem(i) {
+  if (SAMPLE[i] && SAMPLE[i].sec && hl === i) { openSec = SAMPLE[i].sec; hl = 0; sound("select"); render(); $("#screen").focus(); return; } // a second click opens a section
   hl = i; if (tab === "buttons") { artSel = artKey(SAMPLE[i]); buildPanel(); }
   render(); $("#screen").focus();
 }
@@ -1190,8 +1205,8 @@ $("#screen").addEventListener("keydown", e => {
   else if (e.key === "ArrowUp") next = t === "carousel" || t === "dock" ? hl : t === "xmb" ? nextIn(-1) : (hl - cols + n) % n;
   else if (e.key === "ArrowRight") next = t === "xmb" ? sectionJump(1) : (hl + 1) % n;
   else if (e.key === "ArrowLeft") next = t === "xmb" ? sectionJump(-1) : (hl - 1 + n) % n;
-  else if (e.key === "Enter") { sound("select"); motion(); e.preventDefault(); return; }
-  else if (e.key === "Escape") { sound("back"); playOpen(true); return; }
+  else if (e.key === "Enter") { sound("select"); e.preventDefault(); if (SAMPLE[hl] && SAMPLE[hl].sec) { openSec = SAMPLE[hl].sec; hl = 0; render(); } else motion(); return; }
+  else if (e.key === "Escape") { sound("back"); if (openSec) { const back = openSec; openSec = null; render(); hl = SAMPLE.findIndex(x => x.sec === back); render(); } else playOpen(true); return; }
   else return;
   e.preventDefault();
   if (next !== hl) { hl = next; render(); sound("move"); motion(); }
@@ -1281,6 +1296,8 @@ function buildPanel() {
     if (["carousel", "dock", "radial", "arc", "xmb", "rail"].includes(t)) p.append(row(t === "radial" || t === "arc" ? "Ring size" : t === "carousel" ? "Card size" : "Icon size", ...sliderC("layout.size", 40, 100, 5, v => v + "%")));
     if (["grid", "freeform", "tabs"].includes(t)) p.append(row(t === "freeform" ? "Start columns" : "Columns", ...sliderC("layout.columns", 2, 8, 1)));
     if (["list", "compact", "grid", "wheel", "carousel", "radial"].includes(t)) p.append(row("Group by section", toggleC("layout.sections")));
+    if (FOLDER_LAYOUTS.includes(t)) p.append(row("Section first", toggleC("layout.folders", () => { openSec = null; hl = 0; })),
+      el("div", {class: "note"}, "Shows one entry per section; choosing one shows its items (B goes back)."));
     if (t === "freeform") p.append(el("div", {class: "note"}, "Drag items on the preview to place them, and drag the yellow corner to resize. Positions for your own commands are set on the handheld (press Y in the menu)."),
       el("button", {class: "small", onclick: () => { T.layout.free = {}; changed(); }}, "Reset freeform positions"));
   } else if (tab === "colours") {

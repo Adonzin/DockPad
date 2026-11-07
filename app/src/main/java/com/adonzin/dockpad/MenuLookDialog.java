@@ -77,6 +77,13 @@ final class MenuLookDialog {
         box.addView(cols);
         MenuStyleDialog.focusRow(a, cols, cols, colsLabel);
 
+        MaterialSwitch folders = new MaterialSwitch(a);
+        folders.setText("Pick a section first (then its items)");
+        folders.setChecked(t.folders);
+        folders.setForeground(a.getDrawable(R.drawable.focus_ring));
+        folders.setPadding(dp(a, 6), dp(a, 10), dp(a, 6), dp(a, 10));
+        box.addView(folders);
+
         MaterialSwitch sections = new MaterialSwitch(a);
         sections.setText("Group items into sections");
         sections.setChecked(t.sections);
@@ -121,6 +128,7 @@ final class MenuLookDialog {
             colsLabel.setText((lay.equals("freeform") ? "Starting columns (for items you haven't placed): "
                     : "Columns: ") + Math.round(cols.getValue()));
             sections.setVisibility(usesSections ? View.VISIBLE : View.GONE);
+            folders.setVisibility(in(lay, "grid", "carousel", "dock", "rail", "arc") ? View.VISIBLE : View.GONE);
         };
         refresh.run();
         layouts.setOnCheckedChangeListener((g, id) -> refresh.run());
@@ -136,6 +144,7 @@ final class MenuLookDialog {
             t.width = Math.round(width.getValue());
             t.columns = Math.round(cols.getValue());
             t.sections = sections.isChecked();
+            t.folders = folders.isChecked();
             t.band = MenuTheme.BANDS[checked(bands)];
             t.spot = MenuTheme.SPOTS[checked(spots)];
             t.size = Math.round(size.getValue());

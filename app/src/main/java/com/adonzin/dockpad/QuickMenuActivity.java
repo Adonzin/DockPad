@@ -145,6 +145,7 @@ public class QuickMenuActivity extends AppCompatActivity {
         play("back");
         // radial: B inside a section goes back to the sections
         if (renderer != null && !arranging && renderer.back(selected)) return;
+        if (!arranging && closeFolder()) return;
         finish();
     }
 
@@ -438,13 +439,84 @@ public class QuickMenuActivity extends AppCompatActivity {
         return out;
     }
 
+    // ---- sections first (grid, carousel, dock, rail, arc): one entry per section, then that section's items
+
+    /** The section that's open, or null when the sections are showing. */
+    private String openSection;
+
+    private List<MenuRender.Item> folders(List<MenuRender.Item> all) {
+        if (!theme.usesFolders()) {
+            openSection = null;
+            return all;
+        }
+        List<String> names = new ArrayList<>();
+        Map<String, List<MenuRender.Item>> by = new HashMap<>();
+        for (MenuRender.Item it : all) {
+            if (it.action == null) continue;
+            if (!by.containsKey(it.section)) {
+                names.add(it.section);
+                by.put(it.section, new ArrayList<>());
+            }
+            by.get(it.section).add(it);
+        }
+        if (names.size() < 2) {
+            openSection = null;
+            return all;
+        }
+        if (openSection != null && by.containsKey(openSection)) {
+            List<MenuRender.Item> out = new ArrayList<>();
+            for (MenuRender.Item it : all) if (it.section.equals(openSection)) out.add(it);
+            return out;
+        }
+        openSection = null;
+        List<MenuRender.Item> out = new ArrayList<>();
+        for (String name : names) {
+            List<MenuRender.Item> items = by.get(name);
+            MenuRender.Item first = items.get(0);
+            Integer own = MenuRender.sectionIcons.get(name);
+            MenuRender.Item s = new MenuRender.Item("section:" + name, "section:" + name, name,
+                    own != null ? own : first.icon, name, items.size() + (items.size() == 1 ? " item" : " items"),
+                    null, () -> ui.post(() -> openFolder(name)));
+            if (own == null) s.iconFile = first.iconFile;
+            out.add(s);
+        }
+        return out;
+    }
+
+    private void openFolder(String name) {
+        if (closing) return;
+        openSection = name;
+        selected = -1;
+        selectedId = null;
+        rebuild();
+        fadeIn();
+    }
+
+    private void fadeIn() {
+        View p = currentPanel;
+        if (p == null) return;
+        p.setAlpha(0.3f);
+        p.animate().alpha(1f).setDuration(140).start();
+    }
+
+    /** B inside a section: back to the sections (highlighting the one we were in). */
+    private boolean closeFolder() {
+        if (openSection == null || !theme.usesFolders()) return false;
+        selectedId = "section:" + openSection;
+        openSection = null;
+        selected = -1;
+        rebuild();
+        fadeIn();
+        return true;
+    }
+
     /** Builds the menu again (keeping the highlight on the same item). */
     private void rebuild() {
         stopLoop();
         if (renderer != null && selected >= 0 && selected < renderer.selectable.size()) {
             selectedId = renderer.selectable.get(selected).id;
         }
-        List<MenuRender.Item> list = ordered(collect());
+        List<MenuRender.Item> list = folders(ordered(collect()));
         renderer = MenuRender.create(this, theme);
         renderer.go = this::select;
         renderer.build(list);
@@ -836,6 +908,7 @@ public class QuickMenuActivity extends AppCompatActivity {
         List<String> parts = new ArrayList<>();
         boolean side = theme.frame().equals("side");
         if (!side && st.showTitle) parts.add("DockPad");
+        if (openSection != null) parts.add(openSection);
         if (st.showStatus && !statusText.isEmpty()) parts.add(statusText);
         if (st.showClock) parts.add(android.text.format.DateFormat.getTimeFormat(this).format(new java.util.Date()));
         android.text.SpannableStringBuilder out = new android.text.SpannableStringBuilder(String.join("  ·  ", parts));
@@ -1524,6 +1597,10 @@ public class QuickMenuActivity extends AppCompatActivity {
                 case "tabs": h = "L1/R1: tabs · D-pad: tiles · Y: arrange · B: close"; break;
                 default: h = "Y: arrange items · B: close";
             }
+            if (theme.usesFolders() && renderer != null && !renderer.selectable.isEmpty()) {
+                boolean top = openSection == null && renderer.selectable.get(0).id.startsWith("section:");
+                h = h.replace(" · ▲▼: sections", "").replace("B: close", top ? "A: open · B: close" : "B: back");
+            }
             hint.setText(h);
             hint.setTextColor((theme.style.text(this) & 0x00FFFFFF) | 0xB3000000);
         }
@@ -1546,7 +1623,9 @@ public class QuickMenuActivity extends AppCompatActivity {
         List<String> groups = new ArrayList<>();
         List<String> groupSections = new ArrayList<>();
         if (renderer.selectable.get(selected).id.startsWith("section:")) return;
-        for (MenuRender.Item it : renderer.selectable) {
+        // with sections first only one section shows: arrange against the whole menu, inside that section
+        List<MenuRender.Item> every = theme.usesFolders() ? ordered(collect()) : renderer.selectable;
+        for (MenuRender.Item it : every) {
             if (it.id.startsWith("section:")) continue;
             if (!groups.contains(it.group)) {
                 groups.add(it.group);
@@ -1556,7 +1635,7 @@ public class QuickMenuActivity extends AppCompatActivity {
         String g = renderer.selectable.get(selected).group;
         int from = groups.indexOf(g);
         int to = Math.max(0, Math.min(groups.size() - 1, from + step));
-        boolean bySection = theme.bySection();
+        boolean bySection = theme.bySection() || openSection != null;
         if (bySection) {
             // stay inside the section
             String sec = groupSections.get(from);

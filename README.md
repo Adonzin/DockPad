@@ -80,6 +80,7 @@ Docked play on a handheld usually means setting up every emulator again for an e
   - **tabs** (one per section, L1/R1)
   - **rail** (a thin icon column with a name bubble)
   - **radial** (a segmented wheel: pick a section, then its items around the ring, with the name in the centre; point the stick or D-pad at a slice, B goes back; centred, on a side or in a corner)
+  - grid, carousel, dock, rail and edge arc show the **sections first** (A opens one, B goes back), so the screen isn't flooded with every item; can be turned off
   - **edge arc** (a half-ring along the side, around your thumb)
   - **freeform** (put every item anywhere, at any size)
 - Small tiles show the item's name over a faded icon, so they stay readable.
