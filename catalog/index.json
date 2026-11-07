@@ -30,6 +30,16 @@
       "file": "catalog/starfield/starfield.dockpadtheme",
       "preview": "catalog/starfield/preview.png",
       "size": 29526
+    },
+    {
+      "id": "crimson-nocturne",
+      "name": "Crimson Nocturne",
+      "author": "Adonzin",
+      "description": "Gothic vampire theme",
+      "layout": "list",
+      "file": "catalog/crimson-nocturne/crimson-nocturne.dockpadtheme",
+      "preview": "catalog/crimson-nocturne/preview.png",
+      "size": 319641
     }
   ]
 }
