@@ -559,8 +559,14 @@ function headerText() {
   if (frame() !== "side" && s.showTitle) parts.push("DockPad");
   if (s.showStatus) parts.push("On");
   if (s.showClock) parts.push(new Date().toTimeString().slice(0, 5));
-  if (s.showBattery) parts.push("🔋 80%");
-  return parts.join("  ·  ");
+  const txt = parts.join("  ·  ");
+  if (!s.showBattery) return txt;
+  // a drawn battery like DockPad's, in the text colour
+  const c = css(textCol()), NS = "http://www.w3.org/2000/svg", b = document.createElementNS(NS, "svg");
+  b.setAttribute("viewBox", "0 0 31 19"); b.setAttribute("width", "1.55em"); b.setAttribute("height", ".95em");
+  b.style.verticalAlign = "-0.1em";
+  b.innerHTML = `<rect x="1" y="4.4" width="26" height="10.2" rx="2.2" fill="none" stroke="${c}" stroke-width="2"/><rect x="28" y="7.2" width="3" height="4.6" rx="1" fill="${c}"/><rect x="3.2" y="6.6" width="17.3" height="5.8" rx="1" fill="${c}"/>`;
+  return [txt ? txt + "  ·  " : "", b, " 80%"];
 }
 function tileBg(round, row, on) {
   const s = T.style, a = accent();

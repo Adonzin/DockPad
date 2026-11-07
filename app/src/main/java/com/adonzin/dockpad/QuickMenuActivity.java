@@ -831,21 +831,33 @@ public class QuickMenuActivity extends AppCompatActivity {
     }
 
     /** The header line: title (for strips), status, clock and battery, as the look asks. */
-    private String headerText() {
+    private CharSequence headerText() {
         MenuStyle st = theme.style;
         List<String> parts = new ArrayList<>();
         boolean side = theme.frame().equals("side");
         if (!side && st.showTitle) parts.add("DockPad");
         if (st.showStatus && !statusText.isEmpty()) parts.add(statusText);
         if (st.showClock) parts.add(android.text.format.DateFormat.getTimeFormat(this).format(new java.util.Date()));
+        android.text.SpannableStringBuilder out = new android.text.SpannableStringBuilder(String.join("  ·  ", parts));
         if (st.showBattery) {
             android.os.BatteryManager bm = getSystemService(android.os.BatteryManager.class);
             if (bm != null) {
                 int pct = bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY);
-                if (pct > 0) parts.add("🔋 " + pct + "%" + (bm.isCharging() ? " ⚡" : ""));
+                if (pct > 0) {
+                    if (out.length() > 0) out.append("  ·  ");
+                    // a drawn battery (like the other icons) in the text's colour, then the percentage
+                    int at = out.length();
+                    out.append("\u00A0");
+                    float size = status != null ? status.getTextSize() : dp(12);
+                    BatteryIcon icon = new BatteryIcon(pct, bm.isCharging(), st.text(this));
+                    icon.setBounds(0, 0, Math.round(size * 1.55f), Math.round(size * 0.95f));
+                    out.setSpan(new android.text.style.ImageSpan(icon, android.text.style.DynamicDrawableSpan.ALIGN_CENTER),
+                            at, at + 1, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                    out.append(" ").append(String.valueOf(pct)).append("%");
+                }
             }
         }
-        return String.join("  ·  ", parts);
+        return out;
     }
 
     // ------------------------------------------------------------------ animation, sound, feedback
