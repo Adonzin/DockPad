@@ -102,6 +102,14 @@ final class MenuRender {
         void onSelected(int index) {
         }
 
+        /** B inside a style's own level (radial sections): handle it and return true, or false to close. */
+        boolean back(int cur) {
+            return false;
+        }
+
+        /** Set by the menu: highlights an item (for styles that move the highlight themselves). */
+        java.util.function.IntConsumer go;
+
         int dp(float v) {
             return (int) (v * c.getResources().getDisplayMetrics().density + 0.5f);
         }
@@ -485,183 +493,410 @@ final class MenuRender {
 
     // ------------------------------------------------------------------ radial
 
-    /** Items on rings around a centre label. */
-    static final class RadialCanvas extends ViewGroup {
-        final List<int[]> slots = new ArrayList<>(); // {ring, indexInRing, countInRing} per child tile
+    /**
+     * A segmented wheel: one wedge per section; choosing a section turns the wheel into that section's
+     * items. The name of what's highlighted shows in the centre.
+     */
+    static final class RadialWheel extends ViewGroup {
+        final List<View> shown = new ArrayList<>(); // the wedges' tiles, clockwise from the top
         View center;
-        float[] radii = new float[0];
-        int tileSize;
+        float hl = -1;          // highlighted wedge (fractional while it slides)
+        String highlight = "filled";
+        int accent = 0xFF4FC3F7, line = 0x22FFFFFF, disc = 0x22FFFFFF, fill = 0x18FFFFFF;
+        private final android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        private final android.graphics.Path path = new android.graphics.Path();
+        private final android.graphics.RectF ro = new android.graphics.RectF(), ri = new android.graphics.RectF();
+        private android.animation.ValueAnimator slide;
 
-        RadialCanvas(Context c) {
+        RadialWheel(Context c) {
             super(c);
+            setWillNotDraw(false);
+            setClipChildren(false);
+        }
+
+        float dpf(float v) {
+            return v * getResources().getDisplayMetrics().density;
+        }
+
+        float outer() {
+            return Math.min(getWidth(), getHeight()) / 2f - dpf(3);
+        }
+
+        float inner() {
+            return outer() * 0.42f;
+        }
+
+        /** Slides the highlight to wedge {@code to} (the short way round). */
+        void highlightTo(int to, boolean animate) {
+            int n = shown.size();
+            if (slide != null) slide.cancel();
+            if (!animate || hl < 0 || n < 2) {
+                hl = to;
+                invalidate();
+                return;
+            }
+            float from = hl, d = to - from;
+            while (d > n / 2f) d -= n;
+            while (d < -n / 2f) d += n;
+            float target = from + d;
+            slide = android.animation.ValueAnimator.ofFloat(from, target);
+            slide.setDuration(130);
+            slide.addUpdateListener(a -> {
+                hl = (float) a.getAnimatedValue();
+                invalidate();
+            });
+            slide.addListener(new android.animation.AnimatorListenerAdapter() {
+                @Override
+                public void onAnimationEnd(android.animation.Animator a) {
+                    hl = ((to % n) + n) % n;
+                    invalidate();
+                }
+            });
+            slide.start();
         }
 
         @Override
         protected void onMeasure(int w, int h) {
             int size = Math.min(MeasureSpec.getSize(w), MeasureSpec.getSize(h));
-            int rings = radii.length;
-            float R = size / 2f;
-            // fit the tiles to the outer ring's circumference
-            int maxCount = 1;
-            for (int[] s : slots) maxCount = Math.max(maxCount, s[2]);
-            float outer = rings == 0 ? R : R * radii[rings - 1];
-            tileSize = (int) Math.min(R * 0.30f, (2 * Math.PI * outer / maxCount) * 0.82f);
-            if (rings > 1) tileSize = (int) Math.min(tileSize, R * (radii[1] - radii[0]) * 0.9f);
-            for (int i = 0; i < getChildCount(); i++) {
-                View ch = getChildAt(i);
-                if (ch == center) {
-                    int cs = (int) (R * (rings == 0 ? 1 : radii[0]) * 1.2f);
-                    ch.measure(MeasureSpec.makeMeasureSpec(cs, MeasureSpec.EXACTLY),
-                            MeasureSpec.makeMeasureSpec(cs, MeasureSpec.AT_MOST));
-                } else {
-                    ch.measure(MeasureSpec.makeMeasureSpec(tileSize, MeasureSpec.EXACTLY),
-                            MeasureSpec.makeMeasureSpec(tileSize, MeasureSpec.EXACTLY));
-                }
+            float R = size / 2f - dpf(3), r0 = R * 0.42f;
+            int n = Math.max(1, shown.size());
+            float mid = (R + r0) / 2f;
+            int tile = (int) Math.min((R - r0) * 0.72f, 2 * Math.PI * mid / n * 0.62f);
+            for (View v : shown) {
+                v.measure(MeasureSpec.makeMeasureSpec(tile, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(tile, MeasureSpec.EXACTLY));
+            }
+            if (center != null) {
+                int cs = (int) (r0 * 1.55f);
+                center.measure(MeasureSpec.makeMeasureSpec(cs, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(cs, MeasureSpec.AT_MOST));
             }
             setMeasuredDimension(size, size);
         }
 
         @Override
         protected void onLayout(boolean changed, int l, int t, int r, int b) {
-            float cx = (r - l) / 2f, cy = (b - t) / 2f, R = Math.min(cx, cy);
-            int tile = 0;
-            for (int i = 0; i < getChildCount(); i++) {
-                View ch = getChildAt(i);
-                if (ch == center) {
-                    int w = ch.getMeasuredWidth(), h = ch.getMeasuredHeight();
-                    ch.layout((int) (cx - w / 2f), (int) (cy - h / 2f), (int) (cx + w / 2f), (int) (cy + h / 2f));
-                    continue;
-                }
-                int[] s = slots.get(tile++);
-                double angle = -Math.PI / 2 + 2 * Math.PI * s[1] / s[2]; // clockwise from the top
-                float rad = R * radii[s[0]];
-                float x = cx + (float) Math.cos(angle) * rad, y = cy + (float) Math.sin(angle) * rad;
-                int half = ch.getMeasuredWidth() / 2;
-                ch.layout((int) x - half, (int) y - half, (int) x + half, (int) y + half);
+            float cx = (r - l) / 2f, cy = (b - t) / 2f, R = Math.min(cx, cy) - dpf(3), r0 = R * 0.42f;
+            int n = shown.size();
+            float mid = (R + r0) / 2f;
+            for (int k = 0; k < n; k++) {
+                View v = shown.get(k);
+                double a = Math.toRadians(-90 + 360.0 * k / n);
+                float x = cx + (float) Math.cos(a) * mid, y = cy + (float) Math.sin(a) * mid;
+                int hw = v.getMeasuredWidth() / 2, hh = v.getMeasuredHeight() / 2;
+                v.layout((int) x - hw, (int) y - hh, (int) x + hw, (int) y + hh);
             }
+            if (center != null) {
+                int w = center.getMeasuredWidth(), h = center.getMeasuredHeight();
+                center.layout((int) (cx - w / 2f), (int) (cy - h / 2f), (int) (cx + w / 2f), (int) (cy + h / 2f));
+            }
+        }
+
+        private void sector(float cx, float cy, float rIn, float rOut, float start, float sweep) {
+            path.reset();
+            ro.set(cx - rOut, cy - rOut, cx + rOut, cy + rOut);
+            ri.set(cx - rIn, cy - rIn, cx + rIn, cy + rIn);
+            path.arcTo(ro, start, sweep, true);
+            path.arcTo(ri, start + sweep, -sweep, false);
+            path.close();
+        }
+
+        @Override
+        protected void onDraw(android.graphics.Canvas cv) {
+            float cx = getWidth() / 2f, cy = getHeight() / 2f, R = outer(), r0 = inner();
+            int n = shown.size();
+            paint.setShadowLayer(0, 0, 0, 0);
+            // the highlighted wedge
+            if (n > 0 && hl >= 0) {
+                float span = 360f / n, start = -90 + span * hl - span / 2;
+                float grow = highlight.equals("grow") ? dpf(6) : 0;
+                if (!highlight.equals("underline")) {
+                    sector(cx, cy, r0, R + grow, start, span);
+                    paint.setStyle(android.graphics.Paint.Style.FILL);
+                    paint.setColor(highlight.equals("outline") ? 0x0AFFFFFF : fill);
+                    cv.drawPath(path, paint);
+                    if (highlight.equals("outline")) {
+                        paint.setStyle(android.graphics.Paint.Style.STROKE);
+                        paint.setStrokeWidth(dpf(2));
+                        paint.setColor(accent);
+                        cv.drawPath(path, paint);
+                    }
+                }
+                // the accent arc along the outside
+                paint.setStyle(android.graphics.Paint.Style.STROKE);
+                paint.setStrokeCap(android.graphics.Paint.Cap.BUTT);
+                paint.setStrokeWidth(dpf(highlight.equals("underline") ? 5 : 3.5f));
+                paint.setColor(accent);
+                if (highlight.equals("glow")) paint.setShadowLayer(dpf(8), 0, 0, accent);
+                float ar = R + grow - dpf(1);
+                ro.set(cx - ar, cy - ar, cx + ar, cy + ar);
+                cv.drawArc(ro, start, span, false, paint);
+                paint.setShadowLayer(0, 0, 0, 0);
+            }
+            // lines between the wedges
+            if (n > 1) {
+                paint.setStyle(android.graphics.Paint.Style.STROKE);
+                paint.setStrokeWidth(dpf(1));
+                paint.setColor(line);
+                for (int k = 0; k < n; k++) {
+                    double a = Math.toRadians(-90 + 360.0 * k / n - 180.0 / n);
+                    float c0 = (float) Math.cos(a), s0 = (float) Math.sin(a);
+                    cv.drawLine(cx + c0 * r0, cy + s0 * r0, cx + c0 * R, cy + s0 * R, paint);
+                }
+            }
+            // the centre disc
+            paint.setStyle(android.graphics.Paint.Style.FILL);
+            paint.setColor(disc);
+            paint.setShadowLayer(dpf(10), 0, dpf(2), 0x55000000);
+            cv.drawCircle(cx, cy, r0 - dpf(2), paint);
+            paint.setShadowLayer(0, 0, 0, 0);
+            paint.setStyle(android.graphics.Paint.Style.STROKE);
+            paint.setStrokeWidth(dpf(1));
+            paint.setColor(line);
+            cv.drawCircle(cx, cy, r0 - dpf(2), paint);
         }
     }
 
     static final class RadialRenderer extends Renderer {
-        RadialCanvas canvas;
-        TextView centerTitle, centerSub;
-        final List<int[]> slots = new ArrayList<>();
+        RadialWheel wheel;
+        TextView centerSection, centerTitle, centerSub;
+        /** Sections in order, and for each the tile indexes of its items. -1 level = the sections. */
+        final List<String> sections = new ArrayList<>();
+        final List<List<Integer>> members = new ArrayList<>();
+        int sectionCount; // the first tiles are the sections' wedges (0 when not grouped)
+        int level = -2;
+        int text = 0xFFFFFFFF, accentColor;
 
         RadialRenderer(Context c, MenuTheme t) {
             super(c, t);
         }
 
-        static int capacity(int ring) {
-            return 8 + ring * 4;
-        }
-
         @Override
         void build(List<Item> items) {
-            canvas = new RadialCanvas(c);
+            wheel = new RadialWheel(c);
+            text = theme.style.text(c);
+            accentColor = theme.style.accent(c);
+            wheel.accent = accentColor;
+            wheel.line = (text & 0x00FFFFFF) | 0x1F000000;
+            int tile = theme.style.tile(c);
+            wheel.disc = android.graphics.Color.alpha(tile) < 0x14 ? (text & 0x00FFFFFF) | 0x1A000000 : tile;
+            wheel.fill = (text & 0x00FFFFFF) | 0x16000000;
+            wheel.highlight = theme.style.highlight;
             List<Item> sel = new ArrayList<>();
             for (Item it : items) if (it.action != null) sel.add(it);
-            // fill rings from the inside out; spread the last ring's items evenly
-            List<Integer> counts = new ArrayList<>();
-            int left = sel.size(), ring = 0;
-            while (left > 0) {
-                int n = Math.min(capacity(ring), left);
-                counts.add(n);
-                left -= n;
-                ring++;
+            // group by section (keeping the order of first appearance)
+            List<List<Item>> groups = new ArrayList<>();
+            for (Item it : sel) {
+                int k = sections.indexOf(it.section);
+                if (k < 0) {
+                    sections.add(it.section);
+                    groups.add(new ArrayList<>());
+                    k = sections.size() - 1;
+                }
+                groups.get(k).add(it);
             }
-            int rings = counts.size();
-            canvas.radii = new float[rings];
-            for (int i = 0; i < rings; i++) {
-                canvas.radii[i] = rings == 1 ? 0.72f : 0.42f + (0.86f - 0.42f) * i / (rings - 1);
+            boolean grouped = theme.sections && sections.size() > 1;
+            sectionCount = grouped ? sections.size() : 0;
+            if (grouped) {
+                for (int k = 0; k < sections.size(); k++) {
+                    int key = k;
+                    Item first = groups.get(k).get(0);
+                    Item s = new Item("section:" + sections.get(k), "section:" + sections.get(k), sections.get(k),
+                            first.icon, sections.get(k), groups.get(k).size() + (groups.get(k).size() == 1 ? " item" : " items"),
+                            null, () -> enter(key));
+                    Integer own = sectionIcons.get(sections.get(k));
+                    Item shownAs = own != null ? new Item(s.id, s.group, s.section, own, s.title, s.subtitle, null, s.action) : s;
+                    if (own == null) shownAs.iconFile = first.iconFile;
+                    View t = wedge(shownAs);
+                    wheel.addView(t);
+                    selectable(t, shownAs);
+                }
             }
-            int idx = 0;
-            for (int r = 0; r < rings; r++) {
-                for (int k = 0; k < counts.get(r); k++) {
-                    Item it = sel.get(idx++);
-                    View t = radialTile(it);
-                    int[] slot = {r, k, counts.get(r)};
-                    slots.add(slot);
-                    canvas.slots.add(slot);
-                    canvas.addView(t);
+            for (int k = 0; k < groups.size(); k++) {
+                List<Integer> m = new ArrayList<>();
+                for (Item it : groups.get(k)) {
+                    View t = wedge(it);
+                    t.setVisibility(View.GONE);
+                    wheel.addView(t);
+                    m.add(tiles.size());
                     selectable(t, it);
                 }
+                members.add(m);
+            }
+            if (!grouped) { // one ring of everything
+                List<Integer> all = new ArrayList<>();
+                for (List<Integer> m : members) all.addAll(m);
+                members.clear();
+                members.add(all);
             }
             LinearLayout center = new LinearLayout(c);
             center.setOrientation(LinearLayout.VERTICAL);
             center.setGravity(Gravity.CENTER);
+            centerSection = new TextView(c);
+            centerSection.setGravity(Gravity.CENTER);
+            centerSection.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_LabelSmall);
+            centerSection.setLetterSpacing(0.12f);
+            centerSection.setAllCaps(true);
+            centerSection.setTag("badge"); // keeps its own colour (the accent)
+            centerSection.setTextColor(accentColor);
             centerTitle = new TextView(c);
             centerTitle.setGravity(Gravity.CENTER);
             centerTitle.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleMedium);
+            centerTitle.setAllCaps(true);
+            centerTitle.setLetterSpacing(0.06f);
+            centerTitle.setMaxLines(2);
+            centerTitle.setEllipsize(TextUtils.TruncateAt.END);
             centerSub = new TextView(c);
             centerSub.setGravity(Gravity.CENTER);
             centerSub.setMaxLines(3);
+            centerSub.setEllipsize(TextUtils.TruncateAt.END);
             centerSub.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall);
+            center.addView(centerSection);
             center.addView(centerTitle);
             center.addView(centerSub);
-            canvas.center = center;
-            canvas.addView(center);
-            view = canvas;
+            wheel.center = center;
+            wheel.addView(center);
+            view = wheel;
+            showLevel(sectionCount > 0 ? -1 : 0, false);
         }
 
-        private View radialTile(Item it) {
-            return new SmartTile(c, it, true, color(androidx.appcompat.R.attr.colorPrimary), tileBackground(true));
+        /** A wedge's content: just the icon (the wheel draws the wedge and its highlight). */
+        private View wedge(Item it) {
+            android.widget.FrameLayout f = new android.widget.FrameLayout(c);
+            f.setBackground(null);
+            ImageView icon = new ImageView(c);
+            icon.setId(R.id.row_icon);
+            icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            icon.setImageTintList(ColorStateList.valueOf(dimmed()));
+            setIcon(icon, it);
+            f.addView(icon, new android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT));
+            int pad = dp(10);
+            f.setPadding(pad, pad, pad, pad);
+            if (it.badge != null && !it.badge.isEmpty()) {
+                TextView b = new TextView(c);
+                b.setText(it.badge.startsWith("P") && it.badge.length() <= 2 ? it.badge : "•");
+                b.setTag("badge");
+                b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10);
+                b.setTextColor(text);
+                f.addView(b, new android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM | Gravity.END));
+            }
+            return f;
+        }
+
+        private int dimmed() {
+            return (text & 0x00FFFFFF) | 0xB0000000;
+        }
+
+        /** Shows one ring: the sections (-1) or one section's items. */
+        private void showLevel(int lv, boolean animate) {
+            if (lv == level) return;
+            level = lv;
+            wheel.shown.clear();
+            for (int i = 0; i < tiles.size(); i++) tiles.get(i).setVisibility(View.GONE);
+            List<Integer> ids = new ArrayList<>();
+            if (lv < 0) for (int i = 0; i < sectionCount; i++) ids.add(i);
+            else ids.addAll(members.get(lv));
+            for (int i : ids) {
+                View t = tiles.get(i);
+                t.setVisibility(View.VISIBLE);
+                wheel.shown.add(t);
+                if (animate) {
+                    t.setAlpha(0f);
+                    t.setScaleX(0.7f);
+                    t.setScaleY(0.7f);
+                    t.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(170).start();
+                }
+            }
+            wheel.hl = -1;
+            wheel.requestLayout();
+            wheel.invalidate();
+        }
+
+        private int levelOf(int index) {
+            if (index < sectionCount) return -1;
+            for (int k = 0; k < members.size(); k++) if (members.get(k).contains(index)) return k;
+            return 0;
+        }
+
+        private List<Integer> ring() {
+            List<Integer> ids = new ArrayList<>();
+            if (level < 0) for (int i = 0; i < sectionCount; i++) ids.add(i);
+            else ids.addAll(members.get(level));
+            return ids;
+        }
+
+        /** A: opens a section (its first item is highlighted). */
+        private void enter(int k) {
+            if (go != null && k < members.size() && !members.get(k).isEmpty()) go.accept(members.get(k).get(0));
+        }
+
+        @Override
+        boolean back(int cur) {
+            if (sectionCount == 0 || cur < sectionCount || go == null) return false;
+            go.accept(levelOf(cur)); // back to that section's wedge
+            return true;
         }
 
         @Override
         void onSelected(int index) {
             if (index < 0 || index >= selectable.size()) return;
+            int lv = levelOf(index);
+            boolean switched = lv != level;
+            showLevel(lv, switched && level != -2);
+            List<Integer> ids = ring();
+            wheel.highlightTo(Math.max(0, ids.indexOf(index)), !switched);
             Item it = selectable.get(index);
+            centerSection.setText(lv >= 0 && sectionCount > 0 ? sections.get(lv) : "");
+            centerSection.setVisibility(lv >= 0 && sectionCount > 0 ? View.VISIBLE : View.GONE);
             centerTitle.setText(it.title);
-            centerSub.setText(it.subtitle == null ? "" : it.subtitle);
-        }
-
-        int indexOf(int ring, int k) {
-            for (int i = 0; i < slots.size(); i++) if (slots.get(i)[0] == ring && slots.get(i)[1] == k) return i;
-            return -1;
+            String sub = it.subtitle == null ? "" : it.subtitle;
+            if (it.badge != null && !it.badge.isEmpty()) sub = sub.isEmpty() ? it.badge : it.badge + " · " + sub;
+            centerSub.setText(sub);
+            centerSub.setVisibility(sub.isEmpty() ? View.GONE : View.VISIBLE);
+            for (int i : ids) {
+                ImageView iv = tiles.get(i).findViewById(R.id.row_icon);
+                if (iv != null && iv.getImageTintList() != null) {
+                    iv.setImageTintList(ColorStateList.valueOf(i == index ? accentColor : dimmed()));
+                }
+            }
         }
 
         @Override
         int move(int cur, int dir, boolean fresh) {
-            if (slots.isEmpty()) return -1;
+            if (tiles.isEmpty()) return -1;
             if (cur < 0) return 0;
-            int[] s = slots.get(cur);
-            int rings = slots.get(slots.size() - 1)[0] + 1;
-            if (dir == LEFT || dir == RIGHT || rings == 1) {
-                int step = dir == LEFT || dir == UP ? -1 : 1;
-                return indexOf(s[0], ((s[1] + step) % s[2] + s[2]) % s[2]);
-            }
-            // up: outer ring, down: inner ring (at the nearest angle)
-            int ring = s[0] + (dir == UP ? 1 : -1);
-            if (ring < 0 || ring >= rings) {
-                if (!fresh) return -1;
-                ring = ring < 0 ? rings - 1 : 0;
-            }
-            double angle = (double) s[1] / s[2];
-            int count = 0;
-            for (int[] x : slots) if (x[0] == ring) count = x[2];
-            return indexOf(ring, (int) Math.round(angle * count) % count);
+            List<Integer> ids = ring();
+            int p = ids.indexOf(cur);
+            if (p < 0) return ids.isEmpty() ? -1 : ids.get(0);
+            int step = dir == LEFT || dir == UP ? -1 : 1;
+            return ids.get(((p + step) % ids.size() + ids.size()) % ids.size());
         }
 
-        /** L1/R1: inner/outer ring. */
+        /** L1/R1: the previous/next section (inside a section: straight into it). */
         @Override
         int shoulder(int cur, int delta) {
-            if (slots.isEmpty()) return -1;
-            return move(cur < 0 ? 0 : cur, delta > 0 ? UP : DOWN, true);
+            if (sectionCount == 0) return move(cur, delta > 0 ? RIGHT : LEFT, true);
+            int lv = levelOf(Math.max(0, cur));
+            if (lv < 0) return move(cur, delta > 0 ? RIGHT : LEFT, true);
+            int k = ((lv + delta) % members.size() + members.size()) % members.size();
+            return members.get(k).isEmpty() ? -1 : members.get(k).get(0);
         }
 
         @Override
         int aim(float x, float y, int cur) {
-            if (slots.isEmpty()) return -1;
-            int ring = cur >= 0 ? slots.get(cur)[0] : 0;
+            List<Integer> ids = ring();
+            if (ids.isEmpty()) return -1;
             double a = Math.atan2(x, -y); // 0 at the top, clockwise
             if (a < 0) a += 2 * Math.PI;
-            int count = 0;
-            for (int[] s : slots) if (s[0] == ring) count = s[2];
-            if (count == 0) return -1;
-            return indexOf(ring, (int) Math.round(a / (2 * Math.PI) * count) % count);
+            int n = ids.size();
+            return ids.get((int) Math.round(a / (2 * Math.PI) * n) % n);
+        }
+
+        @Override
+        int arrangeStep(int dir) {
+            return level < 0 ? 0 : dir == UP || dir == LEFT ? -1 : 1; // sections are arranged in Sections & items
         }
     }
-
 
     // ------------------------------------------------------------------ tiles
 

@@ -94,7 +94,7 @@ final class MenuLookDialog {
             boolean usesBand = in(lay, "carousel", "dock");
             boolean usesSize = in(lay, "carousel", "dock", "radial", "arc", "xmb", "rail");
             boolean usesCols = in(lay, "grid", "freeform", "tabs");
-            boolean usesSections = in(lay, "list", "compact", "grid", "wheel", "carousel");
+            boolean usesSections = in(lay, "list", "compact", "grid", "wheel", "carousel", "radial");
             posLabel.setText(edgeOnly ? "Side (left or right)" : "Position");
             posLabel.setVisibility(usesPosition ? View.VISIBLE : View.GONE);
             positions.setVisibility(usesPosition ? View.VISIBLE : View.GONE);
@@ -170,8 +170,9 @@ final class MenuLookDialog {
                     + "it, left/right jump between sections.";
             case "tabs": return "One tab per section (L1/R1 or the row's edge switch tabs), with that section's tiles below.";
             case "rail": return "A thin column of icons at the edge; the highlighted one shows its name beside it.";
-            case "radial": return "Items on a ring in the middle. Aim with the stick, or go around with the D-pad. Many "
-                    + "items make several rings (D-pad up/down or L1/R1 between them).";
+            case "radial": return "A wheel in the middle: first one slice per section, then that section's items around it, "
+                    + "with the name in the centre. Aim with the stick or go around with the D-pad; A opens a section, "
+                    + "B goes back, L1/R1 jump between sections. Without sections, every item is on the wheel.";
             case "arc": return "A half-ring along the left or right edge, around your thumb. Aim with the stick or move "
                     + "along it with up/down; L1/R1 or left/right switch rings.";
             case "freeform": return "Every item sits where you put it, at the size you choose.";

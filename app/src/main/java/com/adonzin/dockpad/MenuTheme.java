@@ -151,7 +151,8 @@ final class MenuTheme {
     boolean bySection() {
         switch (layout) {
             case "xmb": case "tabs": return true;
-            case "radial": case "arc": case "freeform": case "dock": case "rail": return false;
+            case "radial": return sections;
+            case "arc": case "freeform": case "dock": case "rail": return false;
             default: return sections;
         }
     }

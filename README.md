@@ -79,7 +79,7 @@ Docked play on a handheld usually means setting up every emulator again for an e
   - **wheel** (a vertical drum)
   - **tabs** (one per section, L1/R1)
   - **rail** (a thin icon column with a name bubble)
-  - **radial** (aim with the stick; several rings, L1/R1)
+  - **radial** (a segmented wheel: pick a section, then its items around the ring, with the name in the centre; aim with the stick, B goes back)
   - **edge arc** (a half-ring along the side, around your thumb)
   - **freeform** (put every item anywhere, at any size)
 - Small tiles show the item's name over a faded icon, so they stay readable.

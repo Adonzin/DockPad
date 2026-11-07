@@ -143,6 +143,8 @@ public class QuickMenuActivity extends AppCompatActivity {
 
     private void back() {
         play("back");
+        // radial: B inside a section goes back to the sections
+        if (renderer != null && !arranging && renderer.back(selected)) return;
         finish();
     }
 
@@ -444,6 +446,7 @@ public class QuickMenuActivity extends AppCompatActivity {
         }
         List<MenuRender.Item> list = ordered(collect());
         renderer = MenuRender.create(this, theme);
+        renderer.go = this::select;
         renderer.build(list);
         root.removeAllViews();
         String frame = theme.frame();
@@ -1491,7 +1494,8 @@ public class QuickMenuActivity extends AppCompatActivity {
         } else {
             String h;
             switch (theme.layout) {
-                case "radial": h = "Stick: aim · D-pad ◀▶: around · ▲▼ or L1/R1: rings · Y: arrange · B: close"; break;
+                case "radial": h = theme.sections ? "Stick or D-pad: aim · A: open · L1/R1: sections · B: back · Y: arrange"
+                        : "Stick or D-pad: aim · A: select · Y: arrange · B: close"; break;
                 case "arc": h = "Stick: aim · ▲▼: along · ◀▶ or L1/R1: rings · Y: arrange · B: close"; break;
                 case "carousel": h = "◀▶: browse · ▲▼: sections · Y: arrange · B: close"; break;
                 case "dock": h = "◀▶: browse · Y: arrange · B: close"; break;
@@ -1521,7 +1525,9 @@ public class QuickMenuActivity extends AppCompatActivity {
         if (step == 0 || selected < 0) return;
         List<String> groups = new ArrayList<>();
         List<String> groupSections = new ArrayList<>();
+        if (renderer.selectable.get(selected).id.startsWith("section:")) return;
         for (MenuRender.Item it : renderer.selectable) {
+            if (it.id.startsWith("section:")) continue;
             if (!groups.contains(it.group)) {
                 groups.add(it.group);
                 groupSections.add(it.section);
