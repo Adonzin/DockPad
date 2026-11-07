@@ -196,6 +196,8 @@ Item ids: `home`, `back`, `cursor`, `turbo`, `turboedit`, `nintendo`, `swapab`, 
 | `intensity` | 10–200 (percent) |
 | `items` | `none`, `stagger` |
 | `highlight` | `none`, `bump`, `hop`, `wiggle`, `shake`, `jelly`, `flip`, `spin`, `flash`, `pulse`, `float`, `sway` |
+| `sectionMove` | `none`, `fade`, `slide`, `zoom`: how a section change looks (opening a section and going back, tabs, XMB columns, radial rings) |
+| `smoothness` | 0–100: 0 is instant, higher is longer and gentler (about 70–500 ms) |
 | `pack` | `off`, `soft`, `retro`, `glass`, `click` |
 | `sounds` | `open`, `close`, `move`, `select`, `back` → `pack:<pack>`, `file:<name>`, or `""` (silent) |
 | `volume`, `musicVolume` | 0–100 |

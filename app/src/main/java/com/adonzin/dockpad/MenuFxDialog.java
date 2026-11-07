@@ -86,6 +86,11 @@ final class MenuFxDialog {
         radios(MenuFx.HIGHLIGHT_LABELS, indexOf(MenuFx.HIGHLIGHTS, fx.highlight), i -> fx.highlight = MenuFx.HIGHLIGHTS[i]);
         slider("Animation strength", 10, 200, 10, fx.intensity, v -> fx.intensity = v,
                 v -> v + "%" + (v < 60 ? " (subtle)" : v > 140 ? " (wild)" : ""));
+        label("Changing sections");
+        small("Opening a section and going back, switching tabs or XMB columns, and the radial wheel's rings.");
+        radios(MenuFx.SECTION_MOVE_LABELS, indexOf(MenuFx.SECTION_MOVES, fx.sectionMove), i -> fx.sectionMove = MenuFx.SECTION_MOVES[i]);
+        slider("Smoothness", 0, 100, 5, fx.smoothness, v -> fx.smoothness = v,
+                v -> v == 0 ? "Instant" : (v <= 30 ? "Snappy" : v <= 70 ? "Smooth" : "Very smooth") + " · " + (70 + Math.round(v * 4.3f)) + " ms");
 
         label("Sounds");
         small("Pick a pack, then change any single sound if you like. Selecting a sound plays it.");

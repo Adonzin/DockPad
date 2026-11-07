@@ -51,6 +51,36 @@ final class MenuRender {
         }
     }
 
+    /**
+     * Brings in what a section change shows, the theme's way ({@code dir}: +1 forward, -1 back,
+     * {@code dist}: how far a slide travels).
+     */
+    static void sectionIn(View v, MenuFx fx, int dir, float dist) {
+        if (v == null) return;
+        long ms = fx.sectionMs();
+        if (ms <= 0) return;
+        v.animate().cancel();
+        float k = Math.min(1.5f, fx.strength());
+        android.view.ViewPropertyAnimator a = v.animate().alpha(1f).setDuration(ms).setInterpolator(fx.sectionEase());
+        switch (fx.sectionMove) {
+            case "fade":
+                v.setAlpha(0f);
+                break;
+            case "zoom":
+                v.setAlpha(0f);
+                float s = Math.max(0.5f, 1f - 0.12f * k);
+                v.setScaleX(dir < 0 ? 2 - s : s);
+                v.setScaleY(dir < 0 ? 2 - s : s);
+                a.scaleX(1f).scaleY(1f);
+                break;
+            default: // slide
+                v.setAlpha(0.15f);
+                v.setTranslationX(dir * dist * k);
+                a.translationX(0f);
+        }
+        a.start();
+    }
+
     /** Shows an item's icon: the user's own image if it has one, else the built-in icon (tinted). */
     static void setIcon(ImageView v, Item it) {
         if (it.iconFile != null) {
@@ -800,11 +830,16 @@ final class MenuRender {
                 View t = tiles.get(i);
                 t.setVisibility(View.VISIBLE);
                 wheel.shown.add(t);
-                if (animate) {
+                if (animate && theme.fx.sectionMs() > 0) {
+                    // the ring's items come in from the centre (slide/zoom) or just appear softly (fade)
+                    boolean fade = theme.fx.sectionMove.equals("fade");
+                    t.animate().cancel();
                     t.setAlpha(0f);
-                    t.setScaleX(0.7f);
-                    t.setScaleY(0.7f);
-                    t.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(170).start();
+                    float s = fade ? 1f : (lv < 0 ? 1.25f : 0.6f);
+                    t.setScaleX(s);
+                    t.setScaleY(s);
+                    t.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(theme.fx.sectionMs())
+                            .setInterpolator(theme.fx.sectionEase()).start();
                 }
             }
             wheel.hl = -1;

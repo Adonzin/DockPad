@@ -18,6 +18,8 @@ final class MenuFx {
             "pulse", "float", "sway"};
     static final String[] HIGHLIGHT_LABELS = {"None", "Bump", "Hop", "Wiggle", "Shake", "Jelly", "Flip", "Spin", "Flash",
             "Pulse (keeps going)", "Float (keeps going)", "Sway (keeps going)"};
+    static final String[] SECTION_MOVES = {"none", "fade", "slide", "zoom"};
+    static final String[] SECTION_MOVE_LABELS = {"Instant", "Fade", "Slide", "Zoom"};
     static final String[] HAPTICS = {"off", "select", "all"};
     static final String[] HAPTIC_LABELS = {"Off", "When selecting", "When moving and selecting"};
     static final String[] EVENTS = {"open", "close", "move", "select", "back"};
@@ -27,6 +29,9 @@ final class MenuFx {
 
     String open = "none", close = "none", speed = "normal", items = "none", highlight = "none";
     String pack = "off";
+    /** Changing sections (opening one, going back, tabs, XMB columns, radial rings): how, and how smoothly (0-100). */
+    String sectionMove = "slide";
+    int smoothness = 40;
     /** How strong the animations are, percent (10-200). */
     int intensity = 100;
     /** event -> "pack:<name>" (that pack's sound), "file:<name>", or "" for silence. Empty map: the pack. */
@@ -39,6 +44,16 @@ final class MenuFx {
 
     float strength() {
         return intensity / 100f;
+    }
+
+    /** How long a section change takes (0 = instant). */
+    long sectionMs() {
+        return sectionMove.equals("none") || smoothness <= 0 ? 0 : Math.round(70 + smoothness * 4.3f);
+    }
+
+    /** Smoother settings ease out more gently. */
+    android.view.animation.Interpolator sectionEase() {
+        return new android.view.animation.DecelerateInterpolator(1f + smoothness / 50f);
     }
 
     float speedFactor() {
@@ -62,6 +77,8 @@ final class MenuFx {
         f.highlight = oneOf(o.optString("highlight", f.highlight), HIGHLIGHTS, "none");
         f.pack = oneOf(o.optString("pack", f.pack), PACKS, "off");
         f.intensity = clamp(o.optInt("intensity", f.intensity), 10, 200);
+        f.sectionMove = oneOf(o.optString("sectionMove", f.sectionMove), SECTION_MOVES, "slide");
+        f.smoothness = clamp(o.optInt("smoothness", f.smoothness), 0, 100);
         JSONObject s = o.optJSONObject("sounds");
         if (s != null) for (Iterator<String> it = s.keys(); it.hasNext(); ) {
             String k = it.next();
@@ -88,6 +105,8 @@ final class MenuFx {
             o.put("highlight", highlight);
             o.put("pack", pack);
             o.put("intensity", intensity);
+            o.put("sectionMove", sectionMove);
+            o.put("smoothness", smoothness);
             o.put("sounds", new JSONObject(sounds));
             o.put("volume", volume);
             o.put("music", music);

@@ -489,14 +489,12 @@ public class QuickMenuActivity extends AppCompatActivity {
         selected = -1;
         selectedId = null;
         rebuild();
-        fadeIn();
+        sectionChange(1);
     }
 
-    private void fadeIn() {
-        View p = currentPanel;
-        if (p == null) return;
-        p.setAlpha(0.3f);
-        p.animate().alpha(1f).setDuration(140).start();
+    /** Sections first: the new level comes in the theme's way (forward when opening, back when leaving). */
+    private void sectionChange(int dir) {
+        if (renderer != null) MenuRender.sectionIn(renderer.view, theme.fx, dir, dp(70));
     }
 
     /** B inside a section: back to the sections (highlighting the one we were in). */
@@ -506,7 +504,7 @@ public class QuickMenuActivity extends AppCompatActivity {
         openSection = null;
         selected = -1;
         rebuild();
-        fadeIn();
+        sectionChange(-1);
         return true;
     }
 

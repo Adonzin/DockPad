@@ -191,6 +191,7 @@ const OPENS = [["none","None"],["fade","Fade"],["slide","Slide in"],["pop","Pop"
 const SPEEDS = [["fast","Fast"],["normal","Normal"],["slow","Slow"]];
 const ITEMSFX = [["none","All at once"],["stagger","One after another"]];
 const MOTIONS = [["none","None"],["bump","Bump"],["hop","Hop"],["wiggle","Wiggle"],["shake","Shake"],["jelly","Jelly"],["flip","Flip"],["spin","Spin"],["flash","Flash"],["pulse","Pulse (keeps going)"],["float","Float (keeps going)"],["sway","Sway (keeps going)"]];
+const SECMOVES = [["none","Instant"],["fade","Fade"],["slide","Slide"],["zoom","Zoom"]];
 const PACKS = [["off","Off"],["soft","Soft"],["retro","Retro"],["glass","Glass"],["click","Clicky"]];
 const EVENTS = [["open","Opening"],["close","Closing"],["move","Moving"],["select","Selecting"],["back","Back"]];
 const HAPTICS = [["off","Off"],["select","When selecting"],["all","When moving and selecting"]];
@@ -225,7 +226,7 @@ function defaults() {
       opacity: 90, dim: -1, corners: 24, border: 0, borderColor: "", edgeOpacity: 100, glow: false, backdrop: "",
       textSize: 100, font: "default", highlight: "filled", showTitle: true, showStatus: true, showClock: false, showBattery: false},
     media: {background: {file: "", target: "screen", scale: "fill", blur: 0, dim: 0}, decorations: []},
-    fx: {open: "none", close: "none", speed: "normal", intensity: 100, items: "none", highlight: "none", pack: "off", sounds: {},
+    fx: {open: "none", close: "none", speed: "normal", intensity: 100, items: "none", highlight: "none", sectionMove: "slide", smoothness: 40, pack: "off", sounds: {},
       volume: 70, music: "", musicVolume: 40, haptics: "off", hapticStrength: 50},
     art: {button: "", buttonOn: "", slice: 0, labels: true, items: {}, cursor: {file: "", side: "left", size: 70, motion: "bob"}}
   };
@@ -268,6 +269,7 @@ function sanitize(src) {
   const f = t.fx;
   f.open = one(F.open, OPENS, "none"); f.close = one(F.close, OPENS, "none"); f.speed = one(F.speed, SPEEDS, "normal");
   f.intensity = num(F.intensity, 10, 200, 100); f.items = one(F.items, ITEMSFX, "none"); f.highlight = one(F.highlight, MOTIONS, "none");
+  f.sectionMove = one(F.sectionMove, SECMOVES, "slide"); f.smoothness = num(F.smoothness, 0, 100, 40);
   f.pack = one(F.pack, PACKS, "off"); f.sounds = {};
   if (F.sounds && typeof F.sounds === "object") for (const [k, v] of Object.entries(F.sounds)) {
     if (!ids(EVENTS).includes(k) || typeof v !== "string") continue;
@@ -546,7 +548,34 @@ function render() {
   applyText(menu);
   startLoopMotion();
   fit();
-  requestAnimationFrame(() => { placeCursor(); decoMotions(decos); });
+  requestAnimationFrame(() => { placeCursor(); decoMotions(decos); sectionAnim(); });
+}
+
+/* section changes: the new section comes in the theme's way */
+let lastSec = null;
+function sectionKey() {
+  const t = T.layout.type;
+  if (usesFolders()) return {k: "f:" + (openSec || ""), n: openSec ? 1 : 0};
+  if (t === "radial") return {k: "r:" + rad.level, n: rad.level < 0 ? 0 : 1};
+  if (t === "tabs" || t === "xmb") { const i = SECTIONS.indexOf((SAMPLE[hl] || {}).s); return {k: "s:" + i, n: i}; }
+  return {k: "", n: 0};
+}
+function sectionAnim() {
+  const now = sectionKey(), before = lastSec;
+  lastSec = {...now, layout: T.layout.type};
+  const f = T.fx, ms = f.sectionMove === "none" || f.smoothness <= 0 ? 0 : 70 + f.smoothness * 4.3;
+  if (!before || before.layout !== T.layout.type || before.k === now.k || !ms) return;
+  const dir = now.n >= before.n ? 1 : -1, k = Math.min(1.5, strength());
+  let targets = items.filter(Boolean);
+  if (T.layout.type === "radial") targets = [...$("#screen").querySelectorAll(".pv-content > div[style*='pointer']")];
+  const ease = `cubic-bezier(.2, ${(.55 + f.smoothness / 250).toFixed(2)}, .25, 1)`;
+  for (const n of targets) {
+    let kf;
+    if (f.sectionMove === "fade") kf = [{opacity: 0}, {opacity: 1}];
+    else if (f.sectionMove === "zoom" || T.layout.type === "radial") { const sc = T.layout.type === "radial" ? (now.n === 0 ? 1.25 : .6) : (dir < 0 ? 1 + .12 * k : 1 - .12 * k); kf = [{opacity: 0, scale: String(sc)}, {opacity: 1, scale: "1"}]; }
+    else kf = [{opacity: .15, translate: `${dir * 60 * k}px 0`}, {opacity: 1, translate: "0 0"}];
+    n.animate(kf, {duration: ms, easing: ease});
+  }
 }
 
 function corners(radii) { const k = T.style.corners / 24; return radii.map(r => r * k + "px").join(" "); }
@@ -1400,7 +1429,10 @@ function buildPanel() {
   } else if (tab === "fx") {
     p.append(grp("Opening", chips("fx.open", OPENS)), grp("Closing", chips("fx.close", OPENS)), grp("Speed", chips("fx.speed", SPEEDS)),
       row("Strength", ...sliderC("fx.intensity", 10, 200, 10, v => v + "%")), grp("Items appear", chips("fx.items", ITEMSFX)),
-      grp("When the highlight moves", chips("fx.highlight", MOTIONS)));
+      grp("When the highlight moves", chips("fx.highlight", MOTIONS)),
+      grp("Changing sections", chips("fx.sectionMove", SECMOVES)),
+      row("Smoothness", ...sliderC("fx.smoothness", 0, 100, 5, v => v === 0 ? "instant" : (v <= 30 ? "snappy" : v <= 70 ? "smooth" : "very smooth"))),
+      el("div", {class: "note"}, "Opening a section and going back, switching tabs or XMB columns, and the radial wheel's rings. Try it on the preview with Enter, Esc and the arrow keys."));
     p.append(el("button", {class: "small", onclick: () => playOpen(false)}, "▶ Play opening"), " ",
       el("button", {class: "small", onclick: () => { $("#screen").focus(); motion(); }}, "▶ Highlight motion"));
     p.append(grp("Sounds", chips("fx.pack", PACKS, () => { T.fx.sounds = {}; sound("select", "pack:" + T.fx.pack); })));

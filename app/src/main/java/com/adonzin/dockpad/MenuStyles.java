@@ -156,9 +156,13 @@ final class MenuStyles {
             view = canvas;
         }
 
+        private boolean seen;
+
         @Override
         void onSelected(int index) {
             if (secs.isEmpty() || index < 0) return;
+            int wasSec = seen ? canvas.sec : -1;
+            seen = true;
             canvas.sec = sectionIndex(secs, index);
             canvas.item = index;
             // which of this section's items fit on screen (decided here, not while drawing)
@@ -178,6 +182,10 @@ final class MenuStyles {
             for (int i = 0; i < tiles.size(); i++) if (!mine.contains(i)) tiles.get(i).setVisibility(View.GONE);
             remembered[Math.min(63, canvas.sec)] = secs.get(canvas.sec).indexOf(index);
             canvas.requestLayout();
+            if (wasSec >= 0 && wasSec != canvas.sec) {
+                int dir = canvas.sec > wasSec ? 1 : -1;
+                for (int i : mine) MenuRender.sectionIn(tiles.get(i), theme.fx, dir, dp(50));
+            }
         }
 
         @Override
@@ -671,7 +679,9 @@ final class MenuStyles {
 
         void show(int k) {
             if (k == shown || k < 0 || k >= pages.size()) return;
+            int was = shown;
             shown = k;
+            if (was >= 0) MenuRender.sectionIn(pages.get(k), theme.fx, k > was ? 1 : -1, dp(60));
             for (int i = 0; i < pages.size(); i++) {
                 pages.get(i).setVisibility(i == k ? View.VISIBLE : View.GONE);
                 TextView t = tabViews.get(i);
