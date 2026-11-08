@@ -172,7 +172,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
             try {
                 pickThemeFile.launch(new String[]{"application/zip", "application/octet-stream", "*/*"});
             } catch (Exception e) {
-                Toast.makeText(this, "No file picker available", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "There's no file picker on this handheld. Install a file manager app, then try again.", Toast.LENGTH_LONG).show();
             }
         }, this::showThemeName));
         findViewById(R.id.theme_share).setOnClickListener(v -> ThemesDialog.share(this, MenuTheme.load(this).toJson()));
@@ -187,7 +187,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
             try {
                 pickMediaFile.launch(new String[]{"audio/*"});
             } catch (Exception e) {
-                Toast.makeText(this, "No file picker available", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "There's no file picker on this handheld. Install a file manager app, then try again.", Toast.LENGTH_LONG).show();
             }
         }));
         findViewById(R.id.new_section).setOnClickListener(v -> organiser.newSection());
@@ -204,14 +204,14 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
             try {
                 pickFont.launch(new String[]{"font/*", "application/x-font-ttf", "application/x-font-otf", "application/octet-stream", "*/*"});
             } catch (Exception e) {
-                Toast.makeText(this, "No file picker available", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "There's no file picker on this handheld. Install a file manager app, then try again.", Toast.LENGTH_LONG).show();
             }
         }));
         findViewById(R.id.backup_restore).setOnClickListener(v -> {
             try {
                 pickBackup.launch(new String[]{"application/json", "application/octet-stream", "text/plain", "*/*"});
             } catch (Exception e) {
-                Toast.makeText(this, "No file picker available", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "There's no file picker on this handheld. Install a file manager app, then try again.", Toast.LENGTH_LONG).show();
             }
         });
 
@@ -1129,7 +1129,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         try {
             pickMediaFile.launch(videoToo ? new String[]{"image/*", "video/*"} : new String[]{"image/*"});
         } catch (Exception e) {
-            Toast.makeText(this, "No file picker available", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "There's no file picker on this handheld. Install a file manager app, then try again.", Toast.LENGTH_LONG).show();
         }
     }
 

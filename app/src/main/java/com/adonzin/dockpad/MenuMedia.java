@@ -268,10 +268,27 @@ final class MenuMedia {
      * Loads a picture or GIF (animated, already started), scaled down so its longer side is at most
      * {@code maxPx}. Null if it can't be read.
      */
+    /**
+     * Decoded still pictures, kept between menu openings: a theme with picture buttons, icons and
+     * repeating decorations would otherwise decode the same files dozens of times each time the menu opens.
+     */
+    private static final android.util.LruCache<String, Bitmap> STILLS = new android.util.LruCache<String, Bitmap>(
+            (int) Math.min(64L * 1024 * 1024, Runtime.getRuntime().maxMemory() / 6)) {
+        @Override
+        protected int sizeOf(String key, Bitmap b) {
+            return b.getAllocationByteCount();
+        }
+    };
+    /** Pictures that turned out to be animated (decoded fresh each time, so every copy moves). */
+    private static final java.util.Set<String> ANIMATED = java.util.Collections.synchronizedSet(new java.util.HashSet<>());
+
     static Drawable load(Context c, String name, int maxPx) {
         if (safeName(name).isEmpty() || isVideo(name) || isAudio(name)) return null;
         File f = new File(dir(c), name);
         if (!f.isFile()) return null;
+        String key = name + "|" + maxPx + "|" + f.lastModified() + "|" + f.length();
+        Bitmap hit = ANIMATED.contains(key) ? null : STILLS.get(key);
+        if (hit != null) return new BitmapDrawable(c.getResources(), hit);
         try {
             ImageDecoder.Source src = ImageDecoder.createSource(f);
             Drawable d = ImageDecoder.decodeDrawable(src, (decoder, info, s) -> {
@@ -281,8 +298,11 @@ final class MenuMedia {
                 decoder.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE);
             });
             if (d instanceof AnimatedImageDrawable) {
+                ANIMATED.add(key);
                 ((AnimatedImageDrawable) d).setRepeatCount(AnimatedImageDrawable.REPEAT_INFINITE);
                 ((AnimatedImageDrawable) d).start();
+            } else if (d instanceof BitmapDrawable && ((BitmapDrawable) d).getBitmap() != null) {
+                STILLS.put(key, ((BitmapDrawable) d).getBitmap());
             }
             return d;
         } catch (Throwable t) {

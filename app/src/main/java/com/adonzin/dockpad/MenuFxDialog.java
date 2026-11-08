@@ -136,6 +136,7 @@ final class MenuFxDialog {
         radios(MenuFx.HAPTIC_LABELS, indexOf(MenuFx.HAPTICS, fx.haptics), i -> fx.haptics = MenuFx.HAPTICS[i]);
         slider("Strength", 5, 100, 5, fx.hapticStrength, v -> fx.hapticStrength = v, v -> v + "%");
 
+        Collapse.apply(box, OPEN);
         if (focusIndex >= 0) {
             java.util.ArrayList<View> after = box.getFocusables(View.FOCUS_FORWARD);
             if (focusIndex < after.size()) {
@@ -260,12 +261,11 @@ final class MenuFxDialog {
         String label(int v);
     }
 
+    /** Which groups are open (kept while DockPad runs). */
+    private static final java.util.Set<String> OPEN = new java.util.HashSet<>(java.util.Collections.singleton("Opening"));
+
     private void label(String s) {
-        TextView t = new TextView(a);
-        t.setText(s);
-        t.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleSmall);
-        t.setPadding(0, dp(16), 0, dp(2));
-        box.addView(t);
+        box.addView(Collapse.header(a, box, s, OPEN));
     }
 
     private TextView small(String s) {
