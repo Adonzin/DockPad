@@ -1332,11 +1332,11 @@ public class QuickMenuActivity extends AppCompatActivity {
                 a.setDuration(Math.round(700 * sp));
                 break;
             default: { // drift: slides across the whole screen, again and again
-                float w = Math.max(1, v.getLayoutParams() != null && v.getLayoutParams().width > 0 ? v.getLayoutParams().width : W / 5);
+                float pw = Math.max(1, w); // the picture's width
                 // from just off the left edge to just off the right edge, whatever the anchor
                 String an = d.anchor;
-                float x0 = an.endsWith("left") ? 0 : an.endsWith("right") ? W - w : (W - w) / 2f;
-                a = android.animation.ObjectAnimator.ofFloat(v, View.TRANSLATION_X, -w - x0, W - x0);
+                float x0 = an.endsWith("left") ? 0 : an.endsWith("right") ? W - pw : (W - pw) / 2f;
+                a = android.animation.ObjectAnimator.ofFloat(v, View.TRANSLATION_X, -pw - x0, W - x0);
                 a.setDuration(Math.round(12000 * sp));
                 a.setInterpolator(new android.view.animation.LinearInterpolator());
                 a.setRepeatMode(android.animation.ValueAnimator.RESTART);
