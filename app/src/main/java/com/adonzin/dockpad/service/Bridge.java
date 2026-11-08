@@ -185,6 +185,7 @@ final class Bridge {
                     lastError = v.describe();
                     return slots.isEmpty() ? null : slots.get(0);
                 }
+                matchButtons(v, target);
                 pad = v;
             }
             TargetEncoder enc = new TargetEncoder(target, events -> {
@@ -559,6 +560,44 @@ final class Bridge {
             }, t, TimeUnit.MILLISECONDS);
             t += 40;
         }
+    }
+
+    /**
+     * Once Android has set the new virtual controller up: if it gave it a different button layout
+     * file than the built-in controls (so a raw code would be Y on one and X on the other), re-code
+     * its buttons to match. Without this, players 2+ could find X/Y (or more) swapped in games and menus.
+     */
+    private void matchButtons(VirtualPad v, EvdevDevice builtIn) {
+        timer.schedule(new Runnable() {
+            int tries;
+
+            @Override
+            public void run() {
+                if (!running || !v.isAlive()) return;
+                try {
+                    String dump = Actions.exec("dumpsys", "input");
+                    String bf = KeyLayouts.layoutFile(dump, builtIn.path, builtIn.name);
+                    String pf = KeyLayouts.layoutFile(dump, null, v.name());
+                    if (bf == null || pf == null) {
+                        if (++tries < 8) timer.schedule(this, 700, TimeUnit.MILLISECONDS);
+                        else v.setRemap(java.util.Collections.emptyMap(), "button layout not found");
+                        return;
+                    }
+                    String names = new File(pf).getName() + " vs built-in " + new File(bf).getName();
+                    if (bf.equals(pf)) {
+                        v.setRemap(java.util.Collections.emptyMap(), "buttons: same layout as built-in");
+                        return;
+                    }
+                    Map<Integer, Integer> m = KeyLayouts.remap(KeyLayouts.parse(bf), KeyLayouts.parse(pf),
+                            builtIn.keys, VirtualPad.keyCodes(builtIn));
+                    v.setRemap(m, m.isEmpty() ? "buttons already match (" + names + ")"
+                            : m.size() + " button" + (m.size() == 1 ? "" : "s") + " re-coded to match (" + names + ")");
+                    Log.i(TAG, v.name() + ": " + v.layoutNote + " " + m);
+                } catch (Throwable t) {
+                    v.setRemap(java.util.Collections.emptyMap(), "button check failed: " + t);
+                }
+            }
+        }, 700, TimeUnit.MILLISECONDS);
     }
 
     /** Presses a key on the built-in controls (e.g. Home/Back). False if it can't right now. */

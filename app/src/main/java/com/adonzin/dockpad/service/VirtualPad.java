@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 /**
  * A virtual controller created through Android's built-in `uinput` shell tool, which the
@@ -140,14 +141,21 @@ final class VirtualPad implements PadOut {
 
     @Override
     public String describe() {
-        if (isAlive()) return "active, priority " + priority;
+        if (isAlive()) return "active, priority " + priority + (layoutNote.isEmpty() ? "" : "; " + layoutNote);
         String out = String.join(" | ", toolOutput);
         return "NOT running" + (error.isEmpty() ? "" : " — " + error) + (out.isEmpty() ? "" : " — " + out);
     }
 
+    /** The buttons a virtual controller has: the built-in controls' plus every gamepad button code. */
+    static java.util.Set<Integer> keyCodes(EvdevDevice d) {
+        java.util.Set<Integer> s = new java.util.TreeSet<>(d.keys);
+        for (int k = 0x130; k <= 0x13e; k++) s.add(k); // BTN_SOUTH … BTN_THUMBR, so buttons can be re-coded
+        return s;
+    }
+
     static String registerJson(EvdevDevice d, String name, boolean rumble) {
         StringBuilder keys = new StringBuilder();
-        for (int k : sorted(d.keys)) keys.append(keys.length() == 0 ? "" : ",").append(k);
+        for (int k : keyCodes(d)) keys.append(keys.length() == 0 ? "" : ",").append(k);
         StringBuilder absBits = new StringBuilder();
         StringBuilder absInfo = new StringBuilder();
         for (int a : sorted(d.abs.keySet())) {
@@ -198,8 +206,27 @@ final class VirtualPad implements PadOut {
     }
 
     @Override
+    /** Raw button codes re-coded so each means on this controller what it means on the built-in ones. */
+    private volatile Map<Integer, Integer> remap = java.util.Collections.emptyMap();
+    volatile String layoutNote = "";
+
+    void setRemap(Map<Integer, Integer> r, String note) {
+        remap = r;
+        layoutNote = note;
+    }
+
+    @Override
     public synchronized void write(int[] events) {
         if (stdin == null) return;
+        Map<Integer, Integer> r = remap;
+        if (!r.isEmpty()) {
+            events = events.clone();
+            for (int i = 0; i + 2 < events.length; i += 3) {
+                if (events[i] != 1) continue; // EV_KEY
+                Integer to = r.get(events[i + 1]);
+                if (to != null) events[i + 1] = to;
+            }
+        }
         StringBuilder b = new StringBuilder("{\"id\":1,\"command\":\"inject\",\"events\":[");
         for (int i = 0; i < events.length; i++) b.append(i == 0 ? "" : ",").append(events[i]);
         b.append("]}");

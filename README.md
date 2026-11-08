@@ -22,7 +22,7 @@ Docked play on a handheld usually means setting up every emulator again for an e
 - **Names:** give any controller its own name (e.g. "Red PS4"), shown in the app and the quick menu.
 - **Per-controller fixes:** swap A/B and X/Y, auto-map by button labels (Nintendo-style pads), change or turn off any button, and reset to default.
 - **Fine-tuning:** stick dead zone, stick response curve, trigger press point, swap sticks, invert Y, and left stick as D-pad.
-- **Made for aiming:** sticks pass through without smoothing, with a round dead zone that doesn't add to the game's own, and DockPad's input threads run ahead of the game. Diagnostics shows how long DockPad holds each controller's input and how often the controller reports. New controllers are taken over the moment they connect, so games don't get their input twice.
+- **Made for aiming:** sticks pass through without smoothing, with a round dead zone that doesn't add to the game's own, and DockPad's input threads run ahead of the game. Diagnostics shows how long DockPad holds each controller's input and how often the controller reports. New controllers are taken over the moment they connect, so games don't get their input twice. Players 2 and up get exactly the same buttons as the built-in controls: if Android gives their virtual controller a different button layout, DockPad re-codes the buttons to match.
 - **Rapid fire** on any buttons, with an adjustable speed and a master on/off.
 - **Rumble pass-through** to controllers that support it.
 - **Battery levels**, with a low-battery warning.
