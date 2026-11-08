@@ -117,6 +117,10 @@ final class Prefs {
     void lastUpdateCheck(long v) { p.edit().putLong("lastUpdateCheck", v).apply(); }
     int dismissedBuild() { return p.getInt("dismissedBuild", 0); }
     void dismissedBuild(int v) { p.edit().putInt("dismissedBuild", v).apply(); }
+    /** While on a charger, keep the handheld from deep sleep so DockPad is ready on wake. Off unless chosen. */
+    boolean stayReadyDocked() { return p.getBoolean("stayReadyDocked", false); }
+    void stayReadyDocked(boolean v) { p.edit().putBoolean("stayReadyDocked", v).apply(); }
+
     /** The first-run guide was finished or skipped (or wasn't needed). */
     boolean guideSeen() { return p.getBoolean("guideSeen", false); }
     void guideSeen(boolean v) { p.edit().putBoolean("guideSeen", v).apply(); }
@@ -146,6 +150,10 @@ final class Prefs {
         b.setMultiplayer(multiplayer());
         b.setTouchpadAsButton(touchpadAsButton());
         b.setShortcuts(shortcutsSpec());
+        try {
+            b.setDockReady(stayReadyDocked());
+        } catch (Exception ignored) { // an older background service: it gets this after updating
+        }
         if (b.isRunning() || (startIfWanted && bridgeWanted())) b.start(true);
     }
 }

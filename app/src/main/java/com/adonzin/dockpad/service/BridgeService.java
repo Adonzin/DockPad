@@ -140,6 +140,11 @@ public class BridgeService extends IBridge.Stub {
     }
 
     @Override
+    public void setDockReady(boolean on) {
+        bridge.dock.setEnabled(on);
+    }
+
+    @Override
     public void setJoinByPress(boolean on) {
         bridge.setJoinByPress(on);
     }

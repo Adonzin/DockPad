@@ -451,6 +451,25 @@ final class Bridge {
 
     // ---------------------------------------------------------------- on-screen keyboard
 
+    /** "Stay ready while docked" (off unless turned on), and its log. On wake: look for controllers at once. */
+    final DockKeeper dock = new DockKeeper(() -> {
+        lastDevList = "";
+        synchronized (scanWake) {
+            scanWake.notifyAll();
+        }
+    });
+
+    {
+        timer.scheduleAtFixedRate(() -> {
+            try {
+                dock.tick();
+            } catch (Throwable t) {
+                Log.w(TAG, "dock: " + t);
+            }
+        }, 3, 5, TimeUnit.SECONDS);
+        Runtime.getRuntime().addShutdownHook(new Thread(dock::stop)); // never leave deep sleep off
+    }
+
     private final KeyboardInput keyboardInput = new KeyboardInput();
     private volatile boolean keyboardOpen;
     private volatile long keyboardLastPoll;
@@ -839,6 +858,7 @@ final class Bridge {
         }
         b.append("Events sent to virtual controller: ").append(written.get()).append('\n');
         if (!lastError.isEmpty()) b.append("Last error: ").append(lastError).append('\n');
+        b.append(dock.describe());
         return b.toString();
     }
 
@@ -1126,6 +1146,7 @@ final class Bridge {
             for (Source s : new ArrayList<>(sources.values())) {
                 boolean unwanted = (s.touchpad && !touchpadAsButton) || (s.builtIn && s.wantGrab != takeOverBuiltIn());
                 if (!s.alive || !present.contains(s.dev.path) || unwanted) {
+                    if (!s.builtIn && !s.touchpad && !unwanted) dock.controller(s.dev.name, false);
                     s.close();
                     sources.remove(s.dev.path);
                 }
@@ -1361,6 +1382,7 @@ final class Bridge {
                 }
                 findDeviceKeys();
                 Log.i(TAG, "Feeding " + dev + " — " + mapper.layoutDescription + ", exclusive: " + hideMethod);
+                if (!builtIn && !touchpad) dock.controller(dev.name, true);
 
                 int size = Process.is64Bit() ? 24 : 16;
                 int off = size == 24 ? 16 : 8;

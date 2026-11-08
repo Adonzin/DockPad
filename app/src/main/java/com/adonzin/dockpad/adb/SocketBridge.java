@@ -191,6 +191,11 @@ public final class SocketBridge implements IBridge {
     }
 
     @Override
+    public void setDockReady(boolean on) throws RemoteException {
+        rc("setDockReady", on);
+    }
+
+    @Override
     public void setJoinByPress(boolean on) throws RemoteException {
         rc("setJoinByPress", on);
     }

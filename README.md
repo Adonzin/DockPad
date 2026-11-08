@@ -141,6 +141,10 @@ To use a theme you made: press **Save theme file**, copy the `.dockpadtheme` fil
 
 Already use [Shizuku](https://shizuku.rikka.app/)? DockPad can use it instead of pairing.
 
+## Docked play (optional)
+
+**Settings → Starting up → Stay ready while docked** (off by default). While the handheld is on a charger (a dock or a desk charger), DockPad keeps it out of deep sleep, so DockPad and your controllers are ready the moment you wake it, even after a night asleep. Off the charger, sleep goes back to normal straight away. It uses a little more power while charging, which is why it's off unless you turn it on. **Diagnostics** shows a log of each night (screen, charger, Wi-Fi, controllers), to see what happened if something wasn't ready.
+
 ## Good to know
 
 - **Player 1** goes into the built-in controls, so there's nothing to set up. **Players 2–4** appear as "DockPad Controller 2–4". Set those up once in each emulator's multiplayer settings.

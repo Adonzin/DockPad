@@ -1035,6 +1035,15 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         addSwitch(appSettings, "Turn off Wireless debugging once started",
                 "DockPad only needs Wireless debugging for a moment while starting. Turning it off afterwards is safer.",
                 prefs.turnOffWirelessDebugging(), prefs::turnOffWirelessDebugging);
+        addSwitch(appSettings, "Stay ready while docked",
+                "While the handheld is on a charger (a dock or a desk charger), DockPad keeps it out of deep sleep, so "
+                        + "DockPad and your controllers are ready the moment you wake it, even after hours. Off the "
+                        + "charger, sleep is normal again. It uses a little more power while charging. Diagnostics "
+                        + "shows a log of each night.",
+                prefs.stayReadyDocked(), v -> {
+                    prefs.stayReadyDocked(v);
+                    pushSettings();
+                });
         View guideRow = getLayoutInflater().inflate(R.layout.item_row, appSettings, false);
         ((ImageView) guideRow.findViewById(R.id.row_icon)).setImageResource(R.drawable.ic_lib_info);
         ((TextView) guideRow.findViewById(R.id.row_title)).setText("First-run guide");
