@@ -548,8 +548,13 @@ final class MenuRender {
             return v * getResources().getDisplayMetrics().density;
         }
 
+        /** Room left at the rim: the "grow" highlight pushes its slice outward, so it needs more. */
+        float rim() {
+            return dpf(highlight.equals("grow") ? 10 : 3);
+        }
+
         float outer() {
-            return Math.min(getWidth(), getHeight()) / 2f - dpf(3);
+            return Math.min(getWidth(), getHeight()) / 2f - rim();
         }
 
         float inner() {
@@ -588,7 +593,7 @@ final class MenuRender {
         @Override
         protected void onMeasure(int w, int h) {
             int size = Math.min(MeasureSpec.getSize(w), MeasureSpec.getSize(h));
-            float R = size / 2f - dpf(3), r0 = R * 0.42f;
+            float R = size / 2f - rim(), r0 = R * 0.42f;
             int n = Math.max(1, shown.size());
             float mid = (R + r0) / 2f;
             int tile = (int) Math.min((R - r0) * 0.72f, 2 * Math.PI * mid / n * 0.62f);
@@ -604,7 +609,7 @@ final class MenuRender {
 
         @Override
         protected void onLayout(boolean changed, int l, int t, int r, int b) {
-            float cx = (r - l) / 2f, cy = (b - t) / 2f, R = Math.min(cx, cy) - dpf(3), r0 = R * 0.42f;
+            float cx = (r - l) / 2f, cy = (b - t) / 2f, R = Math.min(cx, cy) - rim(), r0 = R * 0.42f;
             int n = shown.size();
             float mid = (R + r0) / 2f;
             for (int k = 0; k < n; k++) {
@@ -637,8 +642,19 @@ final class MenuRender {
             // the highlighted wedge
             if (n > 0 && hl >= 0) {
                 float span = 360f / n, start = -90 + span * hl - span / 2;
-                float grow = highlight.equals("grow") ? dpf(6) : 0;
-                if (!highlight.equals("underline")) {
+                float grow = highlight.equals("grow") ? dpf(7) : 0;
+                if (highlight.equals("underline")) {
+                    // like the list styles' underline: a bar under the highlighted icon, nothing else
+                    View t = shown.get(Math.round(hl) % n);
+                    float w = t.getWidth() * 0.55f, y = t.getBottom() - dpf(3);
+                    float x0 = (t.getLeft() + t.getRight()) / 2f - w / 2f;
+                    paint.setStyle(android.graphics.Paint.Style.STROKE);
+                    paint.setStrokeCap(android.graphics.Paint.Cap.ROUND);
+                    paint.setStrokeWidth(dpf(3.5f));
+                    paint.setColor(accent);
+                    cv.drawLine(x0, y, x0 + w, y, paint);
+                    paint.setStrokeCap(android.graphics.Paint.Cap.BUTT);
+                } else {
                     sector(cx, cy, r0, R + grow, start, span);
                     paint.setStyle(android.graphics.Paint.Style.FILL);
                     paint.setColor(highlight.equals("outline") ? 0x0AFFFFFF : fill);
@@ -649,17 +665,17 @@ final class MenuRender {
                         paint.setColor(accent);
                         cv.drawPath(path, paint);
                     }
+                    // the accent arc along the outside
+                    paint.setStyle(android.graphics.Paint.Style.STROKE);
+                    paint.setStrokeCap(android.graphics.Paint.Cap.BUTT);
+                    paint.setStrokeWidth(dpf(3.5f));
+                    paint.setColor(accent);
+                    if (highlight.equals("glow")) paint.setShadowLayer(dpf(8), 0, 0, accent);
+                    float ar = R + grow - dpf(1);
+                    ro.set(cx - ar, cy - ar, cx + ar, cy + ar);
+                    cv.drawArc(ro, start, span, false, paint);
+                    paint.setShadowLayer(0, 0, 0, 0);
                 }
-                // the accent arc along the outside
-                paint.setStyle(android.graphics.Paint.Style.STROKE);
-                paint.setStrokeCap(android.graphics.Paint.Cap.BUTT);
-                paint.setStrokeWidth(dpf(highlight.equals("underline") ? 5 : 3.5f));
-                paint.setColor(accent);
-                if (highlight.equals("glow")) paint.setShadowLayer(dpf(8), 0, 0, accent);
-                float ar = R + grow - dpf(1);
-                ro.set(cx - ar, cy - ar, cx + ar, cy + ar);
-                cv.drawArc(ro, start, span, false, paint);
-                paint.setShadowLayer(0, 0, 0, 0);
             }
             // lines between the wedges
             if (n > 1) {

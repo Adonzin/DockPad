@@ -1274,7 +1274,7 @@ public class QuickMenuActivity extends AppCompatActivity {
         v.setAlpha(d.opacity / 100f);
         noHighlight(v);
         v.setClickable(false);
-        decoMotion(v, d, W, H);
+        decoMotion(v, d, W, H, w, h);
         return v;
     }
 
@@ -1286,10 +1286,25 @@ public class QuickMenuActivity extends AppCompatActivity {
     }
 
     /** A decoration's own movement (float, sway, spin, pulse, blink, drift), looping while the menu is open. */
-    private void decoMotion(View v, MenuMedia.Decoration d, int W, int H) {
+    private void decoMotion(View v, MenuMedia.Decoration d, int W, int H, int w, int h) {
         if (d.motion.equals("none")) return;
         float sp = d.motionSpeed.equals("slow") ? 1.8f : d.motionSpeed.equals("fast") ? 0.55f : 1f;
         android.animation.ObjectAnimator a;
+        if (d.motion.equals("drift") && !d.repeat.equals("none")) {
+            // a repeating strip scrolls endlessly: it moves one copy's length, then starts again
+            // from where the next copy is, so the seam never shows (and there's always a spare copy)
+            boolean across = d.repeat.equals("across");
+            float step = across ? w : h, base = across ? v.getTranslationX() : v.getTranslationY();
+            a = android.animation.ObjectAnimator.ofFloat(v, across ? View.TRANSLATION_X : View.TRANSLATION_Y,
+                    base - step, base);
+            a.setDuration(Math.max(200, Math.round(12000 * sp * step / (across ? W : H))));
+            a.setInterpolator(new android.view.animation.LinearInterpolator());
+            a.setRepeatMode(android.animation.ValueAnimator.RESTART);
+            a.setRepeatCount(android.animation.ValueAnimator.INFINITE);
+            a.start();
+            decoAnims.add(a);
+            return;
+        }
         float ty = v.getTranslationY(), r = v.getRotation();
         switch (d.motion) {
             case "float":
