@@ -182,6 +182,27 @@ public final class Mapper {
         return v < lo ? lo : v > hi ? hi : v;
     }
 
+    /**
+     * Uses Android's own button layout for this controller (from its key layout file) instead of the
+     * generic one: e.g. a PS4 controller's driver sends triangle with the code Android generically
+     * calls X; its own layout says Y, which is what it is (top button). Only gamepad buttons change.
+     */
+    public synchronized int useDeviceKeys(Map<Integer, Integer> deviceKeys) {
+        java.util.Set<Integer> gamepad = new java.util.HashSet<>(STANDARD_KEYS.values());
+        int changed = 0;
+        for (Map.Entry<Integer, Integer> e : deviceKeys.entrySet()) {
+            int code = e.getKey(), kc = e.getValue();
+            if (!gamepad.contains(kc)) continue;
+            Integer was = keyMap.get(code);
+            if (was != null && was == kc) continue;
+            if (was == null && !rawKeys.contains(code)) continue; // a button this controller doesn't have
+            keyMap.put(code, kc);
+            rawKeys.remove(code);
+            changed++;
+        }
+        return changed;
+    }
+
     public void onEvent(int type, int code, int value) {
         if (type == EV_KEY) {
             if (value == 2) return; // autorepeat

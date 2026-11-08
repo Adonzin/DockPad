@@ -831,6 +831,7 @@ final class Bridge {
                             : s.mapper == null ? "" : s.mapper.layoutDescription).append('\n')
                     .append("    exclusive: ").append(s.hideMethod)
                     .append(", events: ").append(s.eventsRead.get()).append('\n');
+            if (!s.keysNote.isEmpty()) b.append("    ").append(s.keysNote).append('\n');
             if (!s.builtIn && !s.touchpad && s.joined) b.append("    ").append(s.latency.summary())
                     .append(s.fastThread ? "" : " · priority not raised").append('\n');
             if (s.lastKey >= 0) b.append("    last button: ").append(Codes.keyName(s.lastKey))
@@ -1256,6 +1257,52 @@ final class Bridge {
         volatile String hideMethod = "pending";
         final AtomicLong eventsRead = new AtomicLong();
         final LatencyStats latency = new LatencyStats();
+        /** Android's own button layout for this controller (raw code → Android key), once found. */
+        volatile Map<Integer, Integer> deviceKeys;
+        volatile String keysNote = "";
+
+        /** Reads which button layout Android gave this controller, then uses it (players get the right X/Y). */
+        void findDeviceKeys() {
+            if (builtIn || touchpad) return;
+            timer.schedule(new Runnable() {
+                int tries;
+
+                @Override
+                public void run() {
+                    if (!alive || !running) return;
+                    try {
+                        String file = KeyLayouts.layoutFile(Actions.exec("dumpsys", "input"), dev.path, null);
+                        if (file == null) {
+                            if (++tries < 10) timer.schedule(this, 600, TimeUnit.MILLISECONDS);
+                            else keysNote = "button layout: Android's not found, using the standard one";
+                            return;
+                        }
+                        Map<Integer, Integer> keys = new java.util.HashMap<>();
+                        for (Map.Entry<Integer, String> e : KeyLayouts.parse(file).entrySet()) {
+                            int kc = android.view.KeyEvent.keyCodeFromString("KEYCODE_" + e.getValue());
+                            if (kc > 0) keys.put(e.getKey(), kc);
+                        }
+                        deviceKeys = keys;
+                        int n = applyDeviceKeys();
+                        keysNote = "button layout: " + new File(file).getName()
+                                + (n == 0 ? " (same as standard)" : " (" + n + " button" + (n == 1 ? "" : "s") + " differ from standard)");
+                        Log.i(TAG, dev.name + ": " + keysNote);
+                    } catch (Throwable t) {
+                        keysNote = "button layout check failed: " + t;
+                    }
+                }
+            }, 300, TimeUnit.MILLISECONDS);
+        }
+
+        synchronized int applyDeviceKeys() {
+            Map<Integer, Integer> k = deviceKeys;
+            if (k == null) return 0;
+            int n = 0;
+            if (mapper != null) n = mapper.useDeviceKeys(k);
+            if (pcMapper != null) pcMapper.useDeviceKeys(k);
+            if (kbMapper != null) kbMapper.useDeviceKeys(k);
+            return n;
+        }
         volatile boolean fastThread;
         private FileInputStream in;
         private int disabledAndroidId = -1;
@@ -1309,8 +1356,10 @@ final class Bridge {
                     }
                     pcMapper = new Mapper(dev, pc.sink());
                     kbMapper = new Mapper(dev, keyboardInput.sink());
+                    applyDeviceKeys();
                     buildEngine();
                 }
+                findDeviceKeys();
                 Log.i(TAG, "Feeding " + dev + " — " + mapper.layoutDescription + ", exclusive: " + hideMethod);
 
                 int size = Process.is64Bit() ? 24 : 16;
@@ -1437,6 +1486,7 @@ final class Bridge {
             m.setTuning(tunings.get(dev.name));
             mapper = m;
             joined = true;
+            applyDeviceKeys();
         }
 
         synchronized void applyTuning() {
