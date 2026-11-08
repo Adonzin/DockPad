@@ -221,7 +221,7 @@ const SYSTEM_ACCENT = "#A8C7FA", SYSTEM_FILL = "#284777"; // stand-ins for the h
 function defaults() {
   return {
     format: 1, name: "My theme", author: "", description: "",
-    layout: {type: "list", position: "left", width: 340, sections: true, folders: true, columns: 3, band: "bottom", spot: "center", size: 80, free: {}},
+    layout: {type: "list", position: "left", width: 340, sections: true, folders: true, remember: true, columns: 3, band: "bottom", spot: "center", size: 80, free: {}},
     style: {palette: "system", panel1: "", panel2: "", panel3: "", gradient: "none", angle: 90, accent: "", text: "", tile: "",
       opacity: 90, dim: -1, corners: 24, border: 0, borderColor: "", edgeOpacity: 100, glow: false, backdrop: "",
       textSize: 100, font: "default", highlight: "filled", showTitle: true, showStatus: true, showClock: false, showBattery: false},
@@ -244,7 +244,7 @@ function sanitize(src) {
   const t = d;
   t.name = String(o.name || d.name).slice(0, 40); t.author = String(o.author || "").slice(0, 40); t.description = String(o.description || "").slice(0, 160);
   Object.assign(t.layout, {type: one(L.type, LAYOUTS, "list"), position: one(L.position, POSITIONS, "left"), width: num(L.width, 200, 1200, 340),
-    sections: L.sections !== false, folders: L.folders !== false, columns: num(L.columns, 2, 8, 3), band: one(L.band, BANDS, "bottom"), spot: one(L.spot, SPOTS, "center"), size: num(L.size, 40, 100, 80), free: {}});
+    sections: L.sections !== false, folders: L.folders !== false, remember: L.remember !== false, columns: num(L.columns, 2, 8, 3), band: one(L.band, BANDS, "bottom"), spot: one(L.spot, SPOTS, "center"), size: num(L.size, 40, 100, 80), free: {}});
   if (L.free && typeof L.free === "object") for (const [k, r] of Object.entries(L.free)) if (Array.isArray(r) && r.length === 4)
     t.layout.free[k] = r.map(x => clamp(Number(x) || 0, 0, 1)).map((x, i) => i === 2 ? Math.max(.04, x) : i === 3 ? Math.max(.03, x) : x);
   const s = t.style;
@@ -519,9 +519,18 @@ function frame() {
 }
 const defaultDim = () => ({ring: 70, band: 55, screen: T.layout.type === "xmb" ? 60 : 50, rail: 35, side: 35})[frame()];
 
+/* section → the item last highlighted there (DockPad's "go back to the item you were on") */
+const lastIn = {};
+/** Where entering a section lands: the remembered item (by id in ALL_ITEMS order) or its first. */
+function entryIndex(list, section) {
+  const want = T.layout.remember ? lastIn[section] : null;
+  const k = want ? list.findIndex(x => x.id === want && x.s === section) : -1;
+  return k >= 0 ? k : list.findIndex(x => x.s === section);
+}
 function render() {
   SAMPLE = shownItems();
   if (hl >= SAMPLE.length) hl = 0;
+  if (SAMPLE[hl] && !SAMPLE[hl].sec) lastIn[SAMPLE[hl].s] = SAMPLE[hl].id;
   const sc = $("#screen"); sc.innerHTML = "";
   sc.classList.toggle("edit-deco", tab === "media");
   // the game
@@ -669,7 +678,7 @@ function iconNode(it, size, col, on) {
   return svg(it.i, size, col);
 }
 function pickItem(i) {
-  if (SAMPLE[i] && SAMPLE[i].sec && hl === i) { openSec = SAMPLE[i].sec; hl = 0; sound("select"); render(); $("#screen").focus(); return; } // a second click opens a section
+  if (SAMPLE[i] && SAMPLE[i].sec && hl === i) { openSec = SAMPLE[i].sec; hl = Math.max(0, entryIndex(ALL_ITEMS.filter(x => x.s === openSec), openSec)); sound("select"); render(); $("#screen").focus(); return; } // a second click opens a section
   hl = i; if (tab === "buttons") { artSel = artKey(SAMPLE[i]); buildPanel(); }
   render(); $("#screen").focus();
 }
@@ -948,7 +957,7 @@ function ringPanel() {
     radGrouped() ? "Stick or D-pad: aim · A: open · L1/R1: sections · B: back" : "Stick or D-pad: aim · A: select · B: close"));
   return wrapH;
 }
-function radEnter() { rad.level = rad.sec; hl = SAMPLE.findIndex(x => x.s === SECTIONS[rad.sec]); render(); }
+function radEnter() { rad.level = rad.sec; hl = entryIndex(SAMPLE, SECTIONS[rad.sec]); render(); }
 function railPanel() {
   const right = T.layout.position === "right", sz = 52 * (.7 + T.layout.size / 100 * .5);
   const p = panel({[right ? "right" : "left"]: 0, top: 0, bottom: 0, width: sz + 16 + "px"}, right ? corners([20, 0, 0, 20]) : corners([0, 20, 20, 0]));
@@ -1249,14 +1258,14 @@ $("#screen").addEventListener("keydown", e => {
   else if (e.key === "ArrowUp") next = t === "carousel" || t === "dock" ? hl : t === "xmb" ? nextIn(-1) : (hl - cols + n) % n;
   else if (e.key === "ArrowRight") next = t === "xmb" ? sectionJump(1) : (hl + 1) % n;
   else if (e.key === "ArrowLeft") next = t === "xmb" ? sectionJump(-1) : (hl - 1 + n) % n;
-  else if (e.key === "Enter") { sound("select"); e.preventDefault(); if (SAMPLE[hl] && SAMPLE[hl].sec) { openSec = SAMPLE[hl].sec; hl = 0; render(); } else motion(); return; }
+  else if (e.key === "Enter") { sound("select"); e.preventDefault(); if (SAMPLE[hl] && SAMPLE[hl].sec) { openSec = SAMPLE[hl].sec; hl = Math.max(0, entryIndex(ALL_ITEMS.filter(x => x.s === openSec), openSec)); render(); } else motion(); return; }
   else if (e.key === "Escape") { sound("back"); if (openSec) { const back = openSec; openSec = null; render(); hl = SAMPLE.findIndex(x => x.sec === back); render(); } else playOpen(true); return; }
   else return;
   e.preventDefault();
   if (next !== hl) { hl = next; render(); sound("move"); motion(); }
 });
 function nextIn(d) { const s = SAMPLE[hl].s, mine = SAMPLE.map((x, i) => [x, i]).filter(([x]) => x.s === s).map(([, i]) => i); const p = mine.indexOf(hl); return mine[(p + d + mine.length) % mine.length]; }
-function sectionJump(d) { const k = (SECTIONS.indexOf(SAMPLE[hl].s) + d + SECTIONS.length) % SECTIONS.length; return SAMPLE.findIndex(x => x.s === SECTIONS[k]); }
+function sectionJump(d) { const k = (SECTIONS.indexOf(SAMPLE[hl].s) + d + SECTIONS.length) % SECTIONS.length; return entryIndex(SAMPLE, SECTIONS[k]); }
 $("#screen").addEventListener("pointerdown", () => $("#screen").focus());
 
 /* ------------------------------ the controls ------------------------------ */
@@ -1340,6 +1349,8 @@ function buildPanel() {
     if (["carousel", "dock", "radial", "arc", "xmb", "rail"].includes(t)) p.append(row(t === "radial" || t === "arc" ? "Ring size" : t === "carousel" ? "Card size" : "Icon size", ...sliderC("layout.size", 40, 100, 5, v => v + "%")));
     if (["grid", "freeform", "tabs"].includes(t)) p.append(row(t === "freeform" ? "Start columns" : "Columns", ...sliderC("layout.columns", 2, 8, 1)));
     if (["list", "compact", "grid", "wheel", "carousel", "radial"].includes(t)) p.append(row("Group by section", toggleC("layout.sections")));
+    if (["xmb", "tabs", "radial"].concat(FOLDER_LAYOUTS).includes(t)) p.append(row("Back to last item", toggleC("layout.remember")),
+      el("div", {class: "note"}, "On: changing section lands on the item you were last on there. Off: on its first item."));
     if (FOLDER_LAYOUTS.includes(t)) p.append(row("Section first", toggleC("layout.folders", () => { openSec = null; hl = 0; })),
       el("div", {class: "note"}, "Shows one entry per section; choosing one shows its items (B goes back)."));
     if (t === "freeform") p.append(el("div", {class: "note"}, "Drag items on the preview to place them, and drag the yellow corner to resize. Positions for your own commands are set on the handheld (press Y in the menu)."),

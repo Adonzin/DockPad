@@ -39,6 +39,8 @@ final class MenuTheme {
     boolean sections = true;
     /** Grid, carousel, dock, rail, edge arc: show the sections first, then the chosen section's items. */
     boolean folders = true;
+    /** Changing section lands on the item last highlighted there (false: on its first item). */
+    boolean remember = true;
     /** Carousel: where the strip sits. */
     String band = "bottom";
     /** Radial: where the wheel sits on the screen. */
@@ -92,6 +94,7 @@ final class MenuTheme {
                 t.width = Math.max(200, Math.min(1200, l.optInt("width", t.width)));
                 t.sections = l.optBoolean("sections", t.sections);
                 t.folders = l.optBoolean("folders", t.folders);
+                t.remember = l.optBoolean("remember", t.remember);
                 String band = l.optString("band", t.band);
                 if (Arrays.asList(BANDS).contains(band)) t.band = band;
                 String spot = l.optString("spot", t.spot);
@@ -130,6 +133,7 @@ final class MenuTheme {
             l.put("width", width);
             l.put("sections", sections);
             l.put("folders", folders);
+            l.put("remember", remember);
             l.put("band", band);
             l.put("spot", spot);
             l.put("size", size);

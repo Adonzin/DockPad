@@ -216,8 +216,7 @@ final class MenuStyles {
             int k = sectionIndex(secs, cur), n = secs.size();
             if (dir == LEFT || dir == RIGHT) {
                 int nk = (k + (dir == LEFT ? -1 : 1) + n) % n;
-                List<Integer> s = secs.get(nk);
-                return s.get(Math.min(s.size() - 1, remembered[Math.min(63, nk)]));
+                return entry(secs.get(nk));
             }
             List<Integer> s = secs.get(k);
             int at = s.indexOf(cur) + (dir == UP ? -1 : 1);
@@ -726,7 +725,7 @@ final class MenuStyles {
         int shoulder(int cur, int delta) {
             if (secs.isEmpty()) return -1;
             int k = (sectionIndex(secs, Math.max(0, cur)) + delta + secs.size()) % secs.size();
-            return secs.get(k).get(0);
+            return entry(secs.get(k));
         }
 
         @Override

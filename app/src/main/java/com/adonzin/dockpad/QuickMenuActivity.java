@@ -445,6 +445,9 @@ public class QuickMenuActivity extends AppCompatActivity {
 
     // ---- sections first (grid, carousel, dock, rail, arc): one entry per section, then that section's items
 
+    /** Section → the item last highlighted in it (kept between menu openings while DockPad runs). */
+    static final Map<String, String> SECTION_MEMORY = new HashMap<>();
+
     /** The section that's open, or null when the sections are showing. */
     private String openSection;
 
@@ -491,7 +494,7 @@ public class QuickMenuActivity extends AppCompatActivity {
         if (closing) return;
         openSection = name;
         selected = -1;
-        selectedId = null;
+        selectedId = theme.remember ? SECTION_MEMORY.get(name) : null; // null: its first item
         rebuild();
         sectionChange(1);
     }
@@ -521,6 +524,7 @@ public class QuickMenuActivity extends AppCompatActivity {
         List<MenuRender.Item> list = folders(ordered(collect()));
         renderer = MenuRender.create(this, theme);
         renderer.go = this::select;
+        renderer.memory = SECTION_MEMORY;
         renderer.build(list);
         root.removeAllViews();
         String frame = theme.frame();
@@ -571,6 +575,7 @@ public class QuickMenuActivity extends AppCompatActivity {
                 // ignore focus Android moves on its own while a style hides items (tabs, XMB)
                 if (has && !selecting) {
                     selected = index;
+                    rememberInSection(index);
                     selecting = true;
                     try {
                         renderer.onSelected(index);
@@ -592,9 +597,15 @@ public class QuickMenuActivity extends AppCompatActivity {
         if (arranging && theme.layout.equals("freeform")) enableTouchArranging();
     }
 
+    private void rememberInSection(int index) {
+        MenuRender.Item it = renderer.selectable.get(index);
+        if (!it.id.startsWith("section:")) SECTION_MEMORY.put(it.section, it.id);
+    }
+
     private void select(int index) {
         if (renderer == null || index < 0 || index >= renderer.tiles.size()) return;
         selected = index;
+        rememberInSection(index);
         selecting = true;
         try {
             renderer.onSelected(index); // first: some styles reveal the item here (tabs, XMB)

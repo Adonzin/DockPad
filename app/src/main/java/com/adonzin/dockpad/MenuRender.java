@@ -137,6 +137,22 @@ final class MenuRender {
             return false;
         }
 
+        /** Set by the menu: section name → id of the item last highlighted in it. */
+        java.util.Map<String, String> memory;
+
+        /**
+         * The item to land on when entering a section ({@code ids}: its items in order): the one last
+         * highlighted there when the theme remembers, else the first.
+         */
+        int entry(List<Integer> ids) {
+            if (ids == null || ids.isEmpty()) return -1;
+            if (theme.remember && memory != null) {
+                String id = memory.get(selectable.get(ids.get(0)).section);
+                if (id != null) for (int i : ids) if (selectable.get(i).id.equals(id)) return i;
+            }
+            return ids.get(0);
+        }
+
         /** Set by the menu: highlights an item (for styles that move the highlight themselves). */
         java.util.function.IntConsumer go;
 
@@ -878,7 +894,7 @@ final class MenuRender {
 
         /** A: opens a section (its first item is highlighted). */
         private void enter(int k) {
-            if (go != null && k < members.size() && !members.get(k).isEmpty()) go.accept(members.get(k).get(0));
+            if (go != null && k < members.size() && !members.get(k).isEmpty()) go.accept(entry(members.get(k)));
         }
 
         @Override
@@ -951,7 +967,7 @@ final class MenuRender {
             int lv = levelOf(Math.max(0, cur));
             if (lv < 0) return move(cur, delta > 0 ? RIGHT : LEFT, true);
             int k = ((lv + delta) % members.size() + members.size()) % members.size();
-            return members.get(k).isEmpty() ? -1 : members.get(k).get(0);
+            return entry(members.get(k));
         }
 
         @Override
