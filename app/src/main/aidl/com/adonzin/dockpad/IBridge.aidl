@@ -29,4 +29,5 @@ interface IBridge {
     void installUpdate(String url, int version) = 25;
     void setRumble(boolean on) = 26;
     void setDockReady(boolean on) = 27;
+    String settingsSnapshot() = 28;
 }

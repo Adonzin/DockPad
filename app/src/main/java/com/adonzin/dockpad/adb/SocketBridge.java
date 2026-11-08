@@ -191,6 +191,11 @@ public final class SocketBridge implements IBridge {
     }
 
     @Override
+    public String settingsSnapshot() throws RemoteException {
+        return String.valueOf(rc("settingsSnapshot"));
+    }
+
+    @Override
     public void setDockReady(boolean on) throws RemoteException {
         rc("setDockReady", on);
     }

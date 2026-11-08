@@ -113,6 +113,7 @@ public final class ShellMain {
                     case "start": r = svc.start(a.optBoolean(0, true)); break;
                     case "stop": svc.stop(); break;
                     case "status": r = svc.status(); break;
+                    case "settingsSnapshot": r = svc.settingsSnapshot(); break;
                     case "isRunning": r = svc.isRunning(); break;
                     case "statusJson": r = svc.statusJson(); break;
                     case "setTouchpadAsButton": svc.setTouchpadAsButton(a.optBoolean(0)); break;

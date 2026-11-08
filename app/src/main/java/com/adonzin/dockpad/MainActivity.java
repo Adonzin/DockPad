@@ -157,6 +157,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         findViewById(R.id.pair_controller).setOnClickListener(v -> PairDialog.show(this));
         findViewById(R.id.open_tester).setOnClickListener(v -> startActivity(new Intent(this, TesterActivity.class)));
         findViewById(R.id.open_diagnostics).setOnClickListener(v -> showDiagnostics());
+        findViewById(R.id.find_setting).setOnClickListener(v -> findSetting());
         findViewById(R.id.open_reset).setOnClickListener(v -> showReset());
         setupPcCard();
         findViewById(R.id.menu_combo).setOnClickListener(v -> editor.addNewWithAction(
@@ -1408,6 +1409,97 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
     }
 
     // ------------------------------------------------------------------ diagnostics
+
+    private java.util.Map<String, String> settingsBefore;
+
+    /**
+     * Finds which system setting a switch in Android's settings changes (read only): a snapshot
+     * before, you flip the switch, a snapshot after, and the differences are listed.
+     */
+    private void findSetting() {
+        IBridge b = bridge;
+        if (b == null) {
+            Toast.makeText(this, "Turn DockPad on first (Home tab).", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (settingsBefore == null) {
+            bg.execute(() -> {
+                java.util.Map<String, String> snap = snapshot(b);
+                ui.post(() -> {
+                    if (snap == null) {
+                        Toast.makeText(this, "Couldn't read the settings.", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    settingsBefore = snap;
+                    ((TextView) findViewById(R.id.find_setting)).setText("Show what changed");
+                    new DpDialog(this).setTitle("Find a system setting")
+                            .setMessage("Noted how everything is set now (" + snap.size() + " settings).\n\n"
+                                    + "Now go to Android's settings and flip the switch you want to find, e.g. Connect TV "
+                                    + "→ the handheld screen switch. Then come back and press \"Show what changed\".\n\n"
+                                    + "This only reads settings; it changes nothing.")
+                            .setPositiveButton("OK", null).show();
+                });
+            });
+            return;
+        }
+        java.util.Map<String, String> before = settingsBefore;
+        bg.execute(() -> {
+            java.util.Map<String, String> after = snapshot(b);
+            StringBuilder out = new StringBuilder();
+            if (after != null) {
+                java.util.Set<String> keys = new java.util.TreeSet<>(before.keySet());
+                keys.addAll(after.keySet());
+                for (String k : keys) {
+                    String x = before.get(k), y = after.get(k);
+                    if (java.util.Objects.equals(x, y)) continue;
+                    out.append(k).append(":  ").append(x == null ? "(none)" : x).append("  →  ")
+                            .append(y == null ? "(none)" : y).append('\n');
+                }
+            }
+            String text = after == null ? "Couldn't read the settings." : out.length() == 0
+                    ? "Nothing changed. The switch may not be a stored setting, or it wasn't flipped."
+                    : out.toString();
+            ui.post(() -> {
+                settingsBefore = null;
+                ((TextView) findViewById(R.id.find_setting)).setText("Find a system setting…");
+                TextView tv = new TextView(this);
+                tv.setText(text);
+                tv.setTypeface(Typeface.MONOSPACE);
+                tv.setTextSize(12);
+                tv.setTextIsSelectable(true);
+                tv.setPadding(dp(24), dp(8), dp(24), 0);
+                android.widget.ScrollView sv = new android.widget.ScrollView(this);
+                sv.addView(tv);
+                new DpDialog(this).setTitle("What changed").setView(sv)
+                        .setPositiveButton("Close", null)
+                        .setNeutralButton("Copy", (d, w) -> {
+                            ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                            cm.setPrimaryClip(ClipData.newPlainText("DockPad settings change", text));
+                            Toast.makeText(this, "Copied", Toast.LENGTH_SHORT).show();
+                        }).show();
+            });
+        });
+    }
+
+    /** "namespace: key=value" lines → map (screen-state lines keyed by their text before '='). */
+    private static java.util.Map<String, String> snapshot(IBridge b) {
+        try {
+            String s = b.settingsSnapshot();
+            if (s == null || s.isEmpty()) return null;
+            java.util.Map<String, String> m = new java.util.LinkedHashMap<>();
+            int n = 0;
+            for (String line : s.split("\n")) {
+                line = line.trim();
+                if (line.isEmpty()) continue;
+                int eq = line.indexOf('=');
+                if (line.startsWith("display:") || line.startsWith("power:")) m.put(line.substring(0, line.indexOf(':')) + " #" + (n++), line);
+                else if (eq > 0) m.put(line.substring(0, eq), line.substring(eq + 1));
+            }
+            return m;
+        } catch (Exception e) {
+            return null;
+        }
+    }
 
     private void showDiagnostics() {
         IBridge b = bridge;

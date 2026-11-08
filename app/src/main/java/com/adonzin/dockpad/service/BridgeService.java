@@ -139,6 +139,14 @@ public class BridgeService extends IBridge.Stub {
         }
     }
 
+    /** Every system/global/secure setting plus the screens' power states (read only), to compare. */
+    @Override
+    public String settingsSnapshot() {
+        return Actions.exec("sh", "-c", "for n in system global secure; do settings list $n | sed \"s/^/$n: /\"; done; "
+                + "dumpsys display | grep -E 'mState=|mScreenState=' | sed 's/^ */display: /'; "
+                + "dumpsys power | grep -E 'mWakefulness=|Display Power' | sed 's/^ */power: /'");
+    }
+
     @Override
     public void setDockReady(boolean on) {
         bridge.dock.setEnabled(on);

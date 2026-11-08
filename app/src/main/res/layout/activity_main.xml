@@ -845,6 +845,13 @@
                     android:layout_marginTop="8dp"
                     android:text="Diagnostics" />
                 <com.google.android.material.button.MaterialButton
+                    android:id="@+id/find_setting"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="Find a system setting…" />
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/open_reset"
                     style="?attr/materialButtonOutlinedStyle"
                     android:layout_width="wrap_content"
