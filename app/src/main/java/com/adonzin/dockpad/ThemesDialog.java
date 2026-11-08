@@ -50,7 +50,10 @@ final class ThemesDialog {
         opts.add("Use it");
         opts.add("Use it and preview");
         opts.add("Share it…");
-        if (!e.builtIn) opts.add("Delete it");
+        if (!e.builtIn) {
+            opts.add("Replace it with my current look…");
+            opts.add("Delete it…");
+        }
         new DpDialog(a).setTitle(e.name)
                 .setItems(opts.toArray(new String[0]), (d, w) -> {
                     String o = opts.get(w);
@@ -61,6 +64,11 @@ final class ThemesDialog {
                         if (o.endsWith("preview")) preview(a);
                     } else if (o.startsWith("Share")) {
                         share(a, e.json);
+                    } else if (o.startsWith("Replace")) {
+                        confirmOverwrite(a, e, () -> {
+                            if (afterApply != null) afterApply.run();
+                            choose(a, afterApply);
+                        });
                     } else {
                         new DpDialog(a).setTitle("Delete " + e.name + "?")
                                 .setMessage("Its pictures and sounds stay, in case other themes use them.")
@@ -75,6 +83,23 @@ final class ThemesDialog {
                 .show();
     }
 
+    /** Asks, then saves the current look over a saved theme (its name and author stay). */
+    private static void confirmOverwrite(Activity a, ThemeLibrary.Entry e, Runnable after) {
+        new DpDialog(a).setTitle("Replace " + e.name + "?")
+                .setMessage("“" + e.name + "” becomes your current look: layout, colours, pictures, sounds and font. "
+                        + "Its name and author stay. This can't be undone.")
+                .setPositiveButton("Replace", (d, w) -> {
+                    try {
+                        ThemeLibrary.overwrite(a, e);
+                        Toast.makeText(a, "Updated “" + e.name + "”", Toast.LENGTH_SHORT).show();
+                        if (after != null) after.run();
+                    } catch (Exception x) {
+                        Toast.makeText(a, "Couldn't save: " + x.getMessage(), Toast.LENGTH_LONG).show();
+                    }
+                })
+                .setNegativeButton("Cancel", null).show();
+    }
+
     static void saveCurrent(Activity a, Runnable after) {
         MenuTheme cur = MenuTheme.load(a);
         LinearLayout box = new LinearLayout(a);
@@ -85,25 +110,65 @@ final class ThemesDialog {
         String lastAuthor = a.getSharedPreferences("dockpad", Activity.MODE_PRIVATE).getString("themeAuthor", "");
         EditText author = field(a, box, "Made by", cur.author.isEmpty() || cur.author.equals("DockPad") ? lastAuthor : cur.author);
         EditText desc = field(a, box, "A line about it", cur.description);
-        new DpDialog(a).setTitle("Save my look as a theme")
+        ThemeLibrary.Entry inUse = ThemeLibrary.savedInUse(a);
+        DpDialog dlg = new DpDialog(a);
+        dlg.setTitle("Save my look as a theme")
                 .setMessage("Saves the layout, colours, pictures, decorations, sounds and font as a theme you can "
                         + "switch back to or share.")
                 .setView(box)
-                .setPositiveButton("Save", (d, w) -> {
+                .setPositiveButton("Save as new", (d, w) -> {
                     String n = name.getText().toString().trim();
                     if (n.isEmpty()) n = "My theme";
                     String au = author.getText().toString().trim();
+                    String de = desc.getText().toString().trim();
                     a.getSharedPreferences("dockpad", Activity.MODE_PRIVATE).edit().putString("themeAuthor", au).apply();
-                    try {
-                        ThemeLibrary.saveCurrent(a, limit(n, 40), limit(au, 40), limit(desc.getText().toString().trim(), 160));
-                        Toast.makeText(a, "Saved “" + n + "”", Toast.LENGTH_SHORT).show();
-                        if (after != null) after.run();
-                    } catch (Exception e) {
-                        Toast.makeText(a, "Couldn't save: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    ThemeLibrary.Entry same = ThemeLibrary.savedNamed(a, n);
+                    String nn = n;
+                    if (same != null) { // the name is taken: replace that one, or keep both
+                        new DpDialog(a).setTitle("“" + same.name + "” already exists")
+                                .setMessage("Replace it with your current look, or save a new copy next to it?")
+                                .setPositiveButton("Replace it", (d2, w2) -> saveOver(a, same, nn, au, de, after))
+                                .setNeutralButton("Save a copy", (d2, w2) -> saveNew(a, nn, au, de, after))
+                                .setNegativeButton("Cancel", null).show();
+                        return;
                     }
+                    saveNew(a, n, au, de, after);
                 })
-                .setNegativeButton("Cancel", null).show();
+                .setNegativeButton("Cancel", null);
+        if (inUse != null) {
+            // the look came from one of your themes: offer to update that one
+            dlg.setNeutralButton("Update “" + limit(inUse.name, 20) + "”", (d, w) -> {
+                String au = author.getText().toString().trim();
+                saveOver(a, inUse, name.getText().toString().trim(), au, desc.getText().toString().trim(), after);
+            });
+        }
+        dlg.show();
         name.requestFocus();
+    }
+
+    private static void saveNew(Activity a, String n, String au, String de, Runnable after) {
+        try {
+            ThemeLibrary.saveCurrent(a, limit(n, 40), limit(au, 40), limit(de, 160));
+            Toast.makeText(a, "Saved “" + n + "”", Toast.LENGTH_SHORT).show();
+            if (after != null) after.run();
+        } catch (Exception e) {
+            Toast.makeText(a, "Couldn't save: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    /** Saves the current look over {@code e}, with the name/author/description typed in the dialog. */
+    private static void saveOver(Activity a, ThemeLibrary.Entry e, String n, String au, String de, Runnable after) {
+        try {
+            ThemeLibrary.Entry renamed = ThemeLibrary.fromJson(e.id, e.json, false);
+            renamed.name = limit(n.isEmpty() ? e.name : n, 40);
+            renamed.author = limit(au, 40);
+            renamed.description = limit(de, 160);
+            ThemeLibrary.overwrite(a, renamed);
+            Toast.makeText(a, "Updated “" + renamed.name + "”", Toast.LENGTH_SHORT).show();
+            if (after != null) after.run();
+        } catch (Exception x) {
+            Toast.makeText(a, "Couldn't save: " + x.getMessage(), Toast.LENGTH_LONG).show();
+        }
     }
 
     static void importFile(Activity a, FilePicker picker, Runnable after) {

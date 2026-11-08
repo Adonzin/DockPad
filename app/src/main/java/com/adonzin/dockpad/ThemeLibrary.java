@@ -106,14 +106,42 @@ final class ThemeLibrary {
         return fromJson(id, o.toString(), false);
     }
 
+    /** Replaces a saved theme with the current look, keeping its name, author and description. */
+    static Entry overwrite(Context c, Entry e) throws Exception {
+        if (e.builtIn) throw new IllegalArgumentException("built-in themes can't be changed");
+        JSONObject o = new JSONObject(MenuTheme.load(c).toJson());
+        o.put("name", e.name);
+        o.put("author", e.author);
+        o.put("description", e.description);
+        File d = new File(dir(c), e.id);
+        //noinspection ResultOfMethodCallIgnored
+        d.mkdirs();
+        write(new File(d, "theme.json"), o.toString(2));
+        c.getSharedPreferences("dockpad", Context.MODE_PRIVATE).edit()
+                .putString("menuTheme", o.toString()).putString("activeTheme", e.id).apply();
+        return fromJson(e.id, o.toString(), false);
+    }
+
+    /** A saved (not built-in) theme with this name, or null. */
+    static Entry savedNamed(Context c, String name) {
+        for (Entry e : all(c)) if (!e.builtIn && e.name.equalsIgnoreCase(name.trim())) return e;
+        return null;
+    }
+
+    /** The saved theme in use right now, or null (none, or a built-in one). */
+    static Entry savedInUse(Context c) {
+        String id = activeId(c);
+        for (Entry e : all(c)) if (!e.builtIn && e.id.equals(id)) return e;
+        return null;
+    }
+
     static void delete(Context c, Entry e) {
         if (e.builtIn) return;
-        File d = new File(dir(c), e.id);
-        File[] fs = d.listFiles();
-        if (fs != null) for (File f : fs) //noinspection ResultOfMethodCallIgnored
-            f.delete();
-        //noinspection ResultOfMethodCallIgnored
-        d.delete();
+        deleteTree(new File(dir(c), e.id));
+        // the look stays as it is; it's just not "this theme" any more
+        if (e.id.equals(activeId(c))) {
+            c.getSharedPreferences("dockpad", Context.MODE_PRIVATE).edit().remove("activeTheme").apply();
+        }
     }
 
     private static String slug(String s) {

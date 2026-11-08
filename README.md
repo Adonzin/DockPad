@@ -58,7 +58,7 @@ Docked play on a handheld usually means setting up every emulator again for an e
   - **decorations:** PNGs and GIFs placed anywhere (corners, edges, centre), sized, moved, rotated, mirrored or upside down, behind or in front of the menu, repeated along an edge, and moving (float, sway, spin, pulse, blink, or drift across the screen)
 - **Themes:**
   - built-in themes (Default, Glass, Retro terminal, Neon ring, Console, Sunset dock)
-  - save your own look as a theme and switch between them, including from the quick menu
+  - save your own look as a theme and switch between them, including from the quick menu; update a saved theme with your current look, or delete it
   - share a theme as one `.dockpadtheme` file, with its pictures, sounds and font packed in
   - picture buttons with a separate highlighted picture, per-item icons and buttons, and a pointer that follows the highlight (set up in the PC editor)
   - **Get themes:** browse the theme catalog with previews and install with one press; [how to make and share themes](docs/THEMES.md)
