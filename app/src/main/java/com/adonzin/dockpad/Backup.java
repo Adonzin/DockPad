@@ -31,7 +31,7 @@ final class Backup {
             {"shortcuts"},
             {"menuCommands", "menuHidden", "menuTheme", "menuOrder", "menuCustom"},
             {"layouts", "controllerNames"},
-            {"multiplayer", "joinByPress", "touchpadAsButton", "rumble", "includeBuiltIn", "autoStart", "turnOffWD", "stayReadyDocked",
+            {"multiplayer", "joinByPress", "touchpadAsButton", "rumble", "includeBuiltIn", "autoStart", "turnOffWD", "stayReadyDocked", "screenOffAgain",
                     "pcSpeed", "pcPointerLeft", "autoUpdateCheck", "closeMenuWithoutControllers"},
     };
     private static final String FLOATS = "pcSpeed";

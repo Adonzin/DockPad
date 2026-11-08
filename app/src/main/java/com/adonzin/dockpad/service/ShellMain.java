@@ -130,6 +130,7 @@ public final class ShellMain {
                     case "typeCombo": svc.typeCombo(a.optString(0)); break;
                     case "setRumble": svc.setRumble(a.optBoolean(0)); break;
                     case "setDockReady": svc.setDockReady(a.optBoolean(0)); break;
+                    case "setScreenOffAgain": svc.setScreenOffAgain(a.optBoolean(0)); break;
                     case "setJoinByPress": svc.setJoinByPress(a.optBoolean(0)); break;
                     case "disconnectController": r = svc.disconnectController(a.optString(0)); break;
                     case "recordAllInput": r = svc.recordAllInput(a.optInt(0, 10000)); break;

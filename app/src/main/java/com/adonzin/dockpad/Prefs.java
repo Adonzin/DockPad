@@ -121,6 +121,10 @@ final class Prefs {
     boolean stayReadyDocked() { return p.getBoolean("stayReadyDocked", false); }
     void stayReadyDocked(boolean v) { p.edit().putBoolean("stayReadyDocked", v).apply(); }
 
+    /** After waking on a TV, press Retroid's "turn off the handheld screen" switch again. Off unless chosen. */
+    boolean screenOffAgain() { return p.getBoolean("screenOffAgain", false); }
+    void screenOffAgain(boolean v) { p.edit().putBoolean("screenOffAgain", v).apply(); }
+
     /** The first-run guide was finished or skipped (or wasn't needed). */
     boolean guideSeen() { return p.getBoolean("guideSeen", false); }
     void guideSeen(boolean v) { p.edit().putBoolean("guideSeen", v).apply(); }
@@ -152,6 +156,7 @@ final class Prefs {
         b.setShortcuts(shortcutsSpec());
         try {
             b.setDockReady(stayReadyDocked());
+            b.setScreenOffAgain(screenOffAgain());
         } catch (Exception ignored) { // an older background service: it gets this after updating
         }
         if (b.isRunning() || (startIfWanted && bridgeWanted())) b.start(true);

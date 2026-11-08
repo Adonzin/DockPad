@@ -1045,6 +1045,15 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
                     prefs.stayReadyDocked(v);
                     pushSettings();
                 });
+        addSwitch(appSettings, "Handheld screen off again after waking",
+                "Retroid turns the handheld's screen off when you dock, but not when it wakes up on the TV. This "
+                        + "presses Retroid's own switch (Settings → Connect TV) again after waking, or when the TV "
+                        + "comes on, so the firmware turns the handheld's screen off. Only while that switch is on. "
+                        + "If the TV is off when it wakes, turn the TV on to see the picture.",
+                prefs.screenOffAgain(), v -> {
+                    prefs.screenOffAgain(v);
+                    pushSettings();
+                });
         View guideRow = getLayoutInflater().inflate(R.layout.item_row, appSettings, false);
         ((ImageView) guideRow.findViewById(R.id.row_icon)).setImageResource(R.drawable.ic_lib_info);
         ((TextView) guideRow.findViewById(R.id.row_title)).setText("First-run guide");

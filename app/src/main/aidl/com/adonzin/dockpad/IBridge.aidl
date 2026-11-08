@@ -30,4 +30,5 @@ interface IBridge {
     void setRumble(boolean on) = 26;
     void setDockReady(boolean on) = 27;
     String settingsSnapshot() = 28;
+    void setScreenOffAgain(boolean on) = 29;
 }

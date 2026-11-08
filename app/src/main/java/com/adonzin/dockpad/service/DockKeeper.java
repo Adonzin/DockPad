@@ -45,6 +45,54 @@ final class DockKeeper {
         note("DockPad's service started");
     }
 
+    // ---- Retroid's "Connect TV → turn off the handheld screen" switch, pressed again after waking
+
+    /** Retroid's own setting (Connect TV page): the firmware turns the handheld's screen off when it changes to 1. */
+    private static final String RETROID_SCREEN_OFF = "close_screen_when_output_video";
+    private volatile boolean screenOffAgain;
+    private boolean lastTv, tvKnown;
+    private int tvChecks;
+
+    synchronized void setScreenOffAgain(boolean on) {
+        if (screenOffAgain == on) return;
+        screenOffAgain = on;
+        note(on ? "\"Handheld screen off again after waking\" turned on" : "\"Handheld screen off again after waking\" turned off");
+    }
+
+    /**
+     * After waking (or when the TV comes on while awake), Retroid's firmware leaves both screens on.
+     * It does turn the handheld's screen off when its own switch changes, so: if that switch is on,
+     * flip it off and on again. The firmware does the rest; DockPad never powers a screen itself.
+     */
+    private void screenOffAgain(String why) {
+        String v = sh("settings get system " + RETROID_SCREEN_OFF).trim();
+        if (!"1".equals(v)) {
+            note("Screen: not pressing Retroid's switch (" + (v.isEmpty() || v.equals("null") ? "not on this handheld" : "it's off") + ")");
+            return;
+        }
+        new Thread(() -> {
+            try {
+                Thread.sleep(1200); // let the screens settle after waking
+                sh("settings put system " + RETROID_SCREEN_OFF + " 0");
+                Thread.sleep(400);
+            } catch (InterruptedException ignored) {
+            } finally {
+                sh("settings put system " + RETROID_SCREEN_OFF + " 1"); // always left as the user set it
+            }
+            note("Pressed Retroid's \"handheld screen off\" switch again (" + why + ")");
+        }, "DockPad-screen").start();
+    }
+
+    /** A TV or monitor is showing the picture (Android has an external display, not just a cable). */
+    private static boolean tvConnected() {
+        String out = sh("dumpsys display | grep -c 'type EXTERNAL'").trim();
+        try {
+            return Integer.parseInt(out) > 0;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+
     synchronized void setEnabled(boolean on) {
         if (enabled == on) return;
         enabled = on;
@@ -61,6 +109,20 @@ final class DockKeeper {
             if (screen && onWake != null) onWake.run(); // check the controllers straight away
         }
         if (!first && wifi != lastWifi) note(wifi ? "Wi-Fi back" : "Wi-Fi dropped");
+        // Retroid's own switch, pressed again when it matters (only when the user turned this on)
+        if (screenOffAgain) {
+            boolean woke = !first && screen && !lastScreen;
+            // the TV check is cheap through /sys; through dumpsys only every ~10 s, and right after waking
+            boolean tv = lastTv, wasKnown = tvKnown;
+            if (woke || !tvKnown || ++tvChecks % 5 == 0) {
+                tv = tvConnected();
+                tvKnown = true;
+            }
+            if (tv && screen && (woke || (wasKnown && !lastTv))) screenOffAgain(woke ? "woke on the TV" : "TV came on");
+            lastTv = tv;
+        } else {
+            tvKnown = false;
+        }
         first = false;
         lastPlugged = plugged;
         lastScreen = screen;

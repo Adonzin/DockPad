@@ -196,6 +196,11 @@ public final class SocketBridge implements IBridge {
     }
 
     @Override
+    public void setScreenOffAgain(boolean on) throws RemoteException {
+        rc("setScreenOffAgain", on);
+    }
+
+    @Override
     public void setDockReady(boolean on) throws RemoteException {
         rc("setDockReady", on);
     }

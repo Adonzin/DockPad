@@ -148,6 +148,11 @@ public class BridgeService extends IBridge.Stub {
     }
 
     @Override
+    public void setScreenOffAgain(boolean on) {
+        bridge.dock.setScreenOffAgain(on);
+    }
+
+    @Override
     public void setDockReady(boolean on) {
         bridge.dock.setEnabled(on);
     }
