@@ -461,7 +461,7 @@ final class Bridge {
             } catch (Throwable t) {
                 Log.w(TAG, "dock: " + t);
             }
-        }, 3, 5, TimeUnit.SECONDS);
+        }, 3, 2, TimeUnit.SECONDS);
         Runtime.getRuntime().addShutdownHook(new Thread(dock::stop)); // never leave deep sleep off
     }
 
@@ -853,6 +853,7 @@ final class Bridge {
         }
         b.append("Events sent to virtual controller: ").append(written.get()).append('\n');
         if (!lastError.isEmpty()) b.append("Last error: ").append(lastError).append('\n');
+        b.append(Displays.describe()).append('\n');
         b.append(dock.describe());
         return b.toString();
     }

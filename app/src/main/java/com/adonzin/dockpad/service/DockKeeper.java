@@ -60,6 +60,8 @@ final class DockKeeper {
             note(screen ? "Screen on" : "Screen off");
             if (screen && onWake != null) onWake.run(); // check the controllers straight away
         }
+        // a screen chosen to be off: put back after waking; handheld screen back on when the TV goes
+        Displays.check(!first && screen && !lastScreen);
         if (!first && wifi != lastWifi) note(wifi ? "Wi-Fi back" : "Wi-Fi dropped");
         first = false;
         lastPlugged = plugged;

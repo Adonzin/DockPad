@@ -141,6 +141,10 @@ To use a theme you made: press **Save theme file**, copy the `.dockpadtheme` fil
 
 Already use [Shizuku](https://shizuku.rikka.app/)? DockPad can use it instead of pairing.
 
+## Two screens
+
+With the handheld connected to a TV or monitor, two commands (for a shortcut or the quick menu's **My commands**) switch one screen off while the picture carries on on the other: **Handheld screen on/off** (play on the TV with the handheld's screen dark) and **TV screen on/off**. One screen always stays on, the choice comes back after the handheld wakes, and unplugging the TV turns the handheld's screen back on.
+
 ## Docked play (optional)
 
 **Settings → Starting up → Stay ready while docked** (off by default). While the handheld is on a charger (a dock or a desk charger), DockPad keeps it out of deep sleep, so DockPad and your controllers are ready the moment you wake it, even after a night asleep. Off the charger, sleep goes back to normal straight away. It uses a little more power while charging, which is why it's off unless you turn it on. **Diagnostics** shows a log of each night (screen, charger, Wi-Fi, controllers), to see what happened if something wasn't ready.

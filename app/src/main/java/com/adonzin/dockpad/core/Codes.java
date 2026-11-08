@@ -62,7 +62,7 @@ public final class Codes {
             ACTION_PREVIOUS_TRACK = -115, ACTION_MUTE = -116, ACTION_MOONLIGHT_KEYBOARD = -117,
             ACTION_QUICK_MENU = -118, ACTION_HOME = -119, ACTION_BACK = -120,
             ACTION_SWAP_AB = -121, ACTION_SWAP_XY = -122, ACTION_SWAP_FACE = -123, ACTION_DOCKPAD_KEYBOARD = -124,
-            ACTION_TOGGLE_TURBO = -125;
+            ACTION_TOGGLE_TURBO = -125, ACTION_HANDHELD_SCREEN = -126, ACTION_TV_SCREEN = -127;
 
     public static final String[] CATEGORIES = {"Controller button", "Keyboard key", "System action"};
 
@@ -83,7 +83,8 @@ public final class Codes {
                     "Toggle on-screen keyboard (with controllers connected)", "Open an app…",
                     "Toggle Cursor mode", "Sleep (screen off)", "Brightness up", "Brightness down",
                     "Play / pause", "Next track", "Previous track", "Mute",
-                    "Moonlight: show keyboard (three-finger tap)"}};
+                    "Moonlight: show keyboard (three-finger tap)",
+                    "Handheld screen on/off (while on a TV)", "TV screen on/off (while docked)"}};
 
     public static final int[][] CAT_CODES = {
             {BTN_SOUTH, BTN_EAST, BTN_NORTH, BTN_WEST, BTN_TL, BTN_TR, BTN_TL2, BTN_TR2, BTN_START, BTN_SELECT,
@@ -101,7 +102,7 @@ public final class Codes {
                     ACTION_NOTIFICATIONS, ACTION_QUICK_SETTINGS, ACTION_CLOSE_PANELS, ACTION_TOGGLE_IME_SETTING,
                     ACTION_OPEN_APP, ACTION_TOGGLE_PC_MODE, ACTION_SLEEP, ACTION_BRIGHTNESS_UP,
                     ACTION_BRIGHTNESS_DOWN, ACTION_PLAY_PAUSE, ACTION_NEXT_TRACK, ACTION_PREVIOUS_TRACK,
-                    ACTION_MUTE, ACTION_MOONLIGHT_KEYBOARD}};
+                    ACTION_MUTE, ACTION_MOONLIGHT_KEYBOARD, ACTION_HANDHELD_SCREEN, ACTION_TV_SCREEN}};
 
     public static String outputLabel(int code) {
         for (int c = 0; c < CAT_CODES.length; c++) {
