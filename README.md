@@ -127,7 +127,7 @@ To use a theme you made: press **Save theme file**, copy the `.dockpadtheme` fil
 ## Install
 
 1. On your handheld, download **DockPad.apk** from [the latest release](../../releases/latest) and install it.
-2. Open DockPad and follow the setup:
+2. Open DockPad. A short guide walks you through setup (with the touch screen or a controller), and checks off each step as it's done:
    1. Turn on Developer options.
    2. Connect to Wi-Fi.
    3. Tap **Pair**.
@@ -135,7 +135,8 @@ To use a theme you made: press **Save theme file**, copy the `.dockpadtheme` fil
    5. Type the code into DockPad's notification.
 
    You only do this once. No PC and no Shizuku needed.
-3. Turn DockPad on. From then on it starts by itself. To update later, go to **Settings → Updates**.
+   6. Turn DockPad on, connect a controller and choose your quick-menu button.
+3. From then on it starts by itself. To update later, go to **Settings → Updates**. The guide can be opened again from **Settings → First-run guide**.
 
 Already use [Shizuku](https://shizuku.rikka.app/)? DockPad can use it instead of pairing.
 

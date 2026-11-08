@@ -34,6 +34,17 @@
         <item name="strokeWidth">3dp</item>
     </style>
 
+    <!-- the first-run guide: full screen, on top of the screen's own (dynamic) colours -->
+    <style name="DockPad.Guide" parent="">
+        <item name="android:windowIsFloating">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:backgroundDimEnabled">false</item>
+    </style>
+    <!-- for buttons made in code: put on top of the screen's theme, then make a MaterialButton -->
+    <style name="ThemeOverlay.DockPad.Button" parent=""><item name="materialButtonStyle">@style/DockPad.Button</item></style>
+    <style name="ThemeOverlay.DockPad.Button.Tonal" parent=""><item name="materialButtonStyle">@style/DockPad.Button.Tonal</item></style>
+    <style name="ThemeOverlay.DockPad.Button.Outlined" parent=""><item name="materialButtonStyle">@style/DockPad.Button.Outlined</item></style>
+    <style name="ThemeOverlay.DockPad.Button.Text" parent=""><item name="materialButtonStyle">@style/DockPad.Button.Text</item></style>
     <style name="DockPad.Dialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
         <item name="buttonBarPositiveButtonStyle">@style/DockPad.Button.Text</item>
         <item name="buttonBarNegativeButtonStyle">@style/DockPad.Button.Text</item>

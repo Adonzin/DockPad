@@ -117,6 +117,9 @@ final class Prefs {
     void lastUpdateCheck(long v) { p.edit().putLong("lastUpdateCheck", v).apply(); }
     int dismissedBuild() { return p.getInt("dismissedBuild", 0); }
     void dismissedBuild(int v) { p.edit().putInt("dismissedBuild", v).apply(); }
+    /** The first-run guide was finished or skipped (or wasn't needed). */
+    boolean guideSeen() { return p.getBoolean("guideSeen", false); }
+    void guideSeen(boolean v) { p.edit().putBoolean("guideSeen", v).apply(); }
     boolean autoStart() { return p.getBoolean("autoStart", true); }
     void autoStart(boolean v) { p.edit().putBoolean("autoStart", v).apply(); }
 

@@ -66,6 +66,8 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
     private volatile IBridge bridge;
     private boolean bound, startWhenConnected;
     private boolean lastRunning;
+    private JSONObject lastStatus;
+    private FirstRunGuide guide;
     private String lastControllersJson = "";
 
     private final Shizuku.UserServiceArgs serviceArgs = new Shizuku.UserServiceArgs(
@@ -221,6 +223,53 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         Shizuku.addBinderReceivedListenerSticky(binderReceived);
         Shizuku.addBinderDeadListener(binderDead);
         Shizuku.addRequestPermissionResultListener(permResult);
+
+        guide = new FirstRunGuide(this);
+        if (!prefs.guideSeen()) {
+            if (ready()) prefs.guideSeen(true); // already set up: no guide (Settings can still open it)
+            else ui.post(guide::show);
+        }
+    }
+
+    // ---- for the first-run guide
+
+    boolean isReady() {
+        return ready();
+    }
+
+    boolean isRunning() {
+        return lastRunning;
+    }
+
+    JSONObject lastStatus() {
+        return lastStatus;
+    }
+
+    boolean hasPairingKey() {
+        return new java.io.File(getFilesDir(), "adb_private.key").exists();
+    }
+
+    void connectWithoutPairing() {
+        prefs.paired(true);
+        prefs.bridgeWanted(true);
+        renderSetup();
+        startOwnService(true);
+    }
+
+    void turnOn() {
+        if (!lastRunning) startBridge();
+    }
+
+    void editQuickMenuCombo() {
+        editor.addNewWithAction(com.adonzin.dockpad.core.Codes.ACTION_QUICK_MENU);
+    }
+
+    void chooseTheme() {
+        ThemesDialog.choose(this, this::showThemeName);
+    }
+
+    void getThemes() {
+        CatalogDialog.show(this, this::showThemeName);
     }
 
     @Override
@@ -230,6 +279,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         autoStartTried = false; // each visit may try once to bring DockPad back
         Watchdog.schedule(this);
         refreshSetup();
+        if (guide != null) guide.refresh();
         if (prefs.autoUpdateCheck() && System.currentTimeMillis() - prefs.lastUpdateCheck() > 6 * 3600_000L) {
             checkUpdates(false);
         }
@@ -370,7 +420,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
     private boolean starting;
     private static final int REQ_NOTIFY = 7;
 
-    private boolean shizukuInstalled() {
+    boolean shizukuInstalled() {
         try {
             getPackageManager().getPackageInfo(SHIZUKU_PACKAGE, 0);
             return true;
@@ -439,7 +489,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         if (!ready()) renderBridge(false, null);
     }
 
-    private boolean wifiConnected() {
+    boolean wifiConnected() {
         android.net.ConnectivityManager cm = getSystemService(android.net.ConnectivityManager.class);
         for (android.net.Network n : cm.getAllNetworks()) {
             android.net.NetworkCapabilities nc = cm.getNetworkCapabilities(n);
@@ -475,11 +525,13 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
                         startOwnService(true);
                     });
         }
-        TextView alt = new TextView(this);
-        alt.setText("Already use Shizuku? Start it and allow DockPad. That works too.");
-        alt.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall);
-        alt.setPadding(0, dp(8), 0, 0);
-        setupSteps.addView(alt);
+        if (shizukuInstalled()) { // only for people who already use it
+            TextView alt = new TextView(this);
+            alt.setText("You can also start DockPad through Shizuku: open Shizuku and allow DockPad.");
+            alt.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall);
+            alt.setPadding(0, dp(8), 0, 0);
+            setupSteps.addView(alt);
+        }
     }
 
     private void addSetupStep(boolean done, String title, String subtitle, String action, Runnable onAction) {
@@ -497,7 +549,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         setupSteps.addView(row);
     }
 
-    private void openSettings(String action) {
+    void openSettings(String action) {
         try {
             startActivity(new Intent(action));
         } catch (ActivityNotFoundException e) {
@@ -505,7 +557,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         }
     }
 
-    private void beginPairing() {
+    void beginPairing() {
         if (Build.VERSION.SDK_INT >= 33
                 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_NOTIFY);
@@ -663,7 +715,9 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
                 try {
                     JSONObject o = j == null ? null : new JSONObject(j);
                     boolean running = o != null && o.optBoolean("running");
+                    lastStatus = o;
                     renderBridge(running, o);
+                    if (guide != null) guide.refresh();
                     renderPc(running, running && o.optBoolean("pcMode"));
                     String ctrls = o == null ? "" : o.optJSONArray("controllers") + "|" + o.optJSONArray("players");
                     if (!ctrls.equals(lastControllersJson)) {
@@ -981,6 +1035,15 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         addSwitch(appSettings, "Turn off Wireless debugging once started",
                 "DockPad only needs Wireless debugging for a moment while starting. Turning it off afterwards is safer.",
                 prefs.turnOffWirelessDebugging(), prefs::turnOffWirelessDebugging);
+        View guideRow = getLayoutInflater().inflate(R.layout.item_row, appSettings, false);
+        ((ImageView) guideRow.findViewById(R.id.row_icon)).setImageResource(R.drawable.ic_lib_info);
+        ((TextView) guideRow.findViewById(R.id.row_title)).setText("First-run guide");
+        ((TextView) guideRow.findViewById(R.id.row_subtitle)).setText(
+                "Step through setup again: pairing, turning on, a controller and the quick menu.");
+        guideRow.setFocusable(true);
+        guideRow.setClickable(true);
+        guideRow.setOnClickListener(v -> guide.show());
+        appSettings.addView(guideRow);
         View resetRow = getLayoutInflater().inflate(R.layout.item_row, controllerSettings, false);
         ((ImageView) resetRow.findViewById(R.id.row_icon)).setImageResource(R.drawable.ic_gamepad);
         ((TextView) resetRow.findViewById(R.id.row_title)).setText("Reset all controller layouts");
