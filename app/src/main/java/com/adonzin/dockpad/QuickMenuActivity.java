@@ -51,10 +51,10 @@ public class QuickMenuActivity extends AppCompatActivity {
     private String selectedId;
     private boolean arranging;
 
-    @Override
     /** When the quick menu last opened (the first-run guide checks the combo works). */
     static volatile long lastOpened;
 
+    @Override
     protected void onCreate(Bundle savedInstanceState) {
         lastOpened = System.currentTimeMillis();
         DynamicColors.applyToActivityIfAvailable(this);
