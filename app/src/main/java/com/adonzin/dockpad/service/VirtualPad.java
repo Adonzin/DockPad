@@ -205,7 +205,6 @@ final class VirtualPad implements PadOut {
         return l;
     }
 
-    @Override
     /** Raw button codes re-coded so each means on this controller what it means on the built-in ones. */
     private volatile Map<Integer, Integer> remap = java.util.Collections.emptyMap();
     volatile String layoutNote = "";
