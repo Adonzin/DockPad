@@ -452,12 +452,7 @@ final class Bridge {
     // ---------------------------------------------------------------- on-screen keyboard
 
     /** "Stay ready while docked" (off unless turned on), and its log. On wake: look for controllers at once. */
-    final DockKeeper dock = new DockKeeper(() -> {
-        lastDevList = "";
-        synchronized (scanWake) {
-            scanWake.notifyAll();
-        }
-    });
+    final DockKeeper dock = new DockKeeper(this::lookForControllersNow);
 
     {
         timer.scheduleAtFixedRate(() -> {
@@ -890,6 +885,14 @@ final class Bridge {
             devWatch.startWatching();
         } catch (Throwable t) {
             devWatch = null; // the regular check every 1.5 s still finds it
+        }
+    }
+
+    /** Rescan the controllers at once (e.g. the screen just came on). */
+    private void lookForControllersNow() {
+        lastDevList = "";
+        synchronized (scanWake) {
+            scanWake.notifyAll();
         }
     }
 
