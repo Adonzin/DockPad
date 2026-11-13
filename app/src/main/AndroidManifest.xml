@@ -42,7 +42,6 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:excludeFromRecents="true"
             android:configChanges="orientation|screenSize|screenLayout|keyboard|keyboardHidden|navigation|smallestScreenSize|density|uiMode">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

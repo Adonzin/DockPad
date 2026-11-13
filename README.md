@@ -159,6 +159,8 @@ If DockPad can't turn on, the screen says exactly why and offers the fix for tha
 
 **Settings → Diagnostics** shows the last start attempt: when it happened, the network state, and each step it reached. Send it along when starting keeps failing.
 
+While DockPad is being set up or isn't on, it shows up in recent apps, so you can switch to Settings and back during pairing. Once it's on, it hides from recent apps again.
+
 A start that fails from a quick-settings tile or after a restart opens this screen too (tap the notification). When Wireless debugging is the problem, that notification has an **Open Wireless debugging** button as well.
 
 ### Ethernet

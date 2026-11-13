@@ -178,6 +178,7 @@ final class ConnectDialog {
         });
         dialog.setOnDismissListener(d -> cleanUp());
         dialog.show();
+        a.showInRecents(true); // easy to come back to from Settings while connecting
         ui.post(tick);
     }
 
@@ -187,6 +188,7 @@ final class ConnectDialog {
 
     private void cleanUp() {
         ui.removeCallbacksAndMessages(null);
+        a.showInRecents(!a.isRunning());
         stopMdns();
         if (open == this) open = null;
     }

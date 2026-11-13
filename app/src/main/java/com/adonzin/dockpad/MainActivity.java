@@ -127,6 +127,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
     protected void onCreate(Bundle savedInstanceState) {
         DynamicColors.applyToActivityIfAvailable(this);
         super.onCreate(savedInstanceState);
+        showInRecents(false); // until we know DockPad isn't on
         setContentView(R.layout.activity_main);
         prefs = new Prefs(this);
         editor = new ShortcutEditor(this, this);
@@ -260,10 +261,34 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         ConnectDialog.show(this, false);
     }
 
+    // ---- recent apps
+
+    private Boolean inRecents;
+
+    /**
+     * DockPad stays out of recent apps while it's on (it lives in the quick menu then), but shows up
+     * there while it's being set up or isn't on, so switching to Settings and back during pairing is easy.
+     */
+    void showInRecents(boolean show) {
+        if (inRecents != null && inRecents == show) return;
+        inRecents = show;
+        try {
+            android.app.ActivityManager am = getSystemService(android.app.ActivityManager.class);
+            for (android.app.ActivityManager.AppTask t : am.getAppTasks()) {
+                android.content.ComponentName base = t.getTaskInfo().baseActivity;
+                if (base == null || base.getClassName().equals(MainActivity.class.getName())) {
+                    t.setExcludeFromRecents(!show);
+                }
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
     // ---- for the connection screen
 
     /** DockPad's own service came up from the connection screen: attach to it. */
     void ownServiceStarted() {
+        showInRecents(false);
         usingOwnService = false; // re-attach
         applyBackend(true);
         if (guide != null) guide.refresh();
@@ -768,6 +793,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
 
     private void renderBridge(boolean running, JSONObject o) {
         lastRunning = running;
+        showInRecents(!running);
         bridgeButton.setText(running ? "Turn off" : "Turn on");
         if (!ready()) {
             bridgeTitle.setText("DockPad is off");
