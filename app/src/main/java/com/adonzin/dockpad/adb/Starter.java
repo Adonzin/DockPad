@@ -245,10 +245,31 @@ public final class Starter {
             m = AdbManager.get(c);
             boolean connected = false;
             int pairingErrors = 0;
+            // A connection left open from before may point at Wireless debugging's old port (it
+            // changes whenever Wireless debugging restarts): always start from a fresh one.
+            if (m.isConnected()) {
+                say.step("Closing an old connection");
+                try {
+                    m.disconnect();
+                } catch (Exception ignored) {
+                }
+            }
             for (int attempt = 0; attempt < 4 && !connected; attempt++) {
                 if (attempt > 0) say.step("Connecting to Wireless debugging (try " + (attempt + 1) + " of 4)…");
                 try {
-                    connected = m.isConnected() || m.autoConnect(c, 8000);
+                    connected = m.autoConnect(c, 8000);
+                    if (connected) {
+                        String probe = run(m, "echo dockpad-ok").trim();
+                        if (!probe.contains("dockpad-ok")) {
+                            say.step("Connected, but the shell didn't answer (" + shorten(probe) + "): reconnecting");
+                            connected = false;
+                            try {
+                                m.disconnect();
+                            } catch (Exception ignored) {
+                            }
+                            sleep(1000);
+                        }
+                    }
                 } catch (AdbPairingRequiredException e) {
                     // Can also happen briefly while Wireless debugging is still starting: retry first.
                     pairingErrors++;
@@ -282,10 +303,11 @@ public final class Starter {
             String pkg = c.getPackageName();
             // Keep Android's debugging service running even when Wi-Fi (and so Wireless debugging)
             // drops during sleep: if it stops, it takes DockPad's service down with it.
-            run(m, "settings put global adb_enabled 1");
+            note(say, "adb_enabled", run(m, "settings put global adb_enabled 1"));
             // Lets DockPad switch wireless debugging on by itself after a restart.
-            run(m, "pm grant " + pkg + " android.permission.WRITE_SECURE_SETTINGS");
+            note(say, "grant", run(m, "pm grant " + pkg + " android.permission.WRITE_SECURE_SETTINGS"));
             String apk = c.getApplicationInfo().sourceDir;
+            say.step("App file: " + shorten(run(m, "ls -l " + apk).trim()));
             // A DockPad service that didn't answer (stuck, or left from another install) would keep
             // the new one from opening its port: stop any that are left first.
             String left = run(m, "pgrep -f " + SERVICE_MATCH).trim();
@@ -297,7 +319,7 @@ public final class Starter {
             String cmd = "CLASSPATH=" + apk + " nohup setsid app_process /system/bin "
                     + SERVICE_CLASS + " " + token(c) + " " + BuildConfig.VERSION_CODE
                     + " >" + SERVICE_LOG + " 2>&1 &";
-            run(m, cmd);
+            note(say, "launch", run(m, cmd));
             for (int i = 0; i < 75; i++) { // wait up to 15 s for the service
                 if (b.version() == BuildConfig.VERSION_CODE) {
                     say.step("Service is up");
@@ -342,13 +364,24 @@ public final class Starter {
             byte[] buf = new byte[4096];
             int n;
             while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            out.write(("[read error: " + e + "]").getBytes("UTF-8"));
         }
         try {
             s.close();
         } catch (Exception ignored) {
         }
         return out.toString("UTF-8");
+    }
+
+    private static void note(Progress say, String what, String output) {
+        String o = output == null ? "" : output.trim();
+        if (!o.isEmpty()) say.step(what + ": " + shorten(o));
+    }
+
+    private static String shorten(String s) {
+        s = s.replace('\n', ' ');
+        return s.length() > 300 ? s.substring(0, 300) + "…" : s;
     }
 
     public static void sleepQuietly(long ms) {
