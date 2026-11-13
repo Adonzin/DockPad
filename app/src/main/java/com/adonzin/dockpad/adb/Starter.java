@@ -163,7 +163,43 @@ public final class Starter {
     }
 
     public static Result start(Context c, boolean turnOffWirelessDebuggingAfter, Progress progress) {
-        Progress say = progress != null ? progress : t -> { };
+        StringBuilder log = new StringBuilder();
+        long t0 = System.currentTimeMillis();
+        Progress logged = t -> {
+            log.append("  +").append(System.currentTimeMillis() - t0).append(" ms  ").append(t).append('\n');
+            if (progress != null) progress.step(t);
+        };
+        Result r;
+        try {
+            r = startLogged(c, turnOffWirelessDebuggingAfter, logged);
+        } catch (RuntimeException e) {
+            r = Result.fail(Problem.OTHER, "Couldn't start: " + e);
+        }
+        remember(c, r, log.toString(), t0);
+        return r;
+    }
+
+    /** The last start attempt, for Diagnostics: when, what happened and each step it got to. */
+    private static void remember(Context c, Result r, String steps, long t0) {
+        if (r.ok && "already running".equals(r.message)) return;
+        StringBuilder sb = new StringBuilder();
+        sb.append(new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(new java.util.Date(t0)))
+                .append(" (").append(System.currentTimeMillis() - t0).append(" ms): ")
+                .append(r.ok ? "started" : r.problem + " - " + r.message).append('\n');
+        sb.append("  Wi-Fi ").append(wifiConnected(c) ? "connected" : wifiSwitchedOn(c) ? "on, not connected" : "off")
+                .append(", Ethernet ").append(ethernetConnected(c) ? "connected" : "no")
+                .append(", Developer options ").append(developerOptionsOn(c) ? "on" : "off")
+                .append(", Wireless debugging ").append(wirelessDebuggingOn(c) ? "on" : "off")
+                .append(", may switch it ").append(canControlWirelessDebugging(c) ? "yes" : "no").append('\n');
+        sb.append(steps);
+        c.getSharedPreferences("dockpad", Context.MODE_PRIVATE).edit().putString("lastStart", sb.toString()).apply();
+    }
+
+    public static String lastStart(Context c) {
+        return c.getSharedPreferences("dockpad", Context.MODE_PRIVATE).getString("lastStart", "");
+    }
+
+    private static Result startLogged(Context c, boolean turnOffWirelessDebuggingAfter, Progress say) {
         SocketBridge b = bridge(c);
         int running = b.version();
         if (running == BuildConfig.VERSION_CODE) return new Result(true, "already running", false);
@@ -216,9 +252,11 @@ public final class Starter {
                 } catch (AdbPairingRequiredException e) {
                     // Can also happen briefly while Wireless debugging is still starting: retry first.
                     pairingErrors++;
+                    say.step("Pairing not accepted (try " + (attempt + 1) + ")");
                     Log.w(TAG, "connect: pairing required (attempt " + attempt + ")", e);
                     sleep(2000);
                 } catch (Exception e) {
+                    say.step("Try " + (attempt + 1) + " failed: " + e);
                     Log.w(TAG, "connect attempt failed", e);
                     sleep(1500);
                 }
@@ -257,6 +295,7 @@ public final class Starter {
             } catch (Exception ignored) {
             }
         } catch (Exception e) {
+            say.step("Failed: " + e);
             Log.e(TAG, "start failed", e);
             return Result.fail(Problem.OTHER, "Couldn't start: " + e.getMessage());
         }

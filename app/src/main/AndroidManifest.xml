@@ -19,6 +19,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS"
         tools:ignore="ProtectedPermissions" />
 
@@ -110,6 +111,10 @@
         </service>
 
         <!-- only the shell (DockPad's own service) can send to it -->
+        <receiver
+            android:name=".AppUpdater$Result"
+            android:exported="false" />
+
         <receiver
             android:name=".KeyboardCloseReceiver"
             android:exported="false" />

@@ -102,7 +102,7 @@ Docked play on a handheld usually means setting up every emulator again for an e
 - Can switch Wireless debugging off again once it has started.
 - Quick Settings tiles for DockPad and Cursor mode.
 - The whole app can be used with a controller. Its tabs (Home, Controllers, Shortcuts, Quick menu, Settings) switch with L1/R1, lists wrap around, and L2/R2 jump to the top or bottom.
-- Updates itself from inside the app.
+- Updates itself from inside the app. With DockPad on, the update installs silently and DockPad reopens. If DockPad is off, it tries to turn itself on first. If that fails, the update goes through Android's installer, which asks you to confirm (the first time, Android also asks you to allow DockPad to install apps).
 - **Backup & sharing:** save your whole setup (shortcuts, quick menu, controller layouts, settings) to one file, restore it later, or share it with friends.
 - Built-in diagnostics, button checker and rumble test.
 
@@ -156,6 +156,8 @@ If DockPad can't turn on, the screen says exactly why and offers the fix for tha
 | Wireless debugging couldn't be reached | Try again, restart Wireless debugging and try again, or pair again |
 | The pairing isn't accepted any more | Pair again |
 | The service didn't start | Try again, or pair again |
+
+**Settings → Diagnostics** shows the last start attempt: when it happened, the network state, and each step it reached. Send it along when starting keeps failing.
 
 A start that fails from a quick-settings tile or after a restart opens this screen too (tap the notification). When Wireless debugging is the problem, that notification has an **Open Wireless debugging** button as well.
 

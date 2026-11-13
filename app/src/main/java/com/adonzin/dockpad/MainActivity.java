@@ -48,7 +48,10 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
     private static final int REQ = 42;
 
     private final Handler ui = new Handler(Looper.getMainLooper());
-    private final ExecutorService bg = Executors.newSingleThreadExecutor();
+    // Work queued after the screen closes is dropped, not a crash.
+    private final ExecutorService bg = new java.util.concurrent.ThreadPoolExecutor(1, 1, 0L,
+            java.util.concurrent.TimeUnit.MILLISECONDS, new java.util.concurrent.LinkedBlockingQueue<>(),
+            new java.util.concurrent.ThreadPoolExecutor.DiscardPolicy());
     private Prefs prefs;
     private ShortcutEditor editor;
     private ControllerDialog controllerDialog;
@@ -1341,32 +1344,71 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
             msg.append("\n\nWhat's new:");
             for (String c : rel.changes) msg.append("\n• ").append(c);
         }
-        boolean canInstall = bridge != null && rel.apkUrl != null && !rel.apkUrl.isEmpty();
+        boolean canInstall = rel.apkUrl != null && !rel.apkUrl.isEmpty();
         msg.append(canInstall
-                ? "\n\nDockPad downloads and installs it by itself, then reopens. Your settings stay."
-                : "\n\nTurn DockPad on to install updates by itself, or download it and install it yourself.");
+                ? (bridge != null
+                    ? "\n\nDockPad downloads and installs it by itself, then reopens. Your settings stay."
+                    : "\n\nDockPad downloads and installs it (Android may ask you to confirm). Your settings stay.")
+                : "\n\nDownload it and install it yourself.");
         DpDialog d = new DpDialog(this);
         d.setTitle("Build " + rel.build + " is available").setMessage(msg.toString())
                 .setNegativeButton("Later", (x, w) -> prefs.dismissedBuild(rel.build));
         if (canInstall) {
-            d.setPositiveButton("Update now", (x, w) -> {
-                IBridge b = bridge;
-                Toast.makeText(this, "Downloading build " + rel.build + "… DockPad reopens when it's done",
-                        Toast.LENGTH_LONG).show();
-                bg.execute(() -> {
-                    try {
-                        b.installUpdate(rel.apkUrl, rel.build);
-                    } catch (Exception e) {
-                        ui.post(() -> Toast.makeText(this, "Couldn't start the update: " + e.getMessage(),
-                                Toast.LENGTH_LONG).show());
-                    }
-                });
-            });
-            d.setNeutralButton("Download", (x, w) -> openUrl(rel.pageUrl));
+            d.setPositiveButton("Update now", (x, w) -> installUpdate(rel));
+            d.setNeutralButton("Open release page", (x, w) -> openUrl(rel.pageUrl));
         } else {
-            d.setPositiveButton("Download", (x, w) -> openUrl(rel.pageUrl));
+            d.setPositiveButton("Open release page", (x, w) -> openUrl(rel.pageUrl));
         }
         d.show();
+    }
+
+    /**
+     * Installs an update: silently through DockPad's service when it's on (or can be turned on),
+     * otherwise through Android's installer, which asks once to confirm.
+     */
+    private void installUpdate(Updates.Release rel) {
+        Toast.makeText(this, "Downloading build " + rel.build + "…", Toast.LENGTH_LONG).show();
+        IBridge current = bridge;
+        bg.execute(() -> {
+            IBridge b = current;
+            if (b == null && prefs.paired()) { // try to turn DockPad on, for the silent install
+                Starter.Result r = Starter.start(this, prefs.turnOffWirelessDebugging());
+                if (r.ok) b = Starter.bridge(this);
+            }
+            if (b != null) {
+                try {
+                    b.installUpdate(rel.apkUrl, rel.build);
+                    ui.post(() -> Toast.makeText(this, "Installing build " + rel.build
+                            + "… DockPad reopens when it's done", Toast.LENGTH_LONG).show());
+                    return;
+                } catch (Exception ignored) {
+                    // fall through to Android's installer
+                }
+            }
+            if (!getPackageManager().canRequestPackageInstalls()) {
+                ui.post(() -> new DpDialog(this)
+                        .setTitle("Allow DockPad to install updates")
+                        .setMessage("DockPad's service is off, so the update goes through Android's installer. "
+                                + "Android needs your OK once: turn on \"Allow from this source\", come back and "
+                                + "tap Update now again.")
+                        .setPositiveButton("Open setting", (x, w) -> {
+                            try {
+                                startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                                        android.net.Uri.parse("package:" + getPackageName())));
+                            } catch (Exception e) {
+                                openSettings(Settings.ACTION_SETTINGS);
+                            }
+                        })
+                        .setNegativeButton("Cancel", null).show());
+                return;
+            }
+            String err = AppUpdater.downloadAndInstall(this, rel.apkUrl);
+            if (err != null) {
+                ui.post(() -> new DpDialog(this).setTitle("Update didn't install").setMessage(err)
+                        .setPositiveButton("Open release page", (x, w) -> openUrl(rel.pageUrl))
+                        .setNegativeButton("OK", null).show());
+            }
+        });
     }
 
     private void openUrl(String url) {
@@ -1547,12 +1589,14 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         bg.execute(() -> {
             String s;
             try {
-                s = b == null ? "DockPad's service isn't connected (is Shizuku running?)." : b.status();
+                s = b == null ? "DockPad's service isn't running." : b.status();
             } catch (Exception e) {
                 s = "Couldn't reach DockPad's service: " + e;
             }
             String crash = DockPadApp.lastCrash(this);
+            String start = Starter.lastStart(this);
             String text = "DockPad " + BuildConfig.VERSION_NAME + "\n" + s
+                    + (start.isEmpty() ? "" : "\n\nLast start attempt:\n" + start)
                     + (crash.isEmpty() ? "" : "\n\nLast app crash:\n" + crash);
             ui.post(() -> {
                 TextView tv = new TextView(this);
