@@ -64,6 +64,7 @@ final class ConnectDialog {
     private volatile int pairPort = -1;
     private volatile InetAddress pairHost;
     private boolean triedSideBySide;
+    private boolean pairedAtStart;
 
     private ConnectDialog(MainActivity a) {
         this.a = a;
@@ -102,6 +103,8 @@ final class ConnectDialog {
         LinearLayout root = new LinearLayout(a);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(28), dp(16), dp(28), dp(14));
+        root.setBackgroundColor(color(com.google.android.material.R.attr.colorSurface) | 0xFF000000);
+        root.setFitsSystemWindows(true);
 
         LinearLayout top = new LinearLayout(a);
         top.setGravity(Gravity.CENTER_VERTICAL);
@@ -161,6 +164,7 @@ final class ConnectDialog {
             w.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT);
             w.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(color(com.google.android.material.R.attr.colorSurface)));
             w.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+            w.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
         }
         dialog.setOnKeyListener((d, kc, e) -> {
             View decor = w == null ? null : w.getDecorView();
@@ -192,7 +196,7 @@ final class ConnectDialog {
         @Override
         public void run() {
             renderChecks();
-            if (pairing && !busy && a.prefs().paired()) pairedFromNotification();
+            if (pairing && !busy && !pairedAtStart && a.prefs().paired()) pairedFromNotification();
             if (!busy && waitedFor) {
                 boolean fixed = false;
                 switch (problem) {
@@ -397,6 +401,7 @@ final class ConnectDialog {
     // ------------------------------------------------------------------ pairing
 
     private void showPairing() {
+        pairedAtStart = a.prefs().paired();
         pairing = true;
         waitedFor = false;
         problem = Starter.Problem.NONE;
@@ -422,8 +427,8 @@ final class ConnectDialog {
         code.setInputType(InputType.TYPE_CLASS_NUMBER);
         code.setFilters(new InputFilter[]{new InputFilter.LengthFilter(6)});
         code.setImeOptions(EditorInfo.IME_ACTION_DONE);
-        code.setTextSize(TypedValue.COMPLEX_UNIT_SP, 24);
-        code.setLetterSpacing(0.2f);
+        code.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
+        code.setSingleLine(true);
         code.setOnEditorActionListener((v, id, e) -> {
             pairWithCode();
             return true;
@@ -612,8 +617,9 @@ final class ConnectDialog {
         v.setMaxLines(2);
         v.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleSmall);
         v.setPadding(dp(10), 0, 0, 0);
-        row.addView(v);
-        checks.addView(row);
+        row.addView(v, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        checks.addView(row, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
     }
 
     private void numbered(int n, String t) {
@@ -621,7 +627,8 @@ final class ConnectDialog {
         v.setText(n + ".  " + t);
         v.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyLarge);
         v.setPadding(dp(8), dp(2), 0, dp(2));
-        body.addView(v);
+        body.addView(v, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
     }
 
     private void small(String t) {
@@ -629,13 +636,14 @@ final class ConnectDialog {
         v.setText(t);
         v.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall);
         v.setPadding(0, dp(8), 0, dp(4));
-        actions.addView(v);
+        actions.addView(v, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
     }
 
     private MaterialButton action(String label, Runnable r) {
         MaterialButton b = button(label, R.style.ThemeOverlay_DockPad_Button_Tonal);
         b.setOnClickListener(v -> r.run());
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.topMargin = dp(6);
         actions.addView(b, lp);
@@ -647,6 +655,9 @@ final class ConnectDialog {
         b.setText(label);
         b.setAllCaps(false);
         b.setFocusable(true);
+        b.setSingleLine(false);
+        b.setMaxLines(4);
+        b.setMinHeight(dp(48));
         return b;
     }
 
