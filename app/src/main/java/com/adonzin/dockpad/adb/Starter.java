@@ -286,10 +286,36 @@ public final class Starter {
             // Lets DockPad switch wireless debugging on by itself after a restart.
             run(m, "pm grant " + pkg + " android.permission.WRITE_SECURE_SETTINGS");
             String apk = c.getApplicationInfo().sourceDir;
+            // A DockPad service that didn't answer (stuck, or left from another install) would keep
+            // the new one from opening its port: stop any that are left first.
+            String left = run(m, "pgrep -f " + SERVICE_MATCH).trim();
+            if (!left.isEmpty()) {
+                say.step("Stopping a DockPad service that didn't answer (pid " + left.replace('\n', ' ') + ")");
+                run(m, "pkill -9 -f " + SERVICE_MATCH);
+                sleep(500);
+            }
             String cmd = "CLASSPATH=" + apk + " nohup setsid app_process /system/bin "
-                    + "com.adonzin.dockpad.service.ShellMain " + token(c) + " " + BuildConfig.VERSION_CODE
-                    + " >/dev/null 2>&1 &";
+                    + SERVICE_CLASS + " " + token(c) + " " + BuildConfig.VERSION_CODE
+                    + " >" + SERVICE_LOG + " 2>&1 &";
             run(m, cmd);
+            for (int i = 0; i < 75; i++) { // wait up to 15 s for the service
+                if (b.version() == BuildConfig.VERSION_CODE) {
+                    say.step("Service is up");
+                    try {
+                        m.disconnect();
+                    } catch (Exception ignored) {
+                    }
+                    if (turnOffWirelessDebuggingAfter && canControlWirelessDebugging(c)) setWirelessDebugging(c, false);
+                    return new Result(true, "started", false);
+                }
+                sleep(200);
+            }
+            // Didn't come up: note why, for Diagnostics.
+            String procs = run(m, "pgrep -fl " + SERVICE_MATCH).trim();
+            say.step("Service processes: " + (procs.isEmpty() ? "none (it exited)" : procs.replace('\n', ' ')));
+            String out = run(m, "tail -n 25 " + SERVICE_LOG).trim();
+            say.step("Service output: " + (out.isEmpty() ? "(none)" : "\n" + out));
+            say.step("Answers on its port: " + b.version());
             try {
                 m.disconnect();
             } catch (Exception ignored) {
@@ -299,18 +325,15 @@ public final class Starter {
             Log.e(TAG, "start failed", e);
             return Result.fail(Problem.OTHER, "Couldn't start: " + e.getMessage());
         }
-
-        for (int i = 0; i < 40; i++) { // wait up to 8 s for the service
-            if (b.version() == BuildConfig.VERSION_CODE) {
-                if (turnOffWirelessDebuggingAfter && canControlWirelessDebugging(c)) setWirelessDebugging(c, false);
-                return new Result(true, "started", false);
-            }
-            sleep(200);
-        }
         if (weTurnedOn) setWirelessDebugging(c, false);
         return Result.fail(Problem.SERVICE, "DockPad connected, but its background service didn't start. Try "
                 + "again; if it keeps failing, send Diagnostics (Settings) to the developer.");
     }
+
+    private static final String SERVICE_CLASS = "com.adonzin.dockpad.service.ShellMain";
+    // "[S]" so the pattern doesn't match the shell running pgrep/pkill itself
+    private static final String SERVICE_MATCH = "'com.adonzin.dockpad.service.[S]hellMain'";
+    private static final String SERVICE_LOG = "/data/local/tmp/dockpad_service.log";
 
     static String run(AdbManager m, String command) throws Exception {
         AdbStream s = m.openStream("shell:" + command);
