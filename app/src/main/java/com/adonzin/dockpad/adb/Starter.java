@@ -21,16 +21,99 @@ public final class Starter {
     private static final String TAG = "DockPad";
     private Starter() {}
 
+    /** Why starting failed, so each failure can offer the one fix that fits. */
+    public enum Problem {
+        NONE,
+        /** Developer options are off. */
+        DEVELOPER_OPTIONS,
+        /** No Wi-Fi connection (Ethernet alone can't run Wireless debugging). */
+        NO_WIFI,
+        /** Wireless debugging is off and DockPad isn't allowed to turn it on yet (before the first pairing). */
+        WIRELESS_DEBUGGING_OFF,
+        /** DockPad turned Wireless debugging on, but Android switched it back off (usually "Allow on this network?"). */
+        NETWORK_NOT_ALLOWED,
+        /** Wireless debugging is on, but its connection couldn't be found or opened. */
+        CONNECT,
+        /** Android doesn't accept DockPad's pairing any more. */
+        PAIRING,
+        /** Connected, but the background service didn't come up. */
+        SERVICE,
+        OTHER
+    }
+
     public static final class Result {
         public final boolean ok;
         public final String message;
         public final boolean needsPairing;
+        public final Problem problem;
 
         Result(boolean ok, String message, boolean needsPairing) {
+            this(ok, message, needsPairing ? Problem.PAIRING : ok ? Problem.NONE : Problem.OTHER);
+        }
+
+        Result(boolean ok, String message, Problem problem) {
             this.ok = ok;
             this.message = message;
-            this.needsPairing = needsPairing;
+            this.problem = problem;
+            this.needsPairing = problem == Problem.PAIRING;
         }
+
+        static Result fail(Problem p, String message) {
+            return new Result(false, message, p);
+        }
+    }
+
+    /** Live progress while starting, for the connection screen. Called on the starting thread. */
+    public interface Progress {
+        void step(String text);
+    }
+
+    // ---- networks
+
+    public static boolean wifiConnected(Context c) {
+        return hasTransport(c, android.net.NetworkCapabilities.TRANSPORT_WIFI);
+    }
+
+    public static boolean ethernetConnected(Context c) {
+        return hasTransport(c, android.net.NetworkCapabilities.TRANSPORT_ETHERNET);
+    }
+
+    public static boolean wifiSwitchedOn(Context c) {
+        try {
+            android.net.wifi.WifiManager w = c.getApplicationContext().getSystemService(android.net.wifi.WifiManager.class);
+            return w != null && w.isWifiEnabled();
+        } catch (Exception e) {
+            return true;
+        }
+    }
+
+    private static boolean hasTransport(Context c, int transport) {
+        try {
+            android.net.ConnectivityManager cm = c.getSystemService(android.net.ConnectivityManager.class);
+            for (android.net.Network n : cm.getAllNetworks()) {
+                android.net.NetworkCapabilities nc = cm.getNetworkCapabilities(n);
+                if (nc != null && nc.hasTransport(transport)) return true;
+            }
+        } catch (Exception ignored) {
+        }
+        return false;
+    }
+
+    public static boolean developerOptionsOn(Context c) {
+        return Settings.Global.getInt(c.getContentResolver(), Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) == 1;
+    }
+
+    /** What to tell someone without Wi-Fi, worded for Ethernet when that's what they're on. */
+    public static String noWifiMessage(Context c) {
+        if (ethernetConnected(c)) {
+            return "You're on Ethernet. Android only runs Wireless debugging over Wi-Fi, so DockPad needs Wi-Fi "
+                    + "joined to any network for a few seconds while it starts (a phone hotspot works, no internet "
+                    + "needed). Once DockPad is on, Ethernet alone is fine.";
+        }
+        if (!wifiSwitchedOn(c)) return "Wi-Fi is switched off. Turn it on and join a network: DockPad starts through "
+                + "Wireless debugging, which only works over Wi-Fi.";
+        return "Not connected to Wi-Fi. Join a network (no internet needed): DockPad starts through Wireless "
+                + "debugging, which only works over Wi-Fi.";
     }
 
     static String token(Context c) {
@@ -76,23 +159,50 @@ public final class Starter {
 
     /** Connects over wireless debugging and launches the service. */
     public static Result start(Context c, boolean turnOffWirelessDebuggingAfter) {
+        return start(c, turnOffWirelessDebuggingAfter, null);
+    }
+
+    public static Result start(Context c, boolean turnOffWirelessDebuggingAfter, Progress progress) {
+        Progress say = progress != null ? progress : t -> { };
         SocketBridge b = bridge(c);
         int running = b.version();
         if (running == BuildConfig.VERSION_CODE) return new Result(true, "already running", false);
         if (running >= 0) { // an older version: replace it
+            say.step("Replacing an older DockPad service…");
             b.exit();
             sleep(500);
         }
 
         boolean weTurnedOn = false;
         if (!wirelessDebuggingOn(c)) {
-            if (!canControlWirelessDebugging(c)) {
-                return new Result(false, "Turn on Wireless debugging in Developer options (connect to Wi-Fi first), then try again.", false);
+            if (!developerOptionsOn(c) && !canControlWirelessDebugging(c)) {
+                return Result.fail(Problem.DEVELOPER_OPTIONS, "Developer options are off. In Settings → About, "
+                        + "tap \"Build number\" 7 times, then try again.");
             }
+            if (!wifiConnected(c)) return Result.fail(Problem.NO_WIFI, noWifiMessage(c));
+            if (!canControlWirelessDebugging(c)) {
+                return Result.fail(Problem.WIRELESS_DEBUGGING_OFF, "Wireless debugging is off. Turn it on in "
+                        + "Developer options, then try again. (After pairing once, DockPad turns it on by itself.)");
+            }
+            say.step("Turning on Wireless debugging…");
             setWirelessDebugging(c, true);
             weTurnedOn = true;
-            sleep(1500);
+            // Android switches it straight back off when it won't run on this network
+            // (no Wi-Fi, or it's asking "Allow wireless debugging on this network?").
+            boolean stayed = false;
+            for (int i = 0; i < 10; i++) {
+                sleep(300);
+                stayed = wirelessDebuggingOn(c);
+                if (!stayed) break;
+            }
+            if (!stayed) {
+                if (!wifiConnected(c)) return Result.fail(Problem.NO_WIFI, noWifiMessage(c));
+                return Result.fail(Problem.NETWORK_NOT_ALLOWED, "Android didn't let Wireless debugging run on this "
+                        + "Wi-Fi network. If it asked \"Allow wireless debugging on this network?\", tick \"Always "
+                        + "allow on this network\" and tap Allow, then try again.");
+            }
         }
+        say.step("Looking for Wireless debugging's connection…");
 
         AdbManager m;
         try {
@@ -100,6 +210,7 @@ public final class Starter {
             boolean connected = false;
             int pairingErrors = 0;
             for (int attempt = 0; attempt < 4 && !connected; attempt++) {
+                if (attempt > 0) say.step("Connecting to Wireless debugging (try " + (attempt + 1) + " of 4)…");
                 try {
                     connected = m.isConnected() || m.autoConnect(c, 8000);
                 } catch (AdbPairingRequiredException e) {
@@ -115,13 +226,21 @@ public final class Starter {
             if (!connected) {
                 if (weTurnedOn) setWirelessDebugging(c, false);
                 if (pairingErrors >= 3) {
-                    return new Result(false, "Android no longer accepts DockPad's pairing (this can happen if "
-                            + "debugging authorizations were revoked or expired). Tap \"Pair again\".", true);
+                    return Result.fail(Problem.PAIRING, "Android no longer accepts DockPad's pairing (this happens "
+                            + "when debugging authorizations are revoked or expire, or after a reset). Pair again: "
+                            + "it takes a minute.");
                 }
-                return new Result(false, "Couldn't connect to Wireless debugging. Make sure Wi-Fi is connected. "
-                        + "If Android asked \"Allow wireless debugging on this network?\", tick \"Always allow\" "
-                        + "and tap Allow, then try again.", false);
+                if (!wifiConnected(c)) return Result.fail(Problem.NO_WIFI, noWifiMessage(c));
+                if (!wirelessDebuggingOn(c)) {
+                    return Result.fail(Problem.NETWORK_NOT_ALLOWED, "Wireless debugging switched itself off. If "
+                            + "Android asked \"Allow wireless debugging on this network?\", tick \"Always allow on this "
+                            + "network\" and tap Allow, then try again.");
+                }
+                return Result.fail(Problem.CONNECT, "Wireless debugging is on, but DockPad couldn't find or open "
+                        + "its connection. This is usually brief: try again. If it keeps happening, turn Wireless "
+                        + "debugging off and on, or turn Wi-Fi off and on.");
             }
+            say.step("Connected. Starting DockPad's service…");
             String pkg = c.getPackageName();
             // Keep Android's debugging service running even when Wi-Fi (and so Wireless debugging)
             // drops during sleep: if it stops, it takes DockPad's service down with it.
@@ -139,7 +258,7 @@ public final class Starter {
             }
         } catch (Exception e) {
             Log.e(TAG, "start failed", e);
-            return new Result(false, "Couldn't start: " + e.getMessage(), false);
+            return Result.fail(Problem.OTHER, "Couldn't start: " + e.getMessage());
         }
 
         for (int i = 0; i < 40; i++) { // wait up to 8 s for the service
@@ -150,7 +269,8 @@ public final class Starter {
             sleep(200);
         }
         if (weTurnedOn) setWirelessDebugging(c, false);
-        return new Result(false, "The service didn't start. Open Diagnostics and send them to the developer.", false);
+        return Result.fail(Problem.SERVICE, "DockPad connected, but its background service didn't start. Try "
+                + "again; if it keeps failing, send Diagnostics (Settings) to the developer.");
     }
 
     static String run(AdbManager m, String command) throws Exception {

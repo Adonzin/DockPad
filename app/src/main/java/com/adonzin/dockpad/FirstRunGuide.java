@@ -168,6 +168,9 @@ final class FirstRunGuide {
             case 2:
                 title("Connect to Wi-Fi");
                 text("Wireless debugging, which DockPad starts through, only works over Wi-Fi.");
+                text("On Ethernet (a dock with a network port)? Wi-Fi is still needed, but only while DockPad "
+                        + "starts: join any network, even a phone hotspot without internet. Once DockPad is on, "
+                        + "Ethernet alone is fine.");
                 text("Tip: if your router has a 5 GHz network, use it. Bluetooth controllers share the 2.4 GHz "
                         + "band with Wi-Fi and stay smoother on 5 GHz.");
                 status();
@@ -176,9 +179,9 @@ final class FirstRunGuide {
             case 3:
                 title("Pair DockPad (one time)");
                 text("This lets DockPad start itself through Wireless debugging. You only do it once.");
-                numbered(1, "Press Pair. Android's developer settings open.");
+                numbered(1, "Press Pair. DockPad's pairing screen opens, with Wireless debugging next to it.");
                 numbered(2, "Turn on Wireless debugging, open it and choose \"Pair device with pairing code\".");
-                numbered(3, "Pull down DockPad's notification and type the 6-digit code into it.");
+                numbered(3, "Type the 6-digit code into DockPad. It connects and turns on by itself.");
                 status();
                 first = action("Pair", a::beginPairing);
                 if (a.hasPairingKey()) action("Paired before? Connect without pairing", a::connectWithoutPairing);
@@ -248,7 +251,9 @@ final class FirstRunGuide {
             }
             case 2: {
                 boolean wifi = a.wifiConnected();
-                check(wifi, wifi ? "Connected to Wi-Fi" : "Not connected to Wi-Fi");
+                check(wifi, wifi ? "Connected to Wi-Fi"
+                        : com.adonzin.dockpad.adb.Starter.ethernetConnected(a) ? "Ethernet only: join Wi-Fi as well while setting up"
+                        : "Not connected to Wi-Fi");
                 break;
             }
             case 3:

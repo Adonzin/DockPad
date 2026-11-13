@@ -254,7 +254,26 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         prefs.paired(true);
         prefs.bridgeWanted(true);
         renderSetup();
-        startOwnService(true);
+        ConnectDialog.show(this, false);
+    }
+
+    // ---- for the connection screen
+
+    /** DockPad's own service came up from the connection screen: attach to it. */
+    void ownServiceStarted() {
+        usingOwnService = false; // re-attach
+        applyBackend(true);
+        if (guide != null) guide.refresh();
+    }
+
+    void setupChanged() {
+        renderSetup();
+        if (guide != null) guide.refresh();
+    }
+
+    /** Asks for notifications (the pairing notification is only a fallback, so a "no" is fine). */
+    void requestNotificationsQuietly() {
+        if (Build.VERSION.SDK_INT >= 33) requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_NOTIFY_QUIET);
     }
 
     void turnOn() {
@@ -278,6 +297,12 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         super.onResume();
         if (findViewById(R.id.theme_name) != null) showThemeName();
         autoStartTried = false; // each visit may try once to bring DockPad back
+        Intent in = getIntent();
+        if (in != null && in.getBooleanExtra(EXTRA_CONNECT, false)) { // from a failed start elsewhere
+            in.removeExtra(EXTRA_CONNECT);
+            autoStartTried = true;
+            ui.post(() -> ConnectDialog.show(this, !prefs.paired()));
+        }
         Watchdog.schedule(this);
         refreshSetup();
         if (guide != null) guide.refresh();
@@ -285,6 +310,20 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
             checkUpdates(false);
         }
         ui.post(poll);
+    }
+
+    /** Opens the connection screen (from a tile or notification after starting failed). */
+    static final String EXTRA_CONNECT = "dockpad.connect";
+
+    static Intent connectIntent(android.content.Context c) {
+        return new Intent(c, MainActivity.class).putExtra(EXTRA_CONNECT, true)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
     }
 
     @Override
@@ -419,7 +458,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
     private volatile boolean usingOwnService;
     private boolean autoStartTried;
     private boolean starting;
-    private static final int REQ_NOTIFY = 7;
+    private static final int REQ_NOTIFY = 7, REQ_NOTIFY_QUIET = 8;
 
     boolean shizukuInstalled() {
         try {
@@ -491,12 +530,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
     }
 
     boolean wifiConnected() {
-        android.net.ConnectivityManager cm = getSystemService(android.net.ConnectivityManager.class);
-        for (android.net.Network n : cm.getAllNetworks()) {
-            android.net.NetworkCapabilities nc = cm.getNetworkCapabilities(n);
-            if (nc != null && nc.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI)) return true;
-        }
-        return false;
+        return Starter.wifiConnected(this);
     }
 
     private void renderSetup() {
@@ -510,7 +544,10 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         addSetupStep(dev, "Turn on Developer options",
                 "In Settings → About, tap \"Build number\" 7 times.",
                 dev ? null : "Open", () -> openSettings(Settings.ACTION_DEVICE_INFO_SETTINGS));
-        addSetupStep(wifi, "Connect to Wi-Fi", "Wireless debugging only works over Wi-Fi.",
+        addSetupStep(wifi, "Connect to Wi-Fi", Starter.ethernetConnected(this)
+                        ? "You're on Ethernet. Wi-Fi is needed too, but only while DockPad starts (any network, no "
+                        + "internet needed)."
+                        : "Wireless debugging, which DockPad starts through, only works over Wi-Fi.",
                 wifi ? null : "Open", () -> openSettings(Settings.ACTION_WIFI_SETTINGS));
         addSetupStep(false, "Pair DockPad (one time only)",
                 "Tap Pair. In Wireless debugging, turn it on and tap \"Pair device with pairing code\". "
@@ -519,12 +556,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         if (new java.io.File(getFilesDir(), "adb_private.key").exists()) {
             addSetupStep(false, "Paired before?",
                     "If DockPad was paired on this device already, try connecting without pairing again.",
-                    "Connect", () -> {
-                        prefs.paired(true);
-                        prefs.bridgeWanted(true);
-                        renderSetup();
-                        startOwnService(true);
-                    });
+                    "Connect", this::connectWithoutPairing);
         }
         if (shizukuInstalled()) { // only for people who already use it
             TextView alt = new TextView(this);
@@ -558,7 +590,13 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         }
     }
 
+    /** Pairing happens in the connection screen (code typed in DockPad, Settings side by side). */
     void beginPairing() {
+        ConnectDialog.show(this, true);
+    }
+
+    /** The older notification-only pairing. */
+    void beginPairingInNotification() {
         if (Build.VERSION.SDK_INT >= 33
                 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_NOTIFY);
@@ -570,6 +608,11 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQ_NOTIFY_QUIET) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED
+                    && ConnectDialog.isOpen()) PairingService.start(this);
+            return;
+        }
         if (requestCode == REQ_NOTIFY) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) beginPairingNow();
             else new DpDialog(this)
@@ -622,18 +665,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
                 renderBridge(false, null);
                 bridgeSubtitle.setText("Couldn't turn on: " + r.message);
                 if (!userAsked) return; // automatic attempt: just show it on the card
-                MaterialAlertDialogBuilder d = new DpDialog(this)
-                        .setTitle("DockPad couldn't turn on")
-                        .setMessage(r.message)
-                        .setPositiveButton("OK", null);
-                if (r.needsPairing) {
-                    d.setNeutralButton("Pair again", (x, w) -> {
-                        prefs.paired(false);
-                        renderSetup();
-                        beginPairing();
-                    });
-                }
-                d.show();
+                ConnectDialog.showFailure(this, r); // the reason, and the fix that fits it
             });
         });
     }

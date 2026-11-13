@@ -48,7 +48,15 @@ final class Tiles {
 
     @SuppressWarnings("deprecation")
     static void openApp(TileService t) {
-        Intent i = new Intent(t, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        open(t, new Intent(t, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+    }
+
+    /** Opens DockPad's connection screen, which explains what went wrong and how to fix it. */
+    static void openConnect(TileService t) {
+        open(t, MainActivity.connectIntent(t));
+    }
+
+    private static void open(TileService t, Intent i) {
         try {
             t.startActivityAndCollapse(i);
         } catch (Exception e) {
@@ -108,7 +116,7 @@ final class Tiles {
                         if (!st.serviceUp) {
                             Starter.Result r = Starter.start(this, prefs.turnOffWirelessDebugging());
                             if (!r.ok) {
-                                ui(() -> openApp(this)); // the app explains what's wrong
+                                ui(() -> openConnect(this)); // the app explains what's wrong
                                 return;
                             }
                         }

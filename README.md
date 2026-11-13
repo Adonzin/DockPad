@@ -131,15 +131,37 @@ To use a theme you made: press **Save theme file**, copy the `.dockpadtheme` fil
 2. Open DockPad. A short guide walks you through setup (with the touch screen or a controller), and checks off each step as it's done:
    1. Turn on Developer options.
    2. Connect to Wi-Fi.
-   3. Tap **Pair**.
+   3. Tap **Pair**. DockPad's pairing screen opens, with Wireless debugging side by side.
    4. In Wireless debugging, choose "Pair device with pairing code".
-   5. Type the code into DockPad's notification.
+   5. Type the code into DockPad. It connects and turns on by itself.
 
    You only do this once. No PC and no Shizuku needed.
-   6. Turn DockPad on, connect a controller and choose your quick-menu button.
+   6. Connect a controller and choose your quick-menu button.
 3. From then on it starts by itself. To update later, go to **Settings → Updates**. The guide can be opened again from **Settings → First-run guide**.
 
 Already use [Shizuku](https://shizuku.rikka.app/)? DockPad can use it instead of pairing.
+
+### Connection screen
+
+Pairing and connecting both happen on one screen inside DockPad. It shows live checks (Developer options, Wi-Fi, Wireless debugging, pairing, service) and what it's doing right now. You type the pairing code there, with Wireless debugging opened next to DockPad. If your device won't split the screen, the code can still go into DockPad's notification.
+
+If DockPad can't turn on, the screen says exactly why and offers the fix for that case:
+
+| What went wrong | What DockPad offers |
+|---|---|
+| Developer options are off | Open About, then tries again by itself once they're on |
+| No Wi-Fi | Open Wi-Fi settings, then tries again by itself once Wi-Fi connects |
+| Wireless debugging is off (before the first pairing) | Open Wireless debugging, then tries again by itself once it's on |
+| Android hasn't allowed this Wi-Fi network | Try again (tick "Always allow on this network"), or open Wireless debugging |
+| Wireless debugging couldn't be reached | Try again, restart Wireless debugging and try again, or pair again |
+| The pairing isn't accepted any more | Pair again |
+| The service didn't start | Try again, or pair again |
+
+A start that fails from a quick-settings tile or after a restart opens this screen too (tap the notification).
+
+### Ethernet
+
+Android only runs Wireless debugging over Wi-Fi. So DockPad needs Wi-Fi joined to a network **while it starts**: any network works, even a phone hotspot with no internet. Once DockPad is on, Ethernet alone is fine: unplugging Wi-Fi doesn't stop it. Updates restart it without Wi-Fi too. Only a restart of the handheld needs Wi-Fi again. Keeping Wi-Fi switched on next to Ethernet works as well.
 
 ## Docked play (optional)
 

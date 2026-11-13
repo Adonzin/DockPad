@@ -52,11 +52,13 @@ public class StarterService extends Service {
             stopForeground(STOP_FOREGROUND_REMOVE);
         } else {
             String msg = r == null ? "Unknown problem." : r.message;
-            if (!wifiConnected()) msg = "No Wi-Fi connection. DockPad needs Wi-Fi to start. Open DockPad once you're connected.";
-            else if (r != null && r.needsPairing) msg += " Open DockPad → Reset connection → Pair again.";
+            if (!wifiConnected()) msg = Starter.noWifiMessage(this);
+            msg += " Tap to open DockPad's connection screen.";
             stopForeground(STOP_FOREGROUND_DETACH);
+            android.app.PendingIntent fix = android.app.PendingIntent.getActivity(this, 3, MainActivity.connectIntent(this),
+                    android.app.PendingIntent.FLAG_IMMUTABLE | android.app.PendingIntent.FLAG_UPDATE_CURRENT);
             Notifications.show(this, ID, Notifications.builder(this, "DockPad didn't start", msg)
-                    .setAutoCancel(true).build());
+                    .setContentIntent(fix).setAutoCancel(true).build());
         }
         stopSelf();
     }
