@@ -565,14 +565,9 @@ final class ConnectDialog {
     }
 
     private void openWirelessDebugging(boolean sideBySide) {
-        Intent i = new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS);
-        i.putExtra(":settings:fragment_args_key", "toggle_adb_wireless"); // highlights Wireless debugging
-        Bundle args = new Bundle();
-        args.putString(":settings:fragment_args_key", "toggle_adb_wireless");
-        i.putExtra(":settings:show_fragment_args", args);
+        Intent i = PairingService.wirelessDebuggingIntent();
         if (sideBySide) {
-            i.addFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT | Intent.FLAG_ACTIVITY_NEW_TASK
-                    | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
+            i.addFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
             triedSideBySide = true;
         }
         try {

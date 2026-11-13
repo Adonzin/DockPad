@@ -67,8 +67,27 @@ public class PairingService extends Service {
         return START_NOT_STICKY;
     }
 
+    /** Android's developer settings, scrolled to Wireless debugging. */
+    static Intent wirelessDebuggingIntent() {
+        Intent i = new Intent(android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS);
+        i.putExtra(":settings:fragment_args_key", "toggle_adb_wireless"); // highlights Wireless debugging
+        Bundle args = new Bundle();
+        args.putString(":settings:fragment_args_key", "toggle_adb_wireless");
+        i.putExtra(":settings:show_fragment_args", args);
+        return i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+    }
+
+    /** A notification button that opens Wireless debugging. */
+    static Notification.Action openWirelessDebuggingAction(Context c) {
+        PendingIntent open = PendingIntent.getActivity(c, 4, wirelessDebuggingIntent(),
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+        return new Notification.Action.Builder(Icon.createWithResource(c, R.drawable.ic_notification),
+                "Open Wireless debugging", open).build();
+    }
+
     private Notification waiting(String title, String text, boolean askForCode) {
         Notification.Builder b = Notifications.builder(this, title, text).setOngoing(true);
+        b.addAction(openWirelessDebuggingAction(this));
         if (askForCode) {
             PendingIntent reply = PendingIntent.getForegroundService(this, 1,
                     new Intent(this, PairingService.class).setAction(ACTION_CODE),
@@ -112,8 +131,13 @@ public class PairingService extends Service {
                         : "Paired, but starting failed: " + r.message;
                 ui.post(() -> {
                     stopForeground(STOP_FOREGROUND_DETACH);
-                    Notifications.show(this, ID, Notifications.builder(this,
-                            r.ok ? "DockPad is ready" : "DockPad paired", msg).setAutoCancel(true).build());
+                    Notification.Builder nb = Notifications.builder(this,
+                            r.ok ? "DockPad is ready" : "DockPad paired", msg).setAutoCancel(true);
+                    if (!r.ok && (r.problem == Starter.Problem.WIRELESS_DEBUGGING_OFF
+                            || r.problem == Starter.Problem.NETWORK_NOT_ALLOWED)) {
+                        nb.addAction(openWirelessDebuggingAction(this));
+                    }
+                    Notifications.show(this, ID, nb.build());
                     finish();
                 });
             } catch (Exception e) {

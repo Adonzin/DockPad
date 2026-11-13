@@ -1,5 +1,7 @@
 package com.adonzin.dockpad;
 
+import android.app.Notification;
+
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
@@ -57,8 +59,13 @@ public class StarterService extends Service {
             stopForeground(STOP_FOREGROUND_DETACH);
             android.app.PendingIntent fix = android.app.PendingIntent.getActivity(this, 3, MainActivity.connectIntent(this),
                     android.app.PendingIntent.FLAG_IMMUTABLE | android.app.PendingIntent.FLAG_UPDATE_CURRENT);
-            Notifications.show(this, ID, Notifications.builder(this, "DockPad didn't start", msg)
-                    .setContentIntent(fix).setAutoCancel(true).build());
+            Notification.Builder nb = Notifications.builder(this, "DockPad didn't start", msg)
+                    .setContentIntent(fix).setAutoCancel(true);
+            if (r != null && (r.problem == Starter.Problem.WIRELESS_DEBUGGING_OFF
+                    || r.problem == Starter.Problem.NETWORK_NOT_ALLOWED)) {
+                nb.addAction(PairingService.openWirelessDebuggingAction(this));
+            }
+            Notifications.show(this, ID, nb.build());
         }
         stopSelf();
     }

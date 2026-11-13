@@ -143,7 +143,7 @@ Already use [Shizuku](https://shizuku.rikka.app/)? DockPad can use it instead of
 
 ### Connection screen
 
-Pairing and connecting both happen on one screen inside DockPad. It shows live checks (Developer options, Wi-Fi, Wireless debugging, pairing, service) and what it's doing right now. You type the pairing code there, with Wireless debugging opened next to DockPad. If your device won't split the screen, the code can still go into DockPad's notification.
+Pairing and connecting both happen on one screen inside DockPad. It shows live checks (Developer options, Wi-Fi, Wireless debugging, pairing, service) and what it's doing right now. You type the pairing code there, with Wireless debugging opened next to DockPad. If your device won't split the screen, the code can still go into DockPad's notification. The notification also has an **Open Wireless debugging** button, so you can get to that setting without digging through Developer options.
 
 If DockPad can't turn on, the screen says exactly why and offers the fix for that case:
 
@@ -157,7 +157,7 @@ If DockPad can't turn on, the screen says exactly why and offers the fix for tha
 | The pairing isn't accepted any more | Pair again |
 | The service didn't start | Try again, or pair again |
 
-A start that fails from a quick-settings tile or after a restart opens this screen too (tap the notification).
+A start that fails from a quick-settings tile or after a restart opens this screen too (tap the notification). When Wireless debugging is the problem, that notification has an **Open Wireless debugging** button as well.
 
 ### Ethernet
 
