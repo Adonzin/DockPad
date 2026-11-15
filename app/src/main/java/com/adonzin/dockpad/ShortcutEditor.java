@@ -119,6 +119,29 @@ final class ShortcutEditor {
         });
     }
 
+    /** The shortcut that gives a single button on this controller its job (pressed), or -1. */
+    int indexOfButtonJob(String device, int code) {
+        List<Shortcut> all = host.prefs().shortcuts();
+        for (int i = 0; i < all.size(); i++) {
+            Shortcut s = all.get(i);
+            if (!s.hold && s.trigger.length == 1 && s.trigger[0] == code && s.device.equals(device)) return i;
+        }
+        return -1;
+    }
+
+    /** Choose what one of a controller's buttons does (an extra button): edits its shortcut. */
+    void editForButton(String device, int code) {
+        int i = indexOfButtonJob(device, code);
+        if (i >= 0) {
+            edit(host.prefs().shortcuts().get(i).copy(), i, device);
+            return;
+        }
+        Shortcut s = new Shortcut();
+        s.device = device;
+        s.trigger = new int[]{code};
+        edit(s, -1, device);
+    }
+
     // ------------------------------------------------------------ quick menu commands
 
     void addCommand() {

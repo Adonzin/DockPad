@@ -47,7 +47,7 @@ public final class Shortcut {
 
     public String triggerLabel() {
         StringBuilder b = new StringBuilder();
-        for (int c : trigger) b.append(b.length() == 0 ? "" : " + ").append(Codes.shortKeyName(c));
+        for (int c : trigger) b.append(b.length() == 0 ? "" : " + ").append(ControllerLayout.buttonName(device, c));
         return b.toString();
     }
 

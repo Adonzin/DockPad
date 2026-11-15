@@ -26,6 +26,10 @@ final class ControllerDialog {
         void runInBackground(Runnable r);
         Prefs prefs();
         void layoutsChanged();
+        /** Choose what a controller's button does (a shortcut on it). */
+        void editButtonJob(String device, int code, String name);
+        /** What a controller's button does now, or null. */
+        String buttonJob(String device, int code);
     }
 
     private final Activity activity;
@@ -171,6 +175,70 @@ final class ControllerDialog {
         tuneRefresh.run();
         tune.setOnClickListener(v -> showTuning(layout, tuneRefresh));
 
+        // ---- extra buttons: the controller's buttons the built-in controls don't have
+        TextView extraTitle = text("Extra buttons", false);
+        extraTitle.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleSmall);
+        extraTitle.setPadding(0, dp(16), 0, dp(4));
+        box.addView(extraTitle);
+        box.addView(text("Back buttons, paddles and other buttons the handheld doesn't have. Add one by pressing "
+                + "it: it's called Extra 1, Extra 2… (rename it any time), and you choose what it does: any "
+                + "button, a key or key combination, an action or a macro.", true));
+        LinearLayout extraList = new LinearLayout(activity);
+        extraList.setOrientation(LinearLayout.VERTICAL);
+        box.addView(extraList);
+        MaterialButton addExtra = new MaterialButton(activity);
+        addExtra.setText("Add an extra button");
+        box.addView(addExtra);
+        Runnable[] extraRefresh = new Runnable[1];
+        extraRefresh[0] = () -> {
+            extraList.removeAllViews();
+            if (layout.extras.isEmpty()) extraList.addView(text("None yet.", true));
+            for (Map.Entry<Integer, String> e : layout.extras.entrySet()) {
+                int code = e.getKey();
+                String name = e.getValue();
+                String job = host.buttonJob(device, code);
+                MaterialButton row = new MaterialButton(activity, null,
+                        com.google.android.material.R.attr.materialButtonOutlinedStyle);
+                row.setAllCaps(false);
+                row.setText(name + "  →  " + (job == null ? "nothing yet (tap to choose)" : job));
+                row.setOnClickListener(v -> new DpDialog(activity)
+                        .setTitle(name + " (" + Codes.keyName(code) + ")")
+                        .setItems(new String[]{"Choose what it does", "Rename", "Remove"}, (d, which) -> {
+                            if (which == 0) {
+                                host.editButtonJob(device, code, name);
+                            } else if (which == 1) {
+                                renameExtra(layout, code, () -> extraRefresh[0].run());
+                            } else {
+                                layout.extras.remove(code);
+                                save(layout);
+                                extraRefresh[0].run();
+                            }
+                        })
+                        .setNegativeButton("Close", null)
+                        .show());
+                extraList.addView(row);
+            }
+        };
+        extraRefresh[0].run();
+        addExtra.setOnClickListener(v -> recordButton(device, "Press the extra button", code -> {
+            if (layout.extras.containsKey(code)) {
+                Toast.makeText(activity, "That's already " + layout.extras.get(code), Toast.LENGTH_SHORT).show();
+                return;
+            }
+            String name = layout.nextExtraName();
+            layout.extras.put(code, name);
+            save(layout);
+            extraRefresh[0].run();
+            new DpDialog(activity)
+                    .setTitle("Added " + name)
+                    .setMessage(Codes.keyName(code) + " is now " + name + ". Choose what it does?")
+                    .setPositiveButton("Choose", (d, w) -> host.editButtonJob(device, code, name))
+                    .setNeutralButton("Rename", (d, w) -> renameExtra(layout, code, () -> extraRefresh[0].run()))
+                    .setNegativeButton("Later", null)
+                    .show();
+        }));
+        lastExtraRefresh = extraRefresh[0];
+
         TextView customTitle = text("Changed buttons", false);
         customTitle.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleSmall);
         customTitle.setPadding(0, dp(16), 0, dp(4));
@@ -216,7 +284,7 @@ final class ControllerDialog {
             layout.swapXY = c;
             save(layout);
         });
-        change.setOnClickListener(v -> recordButton(device, code ->
+        change.setOnClickListener(v -> recordButton(device, "Press the button to change", code ->
                 new DpDialog(activity)
                         .setTitle(Codes.keyName(code) + " should act as…")
                         .setItems(ControllerLayout.TARGET_LABELS, (d, which) -> {
@@ -366,7 +434,37 @@ final class ControllerDialog {
         void onCode(int code);
     }
 
-    private void recordButton(String device, CodeResult then) {
+    /** The open dialog's extra-button list, refreshed when a button's job changes elsewhere. */
+    private Runnable lastExtraRefresh;
+
+    void extrasChanged() {
+        if (lastExtraRefresh != null) lastExtraRefresh.run();
+    }
+
+    private void renameExtra(ControllerLayout layout, int code, Runnable done) {
+        android.widget.EditText e = new android.widget.EditText(activity);
+        e.setText(layout.extras.get(code));
+        e.setSelectAllOnFocus(true);
+        e.setSingleLine(true);
+        android.widget.FrameLayout fb = new android.widget.FrameLayout(activity);
+        fb.setPadding(dp(24), dp(8), dp(24), 0);
+        fb.addView(e);
+        new DpDialog(activity).setTitle("Name for " + layout.extras.get(code))
+                .setMessage("For example \"Left paddle\" or \"Back right\".")
+                .setView(fb)
+                .setPositiveButton("Save", (d, w) -> {
+                    String n = e.getText().toString().replaceAll("[\\t\\n,:]", " ").trim();
+                    if (n.length() > 30) n = n.substring(0, 30);
+                    if (n.isEmpty()) n = layout.nextExtraName();
+                    layout.extras.put(code, n);
+                    save(layout);
+                    done.run();
+                })
+                .setNegativeButton("Cancel", null).show();
+        e.requestFocus();
+    }
+
+    private void recordButton(String device, String title, CodeResult then) {
         IBridge b = host.bridge();
         if (b == null) return;
         LinearProgressIndicator progress = new LinearProgressIndicator(activity);
@@ -376,7 +474,7 @@ final class ControllerDialog {
         wrap.addView(progress, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT));
         AlertDialog waiting = new DpDialog(activity).ignoreControllerButtons()
-                .setTitle("Press the button to change")
+                .setTitle(title)
                 .setMessage("Press it on " + device + ".")
                 .setView(wrap)
                 .setNegativeButton("Cancel", null)

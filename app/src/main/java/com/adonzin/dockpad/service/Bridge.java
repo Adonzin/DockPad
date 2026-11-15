@@ -268,6 +268,7 @@ final class Bridge {
     private volatile Map<String, Map<Integer, Integer>> layouts = new java.util.HashMap<>();
 
     void setLayouts(String spec) {
+        ControllerLayout.publishNames(ControllerLayout.decodeAll(spec));
         Map<String, Map<Integer, Integer>> m = new java.util.HashMap<>();
         Map<String, ControllerLayout> t = new java.util.HashMap<>();
         for (ControllerLayout l : ControllerLayout.decodeAll(spec).values()) {
@@ -1487,9 +1488,15 @@ final class Bridge {
             Mapper m = mapper;
             if (builtIn || touchpad || keyboardOpen || pcModeOn || m == null || m.delivers(code)) return;
             if (!lostPressed.add(code)) return;
+            String named = ControllerLayout.extraName(dev.name, code);
             Log.i(TAG, dev.name + ": " + Codes.keyName(code) + " can't reach games");
-            Actions.toast(dev.name + ": " + Codes.keyName(code) + " has no match on the built-in controls, so "
-                    + "games don't get it. Give it a job in DockPad: Controllers → Change a button, or Shortcuts.");
+            if (named != null) {
+                Actions.toast(dev.name + ": " + named + " has nothing to do yet. Choose it in DockPad → Controllers → "
+                        + "Extra buttons.");
+            } else {
+                Actions.toast(dev.name + ": " + Codes.keyName(code) + " has no match on the built-in controls. Add it "
+                        + "as an extra button in DockPad → Controllers, and choose what it does.");
+            }
         }
 
         private void deliver(int type, int code, int value) {

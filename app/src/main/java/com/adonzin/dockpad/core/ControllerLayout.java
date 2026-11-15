@@ -22,6 +22,45 @@ public final class ControllerLayout {
     public int turboRate = 10;
     /** Stick and trigger fine-tuning. */
     public Tuning tuning = new Tuning();
+    /**
+     * Extra buttons: raw buttons the built-in controls don't have (back buttons, paddles…), with the
+     * name the user knows them by ("Extra 1" until renamed). What they do is a shortcut on them.
+     */
+    public final LinkedHashMap<Integer, String> extras = new LinkedHashMap<>();
+
+    /** The next free "Extra N" name. */
+    public String nextExtraName() {
+        for (int n = 1; ; n++) {
+            String name = "Extra " + n;
+            if (!extras.containsValue(name)) return name;
+        }
+    }
+
+    /** Extra-button names of every controller, for labels anywhere (device -> code -> name). */
+    private static volatile Map<String, Map<Integer, String>> names = new HashMap<>();
+
+    public static void publishNames(Map<String, ControllerLayout> all) {
+        Map<String, Map<Integer, String>> m = new HashMap<>();
+        for (ControllerLayout l : all.values()) if (!l.extras.isEmpty()) m.put(l.device, new HashMap<>(l.extras));
+        names = m;
+    }
+
+    /** A button's name on this controller: its extra-button name if it has one, else the usual short name. */
+    public static String buttonName(String device, int code) {
+        String n = extraName(device, code);
+        return n != null ? n : Codes.shortKeyName(code);
+    }
+
+    /** The extra-button name, or null. With no specific device, any controller's name for it. */
+    public static String extraName(String device, int code) {
+        Map<String, Map<Integer, String>> all = names;
+        Map<Integer, String> m = device == null ? null : all.get(device);
+        if (m != null && m.containsKey(code)) return m.get(code);
+        if (device == null || "*".equals(device)) {
+            for (Map<Integer, String> e : all.values()) if (e.containsKey(code)) return e.get(code);
+        }
+        return null;
+    }
 
     /**
      * Controllers labelled the Nintendo way (B at the bottom, A on the right), so their labels
@@ -45,12 +84,13 @@ public final class ControllerLayout {
         swapAB = swapXY = false;
         custom.clear();
         turbo.clear();
+        extras.clear();
         turboRate = 10;
         tuning.reset();
     }
 
     public boolean isEmpty() {
-        return !swapAB && !swapXY && custom.isEmpty() && turbo.isEmpty() && tuning.isDefault();
+        return !swapAB && !swapXY && custom.isEmpty() && turbo.isEmpty() && tuning.isDefault() && extras.isEmpty();
     }
 
     /** The final raw -> new button table. */
@@ -80,6 +120,7 @@ public final class ControllerLayout {
             parts.add(t.toString());
         }
         if (!tuning.isDefault()) parts.add(tuning.summary());
+        if (!extras.isEmpty()) parts.add(extras.size() == 1 ? "1 extra button" : extras.size() + " extra buttons");
         return parts.isEmpty() ? "Standard layout" : String.join(", ", parts);
     }
 
@@ -93,13 +134,20 @@ public final class ControllerLayout {
         StringBuilder t = new StringBuilder().append(turboRate).append(':');
         int i = 0;
         for (int code : turbo) t.append(i++ == 0 ? "" : ",").append(code);
+        StringBuilder x = new StringBuilder();
+        for (Map.Entry<Integer, String> e : extras.entrySet()) {
+            if (x.length() > 0) x.append(',');
+            x.append(e.getKey()).append(':').append(e.getValue().replaceAll("[\\t\\n,:]", " ").trim());
+        }
+        String tune = tuning.isDefault() ? "" : tuning.encode();
         return device + "\t" + (swapAB ? "A" : "") + (swapXY ? "X" : "") + "-\t" + (c.length() == 0 ? "-" : c)
-                + "\t" + t + (tuning.isDefault() ? "" : "\t" + tuning.encode());
+                + "\t" + t
+                + (x.length() > 0 ? "\t" + (tune.isEmpty() ? "-" : tune) + "\t" + x : tune.isEmpty() ? "" : "\t" + tune);
     }
 
     public static ControllerLayout decode(String line) {
         String[] f = line.split("\t");
-        if (f.length < 3 || f.length > 5) return null;
+        if (f.length < 3 || f.length > 6) return null;
         ControllerLayout l = new ControllerLayout();
         l.device = f[0];
         l.swapAB = f[1].contains("A");
@@ -113,7 +161,16 @@ public final class ControllerLayout {
                 }
             }
         }
-        if (f.length == 5) l.tuning = Tuning.decode(f[4]);
+        if (f.length >= 5 && !"-".equals(f[4])) l.tuning = Tuning.decode(f[4]);
+        if (f.length == 6) {
+            for (String pair : f[5].split(",")) {
+                String[] kv = pair.split(":", 2);
+                try {
+                    if (kv.length == 2 && !kv[1].trim().isEmpty()) l.extras.put(Integer.parseInt(kv[0]), kv[1].trim());
+                } catch (Exception ignored) {
+                }
+            }
+        }
         if (f.length >= 4) {
             String[] t = f[3].split(":", 2);
             try {

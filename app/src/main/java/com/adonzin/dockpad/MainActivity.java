@@ -26,6 +26,7 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.adonzin.dockpad.adb.Starter;
+import com.adonzin.dockpad.core.ControllerLayout;
 import com.adonzin.dockpad.core.Shortcut;
 import com.adonzin.dockpad.service.BridgeService;
 import com.google.android.material.button.MaterialButton;
@@ -132,6 +133,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         prefs = new Prefs(this);
         editor = new ShortcutEditor(this, this);
         controllerDialog = new ControllerDialog(this, this);
+        ControllerLayout.publishNames(prefs.layouts());
 
         setupCard = findViewById(R.id.setup_card);
         setupSteps = findViewById(R.id.setup_steps);
@@ -443,7 +445,21 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
     }
 
     @Override
+    public void editButtonJob(String device, int code, String name) {
+        editor.editForButton(device, code);
+    }
+
+    @Override
+    public String buttonJob(String device, int code) {
+        int i = editor.indexOfButtonJob(device, code);
+        if (i < 0) return null;
+        Shortcut s = prefs.shortcuts().get(i);
+        return s.steps.isEmpty() ? "nothing (blocked)" : s.actionLabel();
+    }
+
+    @Override
     public void layoutsChanged() {
+        ControllerLayout.publishNames(prefs.layouts());
         lastControllersJson = ""; // re-render rows with the new summary
         pushSettings();
     }
@@ -474,6 +490,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
 
     @Override
     public void shortcutsChanged() {
+        if (controllerDialog != null) controllerDialog.extrasChanged();
         renderCommands();
         renderShortcuts();
         pushSettings();

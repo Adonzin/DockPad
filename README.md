@@ -38,7 +38,7 @@ Docked play on a handheld usually means setting up every emulator again for an e
   - a recorded sequence of presses
 - Adjustable hold time per shortcut, and **several hold times on one button** (e.g. tap Select for Select, hold 1 s for Back, hold 3 s for Home). Letting go runs the last one reached, and a small message shows which is ready.
 - DualShock 4 / DualSense touchpad click as a button.
-- **Extra buttons** (back buttons, paddles, capture, C/Z…): a button with no match on the built-in controls used to be dropped without a word. Now, the first time you press one, DockPad says so and points you to the fix: give it a job with **Controllers → Change a button** (act as any button) or **Shortcuts** (a key combination, an action, a macro). Diagnostics list each controller's unmatched buttons, and any other input devices, since some controllers send extra buttons through a second device.
+- **Extra buttons** (back buttons, paddles, capture, C/Z…): every controller's page has an **Extra buttons** section. Press **Add an extra button**, press it on the controller, and it becomes Extra 1, Extra 2… (rename it, e.g. "Left paddle"). Then choose what it does: act as any button, a key or key combination, an action or a macro. Its name shows up in shortcuts too. A button with no match on the built-in controls is no longer dropped without a word: the first time you press one, DockPad says so and points you here. Diagnostics list each controller's unmatched buttons, and any other input devices, since some controllers send extra buttons through a second device.
 
 **Quick menu overlay**
 - Opens over any game with a button combo, and is fully navigable with a controller.
