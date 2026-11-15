@@ -311,7 +311,7 @@ public final class Starter {
             // A DockPad service that didn't answer (stuck, or left from another install) would keep
             // the new one from opening its port: stop any that are left first.
             String left = run(m, "pgrep -f " + SERVICE_MATCH).trim();
-            if (!left.isEmpty()) {
+            if (left.matches("[0-9\\s]+")) { // process ids only
                 say.step("Stopping a DockPad service that didn't answer (pid " + left.replace('\n', ' ') + ")");
                 run(m, "pkill -9 -f " + SERVICE_MATCH);
                 sleep(500);
@@ -365,7 +365,9 @@ public final class Starter {
             int n;
             while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
         } catch (Exception e) {
-            out.write(("[read error: " + e + "]").getBytes("UTF-8"));
+            // "Stream closed" is how a finished command's stream ends: not an error
+            String msg = String.valueOf(e.getMessage());
+            if (!msg.contains("Stream closed")) out.write(("[read error: " + e + "]").getBytes("UTF-8"));
         }
         try {
             s.close();
