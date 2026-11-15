@@ -796,6 +796,7 @@ final class Bridge {
     synchronized String status() {
         StringBuilder b = new StringBuilder();
         b.append("Bridge: ").append(running ? "RUNNING" : "stopped").append('\n');
+        b.append("Service load: ").append(load()).append('\n');
         EvdevDevice t = target;
         b.append("Built-in controls: ").append(t == null ? "not found" : t.name + " [" + t.id() + "]").append('\n');
         b.append("Cursor mode: ").append(pcModeOn ? "ON" : "off").append('\n');
@@ -1012,6 +1013,42 @@ final class Bridge {
         }
         builtInHow = "";
         return null;
+    }
+
+    // ---------------------------------------------------------------- service load (for heat questions)
+
+    private long loadLastCpu = -1, loadLastAt;
+
+    /** How much processor time DockPad's service uses: since the last check and since it started. */
+    private synchronized String load() {
+        try {
+            String stat = new String(java.nio.file.Files.readAllBytes(new File("/proc/self/stat").toPath()));
+            String[] f = stat.substring(stat.lastIndexOf(')') + 2).split(" ");
+            long cpu = Long.parseLong(f[11]) + Long.parseLong(f[12]); // utime + stime, in 1/100 s
+            long startTicks = Long.parseLong(f[19]);
+            double uptime = Double.parseDouble(new String(java.nio.file.Files.readAllBytes(
+                    new File("/proc/uptime").toPath())).split(" ")[0]);
+            double alive = Math.max(1, uptime - startTicks / 100.0);
+            long now = System.currentTimeMillis();
+            String recent = "";
+            if (loadLastCpu >= 0 && now - loadLastAt > 1000) {
+                recent = String.format(java.util.Locale.US, "%.1f%% since the last Diagnostics, ",
+                        (cpu - loadLastCpu) * 1000.0 / (now - loadLastAt));
+            }
+            loadLastCpu = cpu;
+            loadLastAt = now;
+            int threads = 0;
+            for (String line : new String(java.nio.file.Files.readAllBytes(new File("/proc/self/status").toPath())).split("\n")) {
+                if (line.startsWith("Threads:")) threads = Integer.parseInt(line.substring(8).trim());
+            }
+            String copies = Actions.exec("sh", "-c", "pgrep -f '[c]om.adonzin.dockpad.service.ShellMain' | wc -l").trim();
+            return recent + String.format(java.util.Locale.US, "%.1f%% of one core on average over %s, %d threads",
+                    cpu / alive, alive >= 3600 ? String.format(java.util.Locale.US, "%.1f h", alive / 3600)
+                            : String.format(java.util.Locale.US, "%.0f min", alive / 60), threads)
+                    + (copies.matches("[0-9]+") && Integer.parseInt(copies) > 1 ? ", WARNING: " + copies + " copies running" : "");
+        } catch (Throwable t) {
+            return "unknown (" + t.getMessage() + ")";
+        }
     }
 
     // ---------------------------------------------------------------- "Check buttons"

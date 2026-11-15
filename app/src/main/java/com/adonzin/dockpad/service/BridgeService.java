@@ -24,7 +24,7 @@ public class BridgeService extends IBridge.Stub {
     @Override
     public void destroy() {
         bridge.stop();
-        System.exit(0);
+        ShellMain.quit(0);
     }
 
     @Override

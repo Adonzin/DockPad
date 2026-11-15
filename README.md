@@ -159,7 +159,7 @@ If DockPad can't turn on, the screen says exactly why and offers the fix for tha
 | The pairing isn't accepted any more | Pair again |
 | The service didn't start | Try again, or pair again |
 
-**Settings → Diagnostics** shows the last start attempt: when it happened, the network state, and each step it reached. Send it along when starting keeps failing.
+**Settings → Diagnostics** shows how much processor time DockPad's service uses (and warns if more than one copy is running; only one is ever allowed now), and the last start attempt: when it happened, the network state, and each step it reached. Send it along when starting keeps failing.
 
 While DockPad is being set up or isn't on, it shows up in recent apps, so you can switch to Settings and back during pairing. Once it's on, it hides from recent apps again.
 

@@ -49,8 +49,44 @@ public final class ShellMain {
             Actions.exec("sh", "-c", "(sleep 1; CLASSPATH=" + apk + " nohup setsid app_process /system/bin "
                     + ShellMain.class.getName() + " " + token + " " + newVersion + ") >/dev/null 2>&1 &");
             Actions.exec("sh", "-c", "(sleep 4; am start -n " + pkg + "/" + pkg + ".MainActivity) >/dev/null 2>&1 &");
-            System.exit(0);
+            quit(0);
         }, "DockPad-update").start();
+    }
+
+    /**
+     * Ends this process for sure: shutdown hooks (which restore deep sleep) get a few seconds, then
+     * it's halted, so a stuck hook can't leave a second DockPad service running in the background.
+     */
+    static void quit(int code) {
+        Thread killer = new Thread(() -> {
+            try {
+                Thread.sleep(3000);
+            } catch (InterruptedException ignored) {
+            }
+            Runtime.getRuntime().halt(code);
+        }, "DockPad-halt");
+        killer.setDaemon(true);
+        killer.start();
+        System.exit(code);
+    }
+
+    /** Only one DockPad service may run: any other copy (left over or stuck) is stopped. */
+    private static void stopOtherCopies() {
+        try {
+            int me = android.os.Process.myPid();
+            String out = Actions.exec("sh", "-c", "pgrep -f '[c]om.adonzin.dockpad.service.ShellMain'");
+            for (String line : out.split("\\s+")) {
+                line = line.trim();
+                if (!line.matches("[0-9]+")) continue;
+                int pid = Integer.parseInt(line);
+                if (pid == me) continue;
+                Log.w("DockPad", "Stopping another DockPad service copy, pid " + pid);
+                android.os.Process.killProcess(pid);
+                Actions.exec("kill", "-9", String.valueOf(pid));
+            }
+        } catch (Throwable t) {
+            Log.w("DockPad", "checking for other copies: " + t);
+        }
     }
 
     public static void main(String[] args) {
@@ -78,6 +114,7 @@ public final class ShellMain {
             }
         }
         serverSocket = server;
+        stopOtherCopies();
         BridgeService svc = new BridgeService();
         Log.i("DockPad", "Standalone service started, version " + version);
         while (true) {
@@ -140,7 +177,7 @@ public final class ShellMain {
                         res.put("r", JSONObject.NULL);
                         reply(s, res);
                         svc.stop();
-                        System.exit(0);
+                        quit(0);
                         return;
                     default: res.put("e", "unknown method " + m);
                 }
