@@ -104,6 +104,11 @@ public final class TargetEncoder implements Mapper.Sink {
     }
 
     @Override
+    public boolean hasRawKey(int evdevCode) {
+        return target.hasKey(evdevCode);
+    }
+
+    @Override
     public synchronized void rawKey(int evdevCode, boolean down) {
         if (target.hasKey(evdevCode)) press(evdevCode, down);
         flush();

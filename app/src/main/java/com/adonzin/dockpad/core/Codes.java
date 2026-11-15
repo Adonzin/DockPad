@@ -190,7 +190,9 @@ public final class Codes {
             case KEY_APPSELECT: return "Recent apps key";
             case KEY_VOLUMEUP: return "Volume up";
             case KEY_VOLUMEDOWN: return "Volume down";
-            default: return String.format("button 0x%x", code);
+            default:
+                if (code >= 0x2c4 && code <= 0x2e7) return "Extra button " + (code - 0x2c0 + 1) + " (back/paddle?)";
+                return String.format("button 0x%x", code);
         }
     }
 

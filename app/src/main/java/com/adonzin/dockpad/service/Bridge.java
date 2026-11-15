@@ -846,6 +846,20 @@ final class Bridge {
                     .append("    exclusive: ").append(s.hideMethod)
                     .append(", events: ").append(s.eventsRead.get()).append('\n');
             if (!s.keysNote.isEmpty()) b.append("    ").append(s.keysNote).append('\n');
+            if (s.mapper != null && !s.builtIn && !s.touchpad) {
+                java.util.List<Integer> lost = s.mapper.lostButtons();
+                if (!lost.isEmpty() || !s.lostPressed.isEmpty()) {
+                    b.append("    buttons with no match on the built-in controls:");
+                    for (int c : lost) b.append(' ').append(String.format("0x%x", c));
+                    if (!s.lostPressed.isEmpty()) {
+                        b.append(" · pressed:");
+                        synchronized (s.lostPressed) {
+                            for (int c : s.lostPressed) b.append(' ').append(Codes.keyName(c));
+                        }
+                    }
+                    b.append('\n');
+                }
+            }
             if (!s.builtIn && !s.touchpad && s.joined) b.append("    ").append(s.latency.summary())
                     .append(s.fastThread ? "" : " · priority not raised").append('\n');
             if (s.lastKey >= 0) b.append("    last button: ").append(Codes.keyName(s.lastKey))
@@ -853,6 +867,22 @@ final class Bridge {
         }
         b.append("Events sent to virtual controller: ").append(written.get()).append('\n');
         if (!lastError.isEmpty()) b.append("Last error: ").append(lastError).append('\n');
+        // Everything else: a controller's extra buttons sometimes arrive on a second, separate device.
+        try {
+            StringBuilder other = new StringBuilder();
+            for (EvdevDevice d : EvdevDevice.parse(run("getevent", "-i"))) {
+                boolean taken;
+                synchronized (this) {
+                    taken = sources.containsKey(d.path);
+                }
+                if (taken || VirtualPad.isOurs(d.name) || (target != null && d.path.equals(target.path))) continue;
+                other.append("   ").append(d.name).append(" (").append(d.path.replace("/dev/input/", ""))
+                        .append(", ").append(d.keys.size()).append(" keys").append(d.isKeyboard() ? ", keyboard" : "")
+                        .append(d.isGamepad() ? ", gamepad" : "").append(")\n");
+            }
+            if (other.length() > 0) b.append("Other input devices:\n").append(other);
+        } catch (Exception ignored) {
+        }
         b.append(dock.describe());
         return b.toString();
     }
@@ -1431,6 +1461,7 @@ final class Bridge {
                                 if (!touchpad && !builtIn) code = applySwap(code);
                                 if (handleKey(code, value)) continue;
                                 if (turboKey(code, value)) continue;
+                                if (value == 1) noticeLostButton(code);
                             }
                             deliver(type, code, value);
                             if (type == Codes.EV_SYN && code == 0 && !builtIn && !touchpad) latency.report(stampUs);
@@ -1449,6 +1480,18 @@ final class Bridge {
         }
 
         /** Sends an event to the game (as player N) or, in PC mode, to the mouse/keyboard. */
+        /** Buttons pressed that can't reach games: told once each, with how to give them a job. */
+        final Set<Integer> lostPressed = java.util.Collections.synchronizedSet(new java.util.LinkedHashSet<>());
+
+        private void noticeLostButton(int code) {
+            Mapper m = mapper;
+            if (builtIn || touchpad || keyboardOpen || pcModeOn || m == null || m.delivers(code)) return;
+            if (!lostPressed.add(code)) return;
+            Log.i(TAG, dev.name + ": " + Codes.keyName(code) + " can't reach games");
+            Actions.toast(dev.name + ": " + Codes.keyName(code) + " has no match on the built-in controls, so "
+                    + "games don't get it. Give it a job in DockPad: Controllers → Change a button, or Shortcuts.");
+        }
+
         private void deliver(int type, int code, int value) {
             if (keyboardOpen) {
                 if (wantGrab) kbMapper.onEvent(type, code, value);

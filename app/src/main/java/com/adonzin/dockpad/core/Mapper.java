@@ -22,6 +22,10 @@ public final class Mapper {
         void key(int androidKeyCode, boolean down);
         /** A key with no standard gamepad meaning (volume, home, vendor keys): passed through as-is. */
         void rawKey(int evdevCode, boolean down);
+        /** Whether a raw key can reach games at all (the target device has it). */
+        default boolean hasRawKey(int evdevCode) {
+            return true;
+        }
         /** Full logical axis state, indexed by LX..HY. */
         void axes(float[] state);
     }
@@ -201,6 +205,19 @@ public final class Mapper {
             changed++;
         }
         return changed;
+    }
+
+    /** Whether pressing this button reaches games (false: it's dropped, the target has no such button). */
+    public synchronized boolean delivers(int code) {
+        if (keyMap.containsKey(code) || STANDARD_KEYS.containsKey(code)) return true;
+        return rawKeys.contains(code) && sink.hasRawKey(code);
+    }
+
+    /** The buttons this controller says it has that can't reach games as they are. */
+    public synchronized java.util.List<Integer> lostButtons() {
+        java.util.List<Integer> out = new java.util.ArrayList<>();
+        for (int c : rawKeys) if (!sink.hasRawKey(c)) out.add(c);
+        return out;
     }
 
     public void onEvent(int type, int code, int value) {
