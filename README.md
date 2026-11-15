@@ -33,6 +33,7 @@ Docked play on a handheld usually means setting up every emulator again for an e
 - Any button or combo, held or pressed, can do:
   - Home, Back, or another button
   - a keyboard key
+  - a **key combination** such as Ctrl + Alt + Delete, Alt + Tab or Alt + F4: pick a ready-made one, or make your own from Ctrl / Alt / Shift / Windows plus a key. The held keys always go down first and come up last, so the combination registers properly.
   - a system action: screenshot, clear recent apps, force close the game, previous app, brightness, media keys, sleep, open an app…
   - a recorded sequence of presses
 - Adjustable hold time per shortcut, and **several hold times on one button** (e.g. tap Select for Select, hold 1 s for Back, hold 3 s for Home). Letting go runs the last one reached, and a small message shows which is ready.
@@ -40,7 +41,7 @@ Docked play on a handheld usually means setting up every emulator again for an e
 
 **Quick menu overlay**
 - Opens over any game with a button combo, and is fully navigable with a controller.
-- Has Home, Back, Cursor mode, an on-screen keyboard, rapid fire, face-button swaps, screenshot, force close, your own commands, live controllers list (with battery and disconnect), and pairing. Disconnect your last controller and the menu closes by itself, since you're back to handheld play (can be turned off).
+- Has Home, Back, Cursor mode, an on-screen keyboard, rapid fire, face-button swaps, screenshot, force close, your own commands (including key combinations and macros, e.g. a "Ctrl + Alt + Delete" item), live controllers list (with battery and disconnect), and pairing. Disconnect your last controller and the menu closes by itself, since you're back to handheld play (can be turned off).
 - You choose which items it shows.
 - **Organise it your way** in its own Quick menu tab: show or hide items, put them in order, move any item or command to another section, rename sections and items (e.g. "Tools" → "Utilities"), give them icons from a built-in library or your own images, and make your own sections.
 - Volume, brightness and media commands keep the menu open, so you can press them again and again.

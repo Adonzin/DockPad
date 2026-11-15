@@ -146,7 +146,7 @@ public final class ShortcutEngine {
                 }
             }
             int[] held = heldOutputs.remove(code);
-            if (held != null) for (int o : held) release(o, null);
+            if (held != null) for (int o : Codes.releaseOrder(held)) release(o, null);
             return true;
         }
     }
@@ -155,7 +155,7 @@ public final class ShortcutEngine {
         if (s.steps.size() == 1) {
             int[] outs = s.steps.get(0);
             heldOutputs.put(key, outs);
-            for (int o : outs) press(o, s);
+            for (int o : Codes.pressOrder(outs)) press(o, s);
         } else {
             playMacro(s);
         }
@@ -168,11 +168,11 @@ public final class ShortcutEngine {
         for (int[] step : steps) {
             final int[] st = step;
             macroTimers.add(scheduler.schedule(() -> {
-                for (int o : st) press(o, s);
+                for (int o : Codes.pressOrder(st)) press(o, s);
             }, t));
             t += STEP_DOWN_MS;
             macroTimers.add(scheduler.schedule(() -> {
-                for (int o : st) release(o, s);
+                for (int o : Codes.releaseOrder(st)) release(o, s);
             }, t));
             t += STEP_GAP_MS;
         }

@@ -566,11 +566,11 @@ final class Bridge {
         for (int[] step : c.steps) {
             final int[] st = step;
             timer.schedule(() -> {
-                for (int o : st) commandOutput(o, true, c.param);
+                for (int o : Codes.pressOrder(st)) commandOutput(o, true, c.param);
             }, t, TimeUnit.MILLISECONDS);
             t += 60;
             timer.schedule(() -> {
-                for (int o : st) commandOutput(o, false, c.param);
+                for (int o : Codes.releaseOrder(st)) commandOutput(o, false, c.param);
             }, t, TimeUnit.MILLISECONDS);
             t += 40;
         }

@@ -210,16 +210,26 @@ final class ShortcutEditor {
      * Category first (controller button / keyboard key / system action), then the item.
      * With multi = true, several buttons or keys can be pressed together.
      */
+    private static final String COMBO_CATEGORY = "Key combination (like Ctrl + Alt + Delete)";
+
     private void pickOutputs(Shortcut s, boolean multi, Codes1 then) {
-        String[] cats = multi ? Codes.CATEGORIES
-                : new String[]{Codes.CATEGORIES[0], Codes.CATEGORIES[1], Codes.CATEGORIES[2], "Do nothing (block)"};
+        // controller button, keyboard key, key combination, system action (+ do nothing)
+        String[] cats = multi
+                ? new String[]{Codes.CATEGORIES[0], Codes.CATEGORIES[1], COMBO_CATEGORY, Codes.CATEGORIES[2]}
+                : new String[]{Codes.CATEGORIES[0], Codes.CATEGORIES[1], COMBO_CATEGORY, Codes.CATEGORIES[2],
+                "Do nothing (block)"};
         new DpDialog(activity)
                 .setTitle("What should it do?")
-                .setItems(cats, (d, cat) -> {
-                    if (cat == 3) {
+                .setItems(cats, (d, pick) -> {
+                    if (pick == 4) {
                         then.onCodes(new int[0]);
                         return;
                     }
+                    if (pick == 2) {
+                        pickKeyCombo(() -> pickOutputs(s, multi, then), then);
+                        return;
+                    }
+                    int cat = pick == 3 ? 2 : pick;
                     String[] labels = Codes.CAT_LABELS[cat];
                     int[] codes = Codes.CAT_CODES[cat];
                     if (cat == 2 || !multi) {
@@ -249,13 +259,75 @@ final class ShortcutEditor {
                                 if (sel.isEmpty()) return;
                                 int[] out = new int[sel.size()];
                                 for (int i = 0; i < out.length; i++) out[i] = sel.get(i);
-                                then.onCodes(out);
+                                then.onCodes(Codes.pressOrder(out));
                             })
                             .setNegativeButton("Back", (d2, w) -> pickOutputs(s, multi, then))
                             .show();
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
+    }
+
+    /** A ready-made key combination, or one built from Ctrl / Alt / Shift / Windows plus a key. */
+    private void pickKeyCombo(Runnable back, Codes1 then) {
+        String[] names = new String[Codes.KEY_COMBOS.length + 1];
+        names[0] = "Make your own…";
+        for (int i = 0; i < Codes.KEY_COMBOS.length; i++) names[i + 1] = (String) Codes.KEY_COMBOS[i][0];
+        new DpDialog(activity)
+                .setTitle("Key combination")
+                .setItems(names, (d, i) -> {
+                    if (i == 0) buildKeyCombo(() -> pickKeyCombo(back, then), then);
+                    else then.onCodes(((int[]) Codes.KEY_COMBOS[i - 1][1]).clone());
+                })
+                .setNegativeButton("Back", (d, w) -> back.run())
+                .show();
+    }
+
+    private void buildKeyCombo(Runnable back, Codes1 then) {
+        String[] modNames = {"Ctrl", "Alt", "Shift", "Windows"};
+        int[] modCodes = {Codes.KB + 29, Codes.KB + 56, Codes.KB + 42, Codes.KB + 125};
+        boolean[] held = new boolean[modNames.length];
+        new DpDialog(activity)
+                .setTitle("Hold which keys?")
+                .setMultiChoiceItems(modNames, held, (d, i, c) -> held[i] = c)
+                .setPositiveButton("Next", (d, w) -> {
+                    List<Integer> mods = new ArrayList<>();
+                    for (int i = 0; i < modNames.length; i++) if (held[i]) mods.add(modCodes[i]);
+                    // then the key pressed with them (the keyboard list, without the modifiers themselves)
+                    String[] labels = Codes.CAT_LABELS[1];
+                    int[] codes = Codes.CAT_CODES[1];
+                    List<String> keyNames = new ArrayList<>();
+                    List<Integer> keyCodes = new ArrayList<>();
+                    if (!mods.isEmpty()) {
+                        keyNames.add("No other key (only " + joinMods(mods) + ")");
+                        keyCodes.add(-1);
+                    }
+                    for (int i = 0; i < codes.length; i++) {
+                        if (Codes.isModifier(codes[i])) continue;
+                        keyNames.add(labels[i]);
+                        keyCodes.add(codes[i]);
+                    }
+                    String title = mods.isEmpty() ? "Which key?" : joinMods(mods) + " + which key?";
+                    new DpDialog(activity)
+                            .setTitle(title)
+                            .setItems(keyNames.toArray(new String[0]), (d2, k) -> {
+                                int key = keyCodes.get(k);
+                                int[] out = new int[mods.size() + (key < 0 ? 0 : 1)];
+                                for (int i = 0; i < mods.size(); i++) out[i] = mods.get(i);
+                                if (key >= 0) out[out.length - 1] = key;
+                                then.onCodes(out);
+                            })
+                            .setNegativeButton("Back", (d2, w2) -> buildKeyCombo(back, then))
+                            .show();
+                })
+                .setNegativeButton("Back", (d, w) -> back.run())
+                .show();
+    }
+
+    private static String joinMods(List<Integer> mods) {
+        StringBuilder b = new StringBuilder();
+        for (int m : mods) b.append(b.length() == 0 ? "" : " + ").append(Codes.outputLabel(m));
+        return b.toString();
     }
 
     interface AppResult {

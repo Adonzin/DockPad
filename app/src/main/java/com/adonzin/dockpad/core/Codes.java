@@ -50,6 +50,55 @@ public final class Codes {
         return c >= KB && c < KB + 0x300;
     }
 
+    /** Ctrl, Shift, Alt and Windows (left and right) on the virtual keyboard. */
+    public static boolean isModifier(int c) {
+        if (!isKeyboardOutput(c)) return false;
+        switch (c - KB) {
+            case 29: case 97: case 42: case 54: case 56: case 100: case 125: case 126: return true;
+            default: return false;
+        }
+    }
+
+    /** The order to press a step's outputs in: modifiers first, so Ctrl + Alt + Delete arrives as a combination. */
+    public static int[] pressOrder(int[] step) {
+        int[] out = new int[step.length];
+        int n = 0;
+        for (int o : step) if (isModifier(o)) out[n++] = o;
+        for (int o : step) if (!isModifier(o)) out[n++] = o;
+        return out;
+    }
+
+    /** The order to let go: the reverse of pressing, so modifiers are released last. */
+    public static int[] releaseOrder(int[] step) {
+        int[] p = pressOrder(step);
+        int[] out = new int[p.length];
+        for (int i = 0; i < p.length; i++) out[i] = p[p.length - 1 - i];
+        return out;
+    }
+
+    /** Ready-made key combinations: label, then the keys (modifiers first). */
+    public static final Object[][] KEY_COMBOS = {
+            {"Ctrl + Alt + Delete", new int[]{KB + 29, KB + 56, KB + 111}},
+            {"Ctrl + Shift + Esc (Task Manager)", new int[]{KB + 29, KB + 42, KB + 1}},
+            {"Alt + Tab (switch windows)", new int[]{KB + 56, KB + 15}},
+            {"Alt + F4 (close window)", new int[]{KB + 56, KB + 62}},
+            {"Alt + Enter (full screen)", new int[]{KB + 56, KB + 28}},
+            {"Ctrl + C (copy)", new int[]{KB + 29, KB + 46}},
+            {"Ctrl + V (paste)", new int[]{KB + 29, KB + 47}},
+            {"Ctrl + X (cut)", new int[]{KB + 29, KB + 45}},
+            {"Ctrl + Z (undo)", new int[]{KB + 29, KB + 44}},
+            {"Ctrl + Y (redo)", new int[]{KB + 29, KB + 21}},
+            {"Ctrl + A (select all)", new int[]{KB + 29, KB + 30}},
+            {"Ctrl + S (save)", new int[]{KB + 29, KB + 31}},
+            {"Ctrl + W (close tab)", new int[]{KB + 29, KB + 17}},
+            {"Ctrl + Tab (next tab)", new int[]{KB + 29, KB + 15}},
+            {"Windows + D (desktop)", new int[]{KB + 125, KB + 32}},
+            {"Windows + E (files)", new int[]{KB + 125, KB + 18}},
+            {"Windows + L (lock)", new int[]{KB + 125, KB + 38}},
+            {"Windows + Tab", new int[]{KB + 125, KB + 15}},
+            {"Shift + Tab", new int[]{KB + 42, KB + 15}},
+    };
+
     public static boolean isAction(int c) {
         return c <= -100;
     }
