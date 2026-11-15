@@ -1051,6 +1051,96 @@ final class Bridge {
         });
         reader.setDaemon(true);
         reader.start();
+        // Raw HID reports too: some controllers send buttons Android doesn't turn into input events
+        // (vendor-specific paddles); those only show up here.
+        StringBuilder hid = new StringBuilder();
+        List<java.util.function.Supplier<String>> hidSummaries = new ArrayList<>();
+        long until = System.currentTimeMillis() + ms;
+        File[] hidraws = new File("/dev").listFiles((dir, n) -> n.startsWith("hidraw"));
+        if (hidraws != null) {
+            java.util.Arrays.sort(hidraws);
+            for (File f : hidraws) {
+                String hname = hidName(f.getName());
+                java.io.FileInputStream in;
+                try {
+                    in = new java.io.FileInputStream(f);
+                } catch (Exception e) {
+                    synchronized (hid) {
+                        hid.append("  ").append(f.getName()).append(" ").append(hname).append(": can't read (")
+                                .append(e.getMessage()).append(")\n");
+                    }
+                    continue;
+                }
+                synchronized (hid) {
+                    hid.append("  ").append(f.getName()).append(" ").append(hname).append(": readable\n");
+                }
+                // Sums it up per byte: which bytes changed and to what. Sticks show many values;
+                // a button shows just a couple (pressed / not pressed).
+                Map<String, byte[]> first = new java.util.TreeMap<>(); // by report id
+                Map<String, java.util.TreeMap<Integer, java.util.TreeSet<Integer>>> changes = new java.util.TreeMap<>();
+                int[] reports = {0};
+                hidSummaries.add(() -> {
+                    synchronized (first) {
+                        StringBuilder sum = new StringBuilder();
+                        sum.append("    ").append(f.getName()).append(": ").append(reports[0]).append(" reports\n");
+                        for (Map.Entry<String, byte[]> e : first.entrySet()) {
+                            StringBuilder hx = new StringBuilder();
+                            for (byte b : e.getValue()) hx.append(String.format("%02x", b));
+                            sum.append("      ").append(e.getKey()).append(", first: ").append(hx).append('\n');
+                            java.util.TreeMap<Integer, java.util.TreeSet<Integer>> ch = changes.get(e.getKey());
+                            if (ch == null) continue;
+                            for (Map.Entry<Integer, java.util.TreeSet<Integer>> c : ch.entrySet()) {
+                                sum.append("        byte ").append(c.getKey()).append(" was ")
+                                        .append(String.format("%02x", e.getValue()[c.getKey()] & 0xff)).append(", became:");
+                                int k = 0;
+                                for (int v : c.getValue()) {
+                                    if (k++ == 16) {
+                                        sum.append(" …many (a stick or trigger)");
+                                        break;
+                                    }
+                                    sum.append(String.format(" %02x", v));
+                                }
+                                sum.append('\n');
+                            }
+                        }
+                        return sum.toString();
+                    }
+                });
+                Thread t = new Thread(() -> {
+                    byte[] buf = new byte[256];
+                    try {
+                        while (System.currentTimeMillis() < until) {
+                            int n = in.read(buf);
+                            if (n <= 0 || System.currentTimeMillis() >= until) break;
+                            synchronized (first) {
+                            reports[0]++;
+                            String id = String.format("id %02x, %d bytes", buf[0], n);
+                            byte[] base = first.get(id);
+                            if (base == null) {
+                                first.put(id, java.util.Arrays.copyOf(buf, n));
+                                continue;
+                            }
+                            java.util.TreeMap<Integer, java.util.TreeSet<Integer>> ch =
+                                    changes.computeIfAbsent(id, k -> new java.util.TreeMap<>());
+                            for (int i = 0; i < Math.min(n, base.length); i++) {
+                                if (buf[i] == base[i]) continue;
+                                java.util.TreeSet<Integer> vals = ch.computeIfAbsent(i, k -> new java.util.TreeSet<>());
+                                if (vals.size() < 17) vals.add(buf[i] & 0xff);
+                            }
+                            }
+                        }
+                    } catch (Exception ignored) {
+                    } finally {
+                        try {
+                            in.close();
+                        } catch (Exception ignored) {
+                        }
+                    }
+                }, "DockPad-hidraw-check");
+                t.setDaemon(true);
+                t.start();
+            }
+        }
         Thread.sleep(ms);
         recording = null;
         p.destroy();
@@ -1058,6 +1148,11 @@ final class Bridge {
 
         out.append("\nEvents from controllers DockPad is using:\n");
         out.append(rec.length() == 0 ? "  (none)\n" : rec.toString());
+        out.append("\nRaw controller data (each different report once):\n");
+        synchronized (hid) {
+            out.append(hid.length() == 0 ? "  (no raw HID devices)\n" : hid.toString());
+            for (java.util.function.Supplier<String> sup : hidSummaries) out.append(sup.get());
+        }
         out.append("\nEvents from every other device:\n");
         String other;
         synchronized (raw) {
@@ -1074,6 +1169,18 @@ final class Bridge {
             }
         }
         return out.toString();
+    }
+
+    /** A hidraw node's device name, from sysfs. */
+    private static String hidName(String node) {
+        try {
+            for (String line : new String(java.nio.file.Files.readAllBytes(
+                    new File("/sys/class/hidraw/" + node + "/device/uevent").toPath())).split("\n")) {
+                if (line.startsWith("HID_NAME=")) return "(" + line.substring(9) + ")";
+            }
+        } catch (Exception ignored) {
+        }
+        return "";
     }
 
     private void recordEvent(String device, int type, int code, int value) {

@@ -1682,7 +1682,8 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         androidx.appcompat.app.AlertDialog waiting = new DpDialog(this).ignoreControllerButtons()
                 .setTitle("Press the buttons to check")
                 .setMessage("For the next 10 seconds, press the buttons you want to check, one at a time, "
-                        + "on any controller. Everything every device reports is recorded.")
+                        + "on any controller, and leave the sticks alone. Everything every device reports is "
+                        + "recorded, including raw controller data.")
                 .setView(wrap)
                 .setCancelable(false)
                 .show();
