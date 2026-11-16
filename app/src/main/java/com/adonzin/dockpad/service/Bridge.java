@@ -885,6 +885,7 @@ final class Bridge {
             if (other.length() > 0) b.append("Other input devices:\n").append(other);
         } catch (Exception ignored) {
         }
+        b.append(windowsOnScreen());
         b.append(dock.describe());
         return b.toString();
     }
@@ -1013,6 +1014,48 @@ final class Bridge {
         }
         builtInHow = "";
         return null;
+    }
+
+    /** Every window currently drawn and where: finds out who owns something stuck on screen. */
+    private String windowsOnScreen() {
+        try {
+            String dump = Actions.exec("dumpsys", "window", "windows");
+            StringBuilder out = new StringBuilder("Windows on screen (top first):\n");
+            String name = null, frame = null;
+            boolean visible = false, surface = false;
+            int n = 0;
+            for (String raw : (dump + "\n  Window #end Window{end}:").split("\n")) {
+                String line = raw.trim();
+                if (line.startsWith("Window #")) {
+                    if (name != null && visible && surface && n < 30) {
+                        out.append("   ").append(name).append(frame == null ? "" : "  " + frame).append('\n');
+                        n++;
+                    }
+                    int a = line.indexOf('{'), z = line.lastIndexOf('}');
+                    name = a >= 0 && z > a ? line.substring(a + 1, z) : line;
+                    String[] parts = name.split(" ", 3); // "hash u0 name"
+                    if (parts.length == 3) name = parts[2];
+                    frame = null;
+                    visible = false;
+                    surface = false;
+                    continue;
+                }
+                if (frame == null) {
+                    int f = line.indexOf(" frame=[");
+                    if (f < 0 && line.startsWith("frame=[")) f = -1 + 0;
+                    int at = line.indexOf("frame=[");
+                    if (at >= 0 && (at == 0 || line.charAt(at - 1) == ' ')) {
+                        int end = line.indexOf(']', line.indexOf(']', at) + 1);
+                        frame = end > at ? line.substring(at + 6, end + 1) : null;
+                    }
+                }
+                if (line.contains("mViewVisibility=0x0")) visible = true;
+                if (line.contains("mHasSurface=true")) surface = true;
+            }
+            return n == 0 ? "" : out.toString();
+        } catch (Throwable t) {
+            return "Windows on screen: unknown (" + t.getMessage() + ")\n";
+        }
     }
 
     // ---------------------------------------------------------------- service load (for heat questions)
