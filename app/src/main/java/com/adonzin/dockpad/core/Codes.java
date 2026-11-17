@@ -169,8 +169,6 @@ public final class Codes {
     public static String keyName(int code) {
         switch (code) {
             case GESTURE_CORNER_SWIPE: return "Corner swipe";
-            case 114: return "Volume down";
-            case 115: return "Volume up";
             case BTN_LEFT: return "Touchpad click";
             case BTN_SOUTH: return "A / Cross (bottom)";
             case BTN_EAST: return "B / Circle (right)";
@@ -206,8 +204,6 @@ public final class Codes {
     public static String shortKeyName(int code) {
         switch (code) {
             case GESTURE_CORNER_SWIPE: return "Corner swipe";
-            case 114: return "Vol −";
-            case 115: return "Vol +";
             case BTN_LEFT: return "Touchpad";
             case BTN_SOUTH: return "A";
             case BTN_EAST: return "B";
