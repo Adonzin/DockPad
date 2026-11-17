@@ -263,6 +263,100 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         ConnectDialog.show(this, false);
     }
 
+    // ---- handheld controls
+
+    /** Ways to open the quick menu (or anything else) from the handheld itself. */
+    void handheldSetup() {
+        if (!prefs.handheldControls()) {
+            new DpDialog(this).setTitle("Handheld controls are off")
+                    .setMessage("Turn on \"Handheld controls\" first (Settings → Controllers).")
+                    .setPositiveButton("Turn on", (d, w) -> {
+                        prefs.handheldControls(true);
+                        pushSettings();
+                        buildSettings();
+                        handheldSetup();
+                    })
+                    .setNegativeButton("Cancel", null).show();
+            return;
+        }
+        String corner = prefs.handheldCorner();
+        new DpDialog(this).setTitle("Open the quick menu from the handheld")
+                .setItems(new String[]{
+                        "A button combo or hold on the handheld",
+                        "A swipe in from a corner of the screen",
+                        corner.isEmpty() ? "(No corner set yet)" : "Choose a different corner",
+                        "Other handheld shortcuts (Shortcuts page)"}, (d, which) -> {
+                    if (which == 0) {
+                        new DpDialog(this).setTitle("Use the handheld's own buttons")
+                                .setMessage("Next, press the combo on the handheld (not on a controller): for example "
+                                        + "hold Select + Start, L3 + R3, or Volume up + Volume down. Then you can set it "
+                                        + "to need a hold, so a quick press still does what the game expects.")
+                                .setPositiveButton("Record", (d2, w) -> editor.addNewWithAction(com.adonzin.dockpad.core.Codes.ACTION_QUICK_MENU))
+                                .setNegativeButton("Cancel", null).show();
+                    } else if (which == 1) {
+                        learnCorner(true);
+                    } else if (which == 2) {
+                        learnCorner(false);
+                    } else {
+                        tabs.selectTab(tabs.getTabAt(2)); // Shortcuts
+                    }
+                })
+                .setNegativeButton("Close", null).show();
+    }
+
+    private void learnCorner(boolean addQuickMenu) {
+        IBridge b = bridge;
+        if (b == null || !isRunning()) {
+            Toast.makeText(this, "Turn DockPad on first", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        androidx.appcompat.app.AlertDialog waiting = new DpDialog(this)
+                .setTitle("Touch and hold the corner")
+                .setMessage("Put a finger on the corner of the screen you want to swipe from, and hold it still "
+                        + "for about a second. Pick one the games you play don't use, and away from Android's own "
+                        + "swipes (the bottom edge and the sides).")
+                .setNegativeButton("Cancel", null)
+                .show();
+        bg.execute(() -> {
+            String r;
+            try {
+                r = b.learnCorner(15000);
+            } catch (Exception e) {
+                r = "";
+            }
+            String got = r;
+            ui.post(() -> {
+                if (!waiting.isShowing()) return;
+                waiting.dismiss();
+                if (got.isEmpty()) {
+                    Toast.makeText(this, "No touch held: nothing changed", Toast.LENGTH_LONG).show();
+                    return;
+                }
+                prefs.handheldCorner(got);
+                pushSettings();
+                if (addQuickMenu) {
+                    List<Shortcut> all = prefs.shortcuts();
+                    boolean have = false;
+                    for (Shortcut s : all) {
+                        if (Shortcut.HANDHELD.equals(s.device) && s.trigger.length == 1
+                                && s.trigger[0] == com.adonzin.dockpad.core.Codes.GESTURE_CORNER_SWIPE) have = true;
+                    }
+                    if (!have) {
+                        Shortcut s = new Shortcut();
+                        s.device = Shortcut.HANDHELD;
+                        s.trigger = new int[]{com.adonzin.dockpad.core.Codes.GESTURE_CORNER_SWIPE};
+                        s.steps.add(new int[]{com.adonzin.dockpad.core.Codes.ACTION_QUICK_MENU});
+                        all.add(s);
+                        prefs.shortcuts(all);
+                        shortcutsChanged();
+                    }
+                }
+                Toast.makeText(this, "Corner set. Swipe in from it" + (addQuickMenu ? " to open the quick menu." : "."),
+                        Toast.LENGTH_LONG).show();
+            });
+        });
+    }
+
     // ---- recent apps
 
     private Boolean inRecents;
@@ -1108,6 +1202,25 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         addSwitch(controllerSettings, "Close the quick menu when the last controller goes",
                 "If you disconnect your last external controller (from the quick menu or by switching it off) while the quick menu is open, it closes by itself, since you're back to playing on the handheld.",
                 prefs.closeMenuWithoutControllers(), prefs::closeMenuWithoutControllers);
+        addSwitch(controllerSettings, "Handheld controls",
+                "Shortcuts on the handheld itself, for when no controller is in hand: its own buttons, the volume "
+                        + "buttons, or a swipe in from a corner of the screen can open the quick menu or do anything a "
+                        + "shortcut can. The handheld's buttons still reach the game too, so use combos or holds the "
+                        + "game doesn't need. Set them up below once this is on.",
+                prefs.handheldControls(), v -> {
+                    prefs.handheldControls(v);
+                    pushSettings();
+                    if (v) handheldSetup();
+                });
+        View handheldRow = getLayoutInflater().inflate(R.layout.item_row, controllerSettings, false);
+        ((ImageView) handheldRow.findViewById(R.id.row_icon)).setImageResource(R.drawable.ic_gamepad);
+        ((TextView) handheldRow.findViewById(R.id.row_title)).setText("Open the quick menu from the handheld");
+        ((TextView) handheldRow.findViewById(R.id.row_subtitle)).setText(
+                "With handheld controls on: a button combo or hold on the handheld, or a corner swipe.");
+        handheldRow.setFocusable(true);
+        handheldRow.setClickable(true);
+        handheldRow.setOnClickListener(v -> handheldSetup());
+        controllerSettings.addView(handheldRow);
         addSwitch(appSettings, "Start automatically after a restart",
                 "After pairing, DockPad turns itself back on when the device restarts (needs Wi-Fi).",
                 prefs.autoStart(), prefs::autoStart);

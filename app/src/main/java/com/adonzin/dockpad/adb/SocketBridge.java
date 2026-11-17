@@ -201,6 +201,17 @@ public final class SocketBridge implements IBridge {
     }
 
     @Override
+    public void setHandheld(boolean on, String corner) throws RemoteException {
+        rc("setHandheld", on, corner);
+    }
+
+    @Override
+    public String learnCorner(int timeoutMs) throws RemoteException {
+        Object r = rcTimeout("learnCorner", timeoutMs + 5000, timeoutMs);
+        return r == null ? "" : r.toString();
+    }
+
+    @Override
     public void setDockReady(boolean on) throws RemoteException {
         rc("setDockReady", on);
     }

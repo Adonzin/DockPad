@@ -409,7 +409,13 @@ final class ShortcutEditor {
         final String[] device = {recordedDevice};
         Runnable refresh = () -> {
             triggerText.setText(s.triggerLabel());
-            if (device[0] != null) {
+            boolean onHandheld = Shortcut.HANDHELD.equals(device[0]);
+            scopeAny.setVisibility(onHandheld ? View.GONE : View.VISIBLE);
+            if (onHandheld) {
+                scopeDevice.setText("The handheld itself (handheld controls)");
+                scopeDevice.setEnabled(true);
+                scopeDevice.setChecked(true);
+            } else if (device[0] != null) {
                 scopeDevice.setText("Only " + device[0]);
                 scopeDevice.setEnabled(true);
             } else {
@@ -430,6 +436,8 @@ final class ShortcutEditor {
                     + "last one reached. ");
             else if (s.steps.size() == 1) h.append("The action stays pressed for as long as you hold the button. ");
             if (s.steps.size() > 1) h.append("Macro steps are pressed one after another. ");
+            if (onHandheld) h.append("On the handheld, the buttons still reach the game as well, so pick ones "
+                    + "the game doesn't need, or a hold. ");
             hint.setText(h.toString().trim());
         };
 

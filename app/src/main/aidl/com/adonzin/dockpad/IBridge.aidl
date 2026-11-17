@@ -31,4 +31,6 @@ interface IBridge {
     void setDockReady(boolean on) = 27;
     String settingsSnapshot() = 28;
     void setScreenOffAgain(boolean on) = 29;
+    void setHandheld(boolean on, String corner) = 30;
+    String learnCorner(int timeoutMs) = 31;
 }

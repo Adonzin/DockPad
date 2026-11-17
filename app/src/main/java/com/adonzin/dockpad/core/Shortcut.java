@@ -11,6 +11,8 @@ import java.util.List;
  */
 public final class Shortcut {
     public static final String ANY = "*";
+    /** Recorded on the handheld itself (its own buttons, volume buttons, screen): see handheld controls. */
+    public static final String HANDHELD = "Handheld";
 
     public String device = ANY;       // controller name, or ANY
     public int[] trigger = new int[0]; // raw evdev key codes, in the order they are pressed

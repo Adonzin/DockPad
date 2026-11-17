@@ -153,6 +153,20 @@ public class BridgeService extends IBridge.Stub {
     }
 
     @Override
+    public void setHandheld(boolean on, String corner) {
+        bridge.setHandheld(on, corner);
+    }
+
+    @Override
+    public String learnCorner(int timeoutMs) {
+        try {
+            return bridge.learnCorner(timeoutMs);
+        } catch (InterruptedException e) {
+            return "";
+        }
+    }
+
+    @Override
     public void setDockReady(boolean on) {
         bridge.dock.setEnabled(on);
     }

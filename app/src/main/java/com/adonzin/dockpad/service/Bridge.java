@@ -188,7 +188,9 @@ final class Bridge {
                 matchButtons(v, target);
                 pad = v;
             }
+            final boolean toBuiltIn = player == 1;
             TargetEncoder enc = new TargetEncoder(target, events -> {
+                if (toBuiltIn) handheld.wroteToBuiltIn(events);
                 pad.write(events);
                 written.addAndGet(events.length / 3);
             });
@@ -312,6 +314,7 @@ final class Bridge {
 
     void setShortcuts(String spec) {
         shortcuts = Shortcut.decodeAll(spec);
+        handheld.rebuild();
         List<Source> list;
         synchronized (this) {
             list = new ArrayList<>(sources.values());
@@ -348,6 +351,57 @@ final class Bridge {
             capturing = false;
             return captured == null ? "" : captured;
         }
+    }
+
+    // ---------------------------------------------------------------- handheld controls
+
+    final HandheldWatcher handheld = new HandheldWatcher(new HandheldWatcher.Host() {
+        @Override
+        public boolean capture(String device, int code, boolean down) {
+            return captureEvent(device, code, down);
+        }
+
+        @Override
+        public void output(int code, boolean down, Shortcut from) {
+            if (Codes.isAction(code)) {
+                if (down) Actions.run(code, from == null ? "" : from.param, null);
+                return;
+            }
+            if (Codes.isKeyboardOutput(code)) {
+                extras.key(code - Codes.KB, down);
+                return;
+            }
+            Slot sl;
+            synchronized (Bridge.this) {
+                sl = slots.isEmpty() ? null : slots.get(0);
+            }
+            if (sl != null) sl.encoder.rawKey(code, down);
+        }
+
+        @Override
+        public ScheduledExecutorService timer() {
+            return timer;
+        }
+
+        @Override
+        public List<Shortcut> shortcuts() {
+            return shortcuts;
+        }
+
+        @Override
+        public boolean builtInTakenOver() {
+            return takeOverBuiltIn();
+        }
+    });
+
+    void setHandheld(boolean on, String corner) {
+        handheld.configure(on, corner);
+        lastDevList = ""; // look again now
+        lookForControllersNow();
+    }
+
+    String learnCorner(int ms) throws InterruptedException {
+        return handheld.learnCorner(ms);
     }
 
     private boolean captureEvent(String device, int code, boolean down) {
@@ -397,6 +451,7 @@ final class Bridge {
     }
 
     synchronized void stop() {
+        handheld.stopAll();
         running = false;
         if (scanner != null) scanner.interrupt();
         pcModeOn = false;
@@ -885,6 +940,7 @@ final class Bridge {
             if (other.length() > 0) b.append("Other input devices:\n").append(other);
         } catch (Exception ignored) {
         }
+        b.append(handheld.describe());
         b.append(windowsOnScreen());
         b.append(dock.describe());
         return b.toString();
@@ -1354,6 +1410,7 @@ final class Bridge {
 
         synchronized (this) {
             if (!running) return;
+            handheld.update(devs, newTarget);
             boolean targetChanged = newTarget == null || target == null || !newTarget.path.equals(target.path);
             if (targetChanged || !padsAlive()) {
                 teardown();

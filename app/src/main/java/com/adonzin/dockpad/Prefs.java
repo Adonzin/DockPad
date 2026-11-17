@@ -109,6 +109,11 @@ final class Prefs {
     void paired(boolean v) { p.edit().putBoolean("paired", v).apply(); }
 
     /** Close the quick menu by itself when the last external controller goes (back to handheld play). */
+    boolean handheldControls() { return p.getBoolean("handheldControls", false); }
+    void handheldControls(boolean v) { p.edit().putBoolean("handheldControls", v).apply(); }
+    String handheldCorner() { return p.getString("handheldCorner", ""); }
+    void handheldCorner(String v) { p.edit().putString("handheldCorner", v).apply(); }
+
     boolean closeMenuWithoutControllers() { return p.getBoolean("closeMenuWithoutControllers", true); }
     void closeMenuWithoutControllers(boolean v) { p.edit().putBoolean("closeMenuWithoutControllers", v).apply(); }
     boolean autoUpdateCheck() { return p.getBoolean("autoUpdateCheck", true); }
@@ -157,6 +162,7 @@ final class Prefs {
         try {
             b.setDockReady(stayReadyDocked());
             b.setScreenOffAgain(screenOffAgain());
+            b.setHandheld(handheldControls(), handheldCorner());
         } catch (Exception ignored) { // an older background service: it gets this after updating
         }
         if (b.isRunning() || (startIfWanted && bridgeWanted())) b.start(true);
