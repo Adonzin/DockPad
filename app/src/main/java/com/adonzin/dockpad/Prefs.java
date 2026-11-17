@@ -111,6 +111,14 @@ final class Prefs {
     /** Close the quick menu by itself when the last external controller goes (back to handheld play). */
     boolean handheldControls() { return p.getBoolean("handheldControls", false); }
     void handheldControls(boolean v) { p.edit().putBoolean("handheldControls", v).apply(); }
+    String getGesturesSpec() { return p.getString("gestures", ""); }
+    java.util.List<com.adonzin.dockpad.core.Gestures.Gesture> gestures() {
+        return com.adonzin.dockpad.core.Gestures.decodeAll(getGesturesSpec());
+    }
+    void gestures(java.util.List<com.adonzin.dockpad.core.Gestures.Gesture> all) {
+        p.edit().putString("gestures", com.adonzin.dockpad.core.Gestures.encodeAll(all)).apply();
+        com.adonzin.dockpad.core.Gestures.publishNames(all);
+    }
     String handheldCorner() { return p.getString("handheldCorner", ""); }
     void handheldCorner(String v) { p.edit().putString("handheldCorner", v).apply(); }
 
@@ -162,6 +170,7 @@ final class Prefs {
         try {
             b.setDockReady(stayReadyDocked());
             b.setScreenOffAgain(screenOffAgain());
+            b.setGestures(getGesturesSpec());
             b.setHandheld(handheldControls(), handheldCorner());
         } catch (Exception ignored) { // an older background service: it gets this after updating
         }

@@ -47,6 +47,7 @@ public final class ControllerLayout {
 
     /** A button's name on this controller: its extra-button name if it has one, else the usual short name. */
     public static String buttonName(String device, int code) {
+        if (Gestures.isGesture(code)) return Gestures.name(code);
         String n = extraName(device, code);
         return n != null ? n : Codes.shortKeyName(code);
     }

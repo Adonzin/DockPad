@@ -33,4 +33,6 @@ interface IBridge {
     void setScreenOffAgain(boolean on) = 29;
     void setHandheld(boolean on, String corner) = 30;
     String learnCorner(int timeoutMs) = 31;
+    void setGestures(String spec) = 32;
+    String recordGesture(int timeoutMs, int fingers) = 33;
 }

@@ -28,7 +28,7 @@ final class Backup {
     static final String[] SECTION_LABELS = {"Shortcuts & macros", "Quick menu (commands, items, look and layout)",
             "Controllers (names, button fixes, rapid fire, fine-tuning)", "Settings"};
     private static final String[][] SECTION_KEYS = {
-            {"shortcuts"},
+            {"shortcuts", "gestures"},
             {"menuCommands", "menuHidden", "menuTheme", "menuOrder", "menuCustom"},
             {"layouts", "controllerNames"},
             {"multiplayer", "joinByPress", "touchpadAsButton", "rumble", "includeBuiltIn", "autoStart", "turnOffWD", "stayReadyDocked", "screenOffAgain",

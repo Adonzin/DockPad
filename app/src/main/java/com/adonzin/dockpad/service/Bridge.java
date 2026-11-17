@@ -404,6 +404,14 @@ final class Bridge {
         return handheld.learnCorner(ms);
     }
 
+    void setGestures(String spec) {
+        handheld.setGestures(spec);
+    }
+
+    String recordGesture(int ms, int fingers) throws InterruptedException {
+        return handheld.recordGesture(ms, fingers);
+    }
+
     private boolean captureEvent(String device, int code, boolean down) {
         if (!capturing) return false;
         synchronized (captureLock) {

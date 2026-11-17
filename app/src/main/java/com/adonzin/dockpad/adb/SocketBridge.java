@@ -206,6 +206,17 @@ public final class SocketBridge implements IBridge {
     }
 
     @Override
+    public void setGestures(String spec) throws RemoteException {
+        rc("setGestures", spec);
+    }
+
+    @Override
+    public String recordGesture(int timeoutMs, int fingers) throws RemoteException {
+        Object r = rcTimeout("recordGesture", timeoutMs + 5000, timeoutMs, fingers);
+        return r == null ? "" : r.toString();
+    }
+
+    @Override
     public String learnCorner(int timeoutMs) throws RemoteException {
         Object r = rcTimeout("learnCorner", timeoutMs + 5000, timeoutMs);
         return r == null ? "" : r.toString();

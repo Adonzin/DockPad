@@ -158,6 +158,20 @@ public class BridgeService extends IBridge.Stub {
     }
 
     @Override
+    public void setGestures(String spec) {
+        bridge.setGestures(spec);
+    }
+
+    @Override
+    public String recordGesture(int timeoutMs, int fingers) {
+        try {
+            return bridge.recordGesture(timeoutMs, fingers);
+        } catch (InterruptedException e) {
+            return "";
+        }
+    }
+
+    @Override
     public String learnCorner(int timeoutMs) {
         try {
             return bridge.learnCorner(timeoutMs);

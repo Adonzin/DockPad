@@ -170,6 +170,8 @@ public final class ShellMain {
                     case "setScreenOffAgain": svc.setScreenOffAgain(a.optBoolean(0)); break;
                     case "setHandheld": svc.setHandheld(a.optBoolean(0), a.optString(1, "")); break;
                     case "learnCorner": r = svc.learnCorner(a.optInt(0, 15000)); break;
+                    case "setGestures": svc.setGestures(a.optString(0, "")); break;
+                    case "recordGesture": r = svc.recordGesture(a.optInt(0, 15000), a.optInt(1, 2)); break;
                     case "setJoinByPress": svc.setJoinByPress(a.optBoolean(0)); break;
                     case "disconnectController": r = svc.disconnectController(a.optString(0)); break;
                     case "recordAllInput": r = svc.recordAllInput(a.optInt(0, 10000)); break;

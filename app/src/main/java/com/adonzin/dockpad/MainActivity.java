@@ -134,6 +134,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         editor = new ShortcutEditor(this, this);
         controllerDialog = new ControllerDialog(this, this);
         ControllerLayout.publishNames(prefs.layouts());
+        com.adonzin.dockpad.core.Gestures.publishNames(prefs.gestures());
 
         setupCard = findViewById(R.id.setup_card);
         setupSteps = findViewById(R.id.setup_steps);
@@ -285,6 +286,8 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
                         "A button combo or hold on the handheld",
                         "A swipe in from a corner of the screen",
                         corner.isEmpty() ? "(No corner set yet)" : "Choose a different corner",
+                        "Draw a new gesture (two fingers)",
+                        "Your drawn gestures (" + prefs.gestures().size() + ")",
                         "Other handheld shortcuts (Shortcuts page)"}, (d, which) -> {
                     if (which == 0) {
                         new DpDialog(this).setTitle("Use the handheld's own buttons")
@@ -297,10 +300,205 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
                         learnCorner(true);
                     } else if (which == 2) {
                         learnCorner(false);
+                    } else if (which == 3) {
+                        drawGesture(null);
+                    } else if (which == 4) {
+                        manageGestures();
                     } else {
                         tabs.selectTab(tabs.getTabAt(2)); // Shortcuts
                     }
                 })
+                .setNegativeButton("Close", null).show();
+    }
+
+    // ---- drawn gestures
+
+    private static final int GESTURE_SAMPLES = 3;
+
+    /** Teaches DockPad a shape: drawn a few times, then named and given a job. redo: replace its samples. */
+    private void drawGesture(com.adonzin.dockpad.core.Gestures.Gesture redo) {
+        if (bridge == null || !isRunning()) {
+            Toast.makeText(this, "Turn DockPad on first", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (redo == null && com.adonzin.dockpad.core.Gestures.freeId(prefs.gestures()) < 0) {
+            Toast.makeText(this, "That's the most gestures DockPad keeps: delete one first", Toast.LENGTH_LONG).show();
+            return;
+        }
+        DpDialog d = new DpDialog(this);
+        d.setTitle(redo == null ? "Draw a new gesture" : "Draw \"" + redo.name + "\" again")
+                .setMessage("Draw a shape with two fingers together, anywhere on the screen: a spiral, a circle, a Z, "
+                        + "a check mark… You'll draw it " + GESTURE_SAMPLES + " times so DockPad learns it. Draw it the "
+                        + "same way each time (same direction); its size and place don't matter.\n\nGames still see "
+                        + "the touches, so use it where two fingers do no harm.")
+                .setPositiveButton("Start", (x, w) -> drawSample(redo, redo == null ? 2 : redo.fingers, new java.util.ArrayList<>()))
+                .setNegativeButton("Cancel", null);
+        if (redo == null) d.setNeutralButton("Use one finger", (x, w) -> drawSample(null, 1, new java.util.ArrayList<>()));
+        d.show();
+    }
+
+    private void drawSample(com.adonzin.dockpad.core.Gestures.Gesture redo, int fingers, java.util.List<float[]> samples) {
+        IBridge b = bridge;
+        if (b == null) return;
+        androidx.appcompat.app.AlertDialog waiting = new DpDialog(this)
+                .setTitle("Draw it (" + (samples.size() + 1) + " of " + GESTURE_SAMPLES + ")")
+                .setMessage((fingers == 2 ? "With two fingers together. Lift both to finish." : "With one finger. Lift it to finish.")
+                        + " Anywhere on the screen is fine. (Back or B cancels.)")
+                .setCancelable(true)
+                .show();
+        waiting.setCanceledOnTouchOutside(false);
+        bg.execute(() -> {
+            String r;
+            try {
+                r = b.recordGesture(20000, fingers);
+            } catch (Exception e) {
+                r = "";
+            }
+            float[] p = r.isEmpty() ? null : com.adonzin.dockpad.core.Gestures.decodePoints(r);
+            ui.post(() -> {
+                if (!waiting.isShowing()) return;
+                waiting.dismiss();
+                if (p == null) {
+                    new DpDialog(this).setTitle("Nothing drawn")
+                            .setMessage("DockPad didn't see a drawing with " + (fingers == 2 ? "two fingers" : "one finger")
+                                    + ". Draw a bit bigger, and keep the fingers down until the shape is done.")
+                            .setPositiveButton("Try again", (x, w) -> drawSample(redo, fingers, samples))
+                            .setNegativeButton("Cancel", null).show();
+                    return;
+                }
+                samples.add(p);
+                if (samples.size() < GESTURE_SAMPLES) {
+                    drawSample(redo, fingers, samples);
+                    return;
+                }
+                gestureDrawn(redo, fingers, samples);
+            });
+        });
+    }
+
+    private void gestureDrawn(com.adonzin.dockpad.core.Gestures.Gesture redo, int fingers, java.util.List<float[]> samples) {
+        float spread = 0;
+        for (int i = 0; i < samples.size(); i++) {
+            for (int j = i + 1; j < samples.size(); j++) {
+                spread = Math.max(spread, com.adonzin.dockpad.core.Gestures.distance(samples.get(i), samples.get(j)));
+            }
+        }
+        if (spread > com.adonzin.dockpad.core.Gestures.MATCH * 2) {
+            new DpDialog(this).setTitle("Those looked different")
+                    .setMessage("The drawings didn't match each other closely enough to learn. Draw it again, the same "
+                            + "shape in the same direction each time.")
+                    .setPositiveButton("Try again", (x, w) -> drawSample(redo, fingers, new java.util.ArrayList<>()))
+                    .setNegativeButton("Cancel", null).show();
+            return;
+        }
+        List<com.adonzin.dockpad.core.Gestures.Gesture> all = prefs.gestures();
+        for (com.adonzin.dockpad.core.Gestures.Gesture g : all) {
+            if (g.fingers != fingers || (redo != null && g.id == redo.id)) continue;
+            float d = 0;
+            for (float[] s : samples) d += g.distance(s);
+            if (d / samples.size() < com.adonzin.dockpad.core.Gestures.MATCH * 1.2f) {
+                new DpDialog(this).setTitle("Too much like \"" + g.name + "\"")
+                        .setMessage("DockPad couldn't tell this apart from \"" + g.name + "\". Try a more different shape.")
+                        .setPositiveButton("Draw another", (x, w) -> drawSample(redo, fingers, new java.util.ArrayList<>()))
+                        .setNegativeButton("Cancel", null).show();
+                return;
+            }
+        }
+        if (redo != null) {
+            for (com.adonzin.dockpad.core.Gestures.Gesture g : all) {
+                if (g.id != redo.id) continue;
+                g.samples.clear();
+                g.samples.addAll(samples);
+            }
+            prefs.gestures(all);
+            pushSettings();
+            Toast.makeText(this, "\"" + redo.name + "\" learned again", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        com.adonzin.dockpad.core.Gestures.Gesture g = new com.adonzin.dockpad.core.Gestures.Gesture();
+        g.id = com.adonzin.dockpad.core.Gestures.freeId(all);
+        g.fingers = fingers;
+        g.samples.addAll(samples);
+        nameGesture("Gesture " + (g.id + 1), name -> {
+            g.name = name;
+            List<com.adonzin.dockpad.core.Gestures.Gesture> now = prefs.gestures();
+            now.add(g);
+            prefs.gestures(now);
+            pushSettings();
+            new DpDialog(this).setTitle("\"" + name + "\" learned")
+                    .setMessage("Now choose what it does: open the quick menu, a key combination, an action, a macro…")
+                    .setPositiveButton("Choose", (x, w) -> editor.editForButton(Shortcut.HANDHELD, g.code()))
+                    .setNegativeButton("Later", null).show();
+        });
+    }
+
+    private void nameGesture(String current, java.util.function.Consumer<String> then) {
+        android.widget.EditText e = new android.widget.EditText(this);
+        e.setText(current);
+        e.setSelectAllOnFocus(true);
+        e.setSingleLine(true);
+        android.widget.FrameLayout fb = new android.widget.FrameLayout(this);
+        int p = Math.round(24 * getResources().getDisplayMetrics().density);
+        fb.setPadding(p, p / 3, p, 0);
+        fb.addView(e);
+        new DpDialog(this).setTitle("Name it")
+                .setMessage("For example \"Spiral\" or \"Circle\".")
+                .setView(fb)
+                .setPositiveButton("Save", (d, w) -> {
+                    String n = e.getText().toString().replaceAll("[\\t\\n|]", " ").trim();
+                    if (n.length() > 30) n = n.substring(0, 30);
+                    then.accept(n.isEmpty() ? current : n);
+                })
+                .setNegativeButton("Cancel", null).show();
+        e.requestFocus();
+    }
+
+    private void manageGestures() {
+        List<com.adonzin.dockpad.core.Gestures.Gesture> all = prefs.gestures();
+        if (all.isEmpty()) {
+            new DpDialog(this).setTitle("No drawn gestures yet")
+                    .setPositiveButton("Draw one", (d, w) -> drawGesture(null))
+                    .setNegativeButton("Close", null).show();
+            return;
+        }
+        String[] rows = new String[all.size()];
+        for (int i = 0; i < rows.length; i++) {
+            com.adonzin.dockpad.core.Gestures.Gesture g = all.get(i);
+            String job = buttonJob(Shortcut.HANDHELD, g.code());
+            rows[i] = g.name + (g.fingers == 1 ? " (one finger)" : "") + "  →  " + (job == null ? "nothing yet" : job);
+        }
+        new DpDialog(this).setTitle("Your drawn gestures")
+                .setItems(rows, (d, i) -> {
+                    com.adonzin.dockpad.core.Gestures.Gesture g = all.get(i);
+                    new DpDialog(this).setTitle(g.name)
+                            .setItems(new String[]{"Choose what it does", "Rename", "Draw it again", "Delete"}, (d2, w) -> {
+                                if (w == 0) {
+                                    editor.editForButton(Shortcut.HANDHELD, g.code());
+                                } else if (w == 1) {
+                                    nameGesture(g.name, n -> {
+                                        List<com.adonzin.dockpad.core.Gestures.Gesture> now = prefs.gestures();
+                                        for (com.adonzin.dockpad.core.Gestures.Gesture x : now) if (x.id == g.id) x.name = n;
+                                        prefs.gestures(now);
+                                        pushSettings();
+                                        renderShortcuts();
+                                    });
+                                } else if (w == 2) {
+                                    drawGesture(g);
+                                } else {
+                                    List<com.adonzin.dockpad.core.Gestures.Gesture> now = prefs.gestures();
+                                    now.removeIf(x -> x.id == g.id);
+                                    prefs.gestures(now);
+                                    // and the shortcuts it triggered
+                                    List<Shortcut> sc = prefs.shortcuts();
+                                    sc.removeIf(s -> Shortcut.HANDHELD.equals(s.device) && s.trigger.length == 1
+                                            && s.trigger[0] == g.code());
+                                    prefs.shortcuts(sc);
+                                    shortcutsChanged();
+                                }
+                            })
+                            .setNegativeButton("Back", (d2, w) -> manageGestures()).show();
+                })
+                .setPositiveButton("Draw a new one", (d, w) -> drawGesture(null))
                 .setNegativeButton("Close", null).show();
     }
 

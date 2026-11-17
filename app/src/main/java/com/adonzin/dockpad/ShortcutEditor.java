@@ -12,6 +12,7 @@ import android.widget.TextView;
 import androidx.appcompat.app.AlertDialog;
 
 import com.adonzin.dockpad.core.Codes;
+import com.adonzin.dockpad.core.Gestures;
 import com.adonzin.dockpad.core.Shortcut;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
@@ -410,6 +411,14 @@ final class ShortcutEditor {
         Runnable refresh = () -> {
             triggerText.setText(s.triggerLabel());
             boolean onHandheld = Shortcut.HANDHELD.equals(device[0]);
+            // a drawn gesture or corner swipe is over in a moment: it can't be held
+            boolean momentary = s.trigger.length == 1 && (Gestures.isGesture(s.trigger[0])
+                    || s.trigger[0] == Codes.GESTURE_CORNER_SWIPE);
+            whenHold.setVisibility(momentary ? View.GONE : View.VISIBLE);
+            if (momentary && s.hold) {
+                s.hold = false;
+                whenPress.setChecked(true);
+            }
             scopeAny.setVisibility(onHandheld ? View.GONE : View.VISIBLE);
             if (onHandheld) {
                 scopeDevice.setText("The handheld itself (handheld controls)");

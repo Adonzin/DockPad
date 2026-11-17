@@ -5,6 +5,7 @@ import android.util.Log;
 
 import com.adonzin.dockpad.core.Codes;
 import com.adonzin.dockpad.core.EvdevDevice;
+import com.adonzin.dockpad.core.Gestures;
 import com.adonzin.dockpad.core.Shortcut;
 import com.adonzin.dockpad.core.ShortcutEngine;
 
@@ -50,6 +51,64 @@ final class HandheldWatcher {
 
     // presses DockPad wrote into the built-in controls (for player 1): not the handheld's own
     private final Map<Long, Long> injected = new HashMap<>(); // (code<<1|down) -> expiry
+
+    // drawn gestures
+    private volatile List<Gestures.Gesture> gestures = new ArrayList<>();
+    private final Object drawLock = new Object();
+    private volatile int drawFingers; // > 0 while the app records a new gesture
+    private String drawn;
+
+    void setGestures(String spec) {
+        List<Gestures.Gesture> g = Gestures.decodeAll(spec);
+        Gestures.publishNames(g);
+        gestures = g;
+    }
+
+    /** Waits for one drawing with that many fingers; returns it normalised ("" on timeout). */
+    String recordGesture(int timeoutMs, int fingers) throws InterruptedException {
+        synchronized (drawLock) {
+            drawn = null;
+            drawFingers = Math.max(1, fingers);
+            long end = System.currentTimeMillis() + timeoutMs;
+            while (drawFingers > 0 && drawn == null) {
+                long left = end - System.currentTimeMillis();
+                if (left <= 0) break;
+                drawLock.wait(left);
+            }
+            drawFingers = 0;
+            return drawn == null ? "" : drawn;
+        }
+    }
+
+    /** A finished drawing: to the recorder, or matched against the taught shapes. */
+    private void stroke(float[] raw, int fingers, double diagonalShare) {
+        if (diagonalShare < 0.08 || raw.length < 16) return; // a tap or a tiny wiggle
+        float[] norm = Gestures.normalize(raw);
+        if (norm == null) return;
+        if (drawFingers > 0) {
+            if (fingers != drawFingers) return;
+            synchronized (drawLock) {
+                drawn = Gestures.encodePoints(norm);
+                drawFingers = 0;
+                drawLock.notifyAll();
+            }
+            return;
+        }
+        Gestures.Gesture best = null;
+        float bestD = Float.MAX_VALUE;
+        for (Gestures.Gesture g : gestures) {
+            if (g.fingers != fingers) continue;
+            float d = g.distance(norm);
+            if (d < bestD) {
+                bestD = d;
+                best = g;
+            }
+        }
+        if (best == null || bestD > Gestures.MATCH) return;
+        Log.i(TAG, "handheld gesture: " + best.name + " (" + bestD + ")");
+        key(best.code(), true);
+        key(best.code(), false);
+    }
 
     // corner learning
     private final Object learnLock = new Object();
@@ -193,6 +252,7 @@ final class HandheldWatcher {
             if (readers.isEmpty()) b.append(" nothing yet");
             for (Reader r : readers.values()) b.append(" · ").append(r.dev.name).append(r.error == null ? "" : " (" + r.error + ")");
             b.append(cornerX >= 0 ? " · corner swipe set" : " · no corner set");
+            b.append(" · ").append(gestures.size()).append(gestures.size() == 1 ? " drawn gesture" : " drawn gestures");
             int n = 0;
             for (Shortcut s : host.shortcuts()) if (Shortcut.HANDHELD.equals(s.device)) n++;
             b.append(" · ").append(n).append(n == 1 ? " shortcut" : " shortcuts");
@@ -213,6 +273,12 @@ final class HandheldWatcher {
         private int slot, trackingId = -1, startX = -1, startY = -1, x = -1, y = -1;
         private long downAt;
         private boolean multi;
+        // every finger (for drawn gestures)
+        private final int[] fx = new int[10], fy = new int[10];
+        private final boolean[] fOn = new boolean[10];
+        private int strokeFingers;
+        private final List<Float> path = new ArrayList<>();
+        private double pathLen;
 
         Reader(EvdevDevice dev, boolean pad, boolean touch) {
             super("DockPad-handheld-" + dev.path.replace("/dev/input/", ""));
@@ -269,6 +335,12 @@ final class HandheldWatcher {
         }
 
         private void touchEvent(int type, int code, int value) {
+            if (type == 3 && slot >= 0 && slot < fOn.length) { // every finger, for drawn gestures
+                if (code == ABS_MT_TRACKING_ID) fOn[slot] = value >= 0;
+                else if (code == ABS_MT_X) fx[slot] = value;
+                else if (code == ABS_MT_Y) fy[slot] = value;
+            }
+            if (type == Codes.EV_SYN && code == 0) drawFrame();
             if (type == 3) { // EV_ABS
                 if (code == ABS_MT_SLOT) {
                     slot = value;
@@ -298,6 +370,47 @@ final class HandheldWatcher {
                     learnLock.notifyAll();
                 }
             }
+        }
+
+        /** Follows the fingers' centre while the most fingers so far are down; ends when all are lifted. */
+        private void drawFrame() {
+            int count = 0;
+            float cx = 0, cy = 0;
+            for (int i = 0; i < fOn.length; i++) {
+                if (!fOn[i]) continue;
+                count++;
+                cx += fx[i];
+                cy += fy[i];
+            }
+            if (count == 0) {
+                if (strokeFingers > 0 && !path.isEmpty()) {
+                    float[] raw = new float[path.size()];
+                    for (int i = 0; i < raw.length; i++) raw[i] = path.get(i);
+                    EvdevDevice.AbsInfo ix = dev.abs.get(ABS_MT_X), iy = dev.abs.get(ABS_MT_Y);
+                    double w = ix == null ? 1080 : Math.max(1, ix.max - ix.min), h = iy == null ? 1920 : Math.max(1, iy.max - iy.min);
+                    stroke(raw, strokeFingers, pathLen / Math.hypot(w, h));
+                }
+                strokeFingers = 0;
+                path.clear();
+                pathLen = 0;
+                return;
+            }
+            cx /= count;
+            cy /= count;
+            if (count > strokeFingers) { // another finger joined: the drawing starts over from here
+                strokeFingers = count;
+                path.clear();
+                pathLen = 0;
+            }
+            if (count != strokeFingers || path.size() > 4000) return; // fingers lifting at the end
+            int n = path.size();
+            if (n >= 2) {
+                double d = Math.hypot(cx - path.get(n - 2), cy - path.get(n - 1));
+                if (d < 2) return; // not moved
+                pathLen += d;
+            }
+            path.add(cx);
+            path.add(cy);
         }
 
         /** A swipe that starts at the chosen corner and moves well away from it, quickly, with one finger. */
