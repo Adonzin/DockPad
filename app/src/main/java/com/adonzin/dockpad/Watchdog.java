@@ -14,7 +14,23 @@ import com.adonzin.dockpad.adb.Starter;
  * still running, and starts it again if it should be on. Built-in mode only.
  */
 public class Watchdog extends JobService {
-    private static final int JOB_ID = 4242;
+    private static final int JOB_ID = 4242, WIFI_JOB_ID = 4243;
+
+    /**
+     * Starting failed for want of Wi-Fi: try again the moment Wi-Fi connects, instead of at the next
+     * 15-minute check.
+     */
+    static void whenWifiConnects(Context c) {
+        try {
+            JobScheduler js = c.getSystemService(JobScheduler.class);
+            js.schedule(new JobInfo.Builder(WIFI_JOB_ID, new ComponentName(c, Watchdog.class))
+                    .setRequiredNetwork(new android.net.NetworkRequest.Builder()
+                            .addTransportType(android.net.NetworkCapabilities.TRANSPORT_WIFI)
+                            .build())
+                    .build());
+        } catch (Exception ignored) {
+        }
+    }
 
     static void schedule(Context c) {
         JobScheduler js = c.getSystemService(JobScheduler.class);
@@ -36,7 +52,8 @@ public class Watchdog extends JobService {
                 if (!Starter.isRunning(this)) {
                     Starter.Result r = Starter.start(this, prefs.turnOffWirelessDebugging());
                     if (r.ok) prefs.applyTo(Starter.bridge(this), true);
-                    else retry = !r.needsPairing;
+                    else if (r.problem == Starter.Problem.NO_WIFI && !Starter.wifiConnected(this)) whenWifiConnects(this);
+                    else retry = !r.needsPairing && params.getJobId() == JOB_ID;
                 } else {
                     // running: make sure the bridge itself is on
                     prefs.applyTo(Starter.bridge(this), true);

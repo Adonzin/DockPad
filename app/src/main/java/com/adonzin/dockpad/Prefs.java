@@ -109,6 +109,9 @@ final class Prefs {
     void paired(boolean v) { p.edit().putBoolean("paired", v).apply(); }
 
     /** Close the quick menu by itself when the last external controller goes (back to handheld play). */
+    boolean keepPairing() { return p.getBoolean("keepPairing", true); }
+    void keepPairing(boolean v) { p.edit().putBoolean("keepPairing", v).apply(); }
+
     boolean handheldControls() { return p.getBoolean("handheldControls", false); }
     void handheldControls(boolean v) { p.edit().putBoolean("handheldControls", v).apply(); }
     String getGesturesSpec() { return p.getString("gestures", ""); }

@@ -54,7 +54,10 @@ public class StarterService extends Service {
             stopForeground(STOP_FOREGROUND_REMOVE);
         } else {
             String msg = r == null ? "Unknown problem." : r.message;
-            if (!wifiConnected()) msg = Starter.noWifiMessage(this);
+            if (!wifiConnected() || (r != null && r.problem == Starter.Problem.NO_WIFI)) {
+                msg = Starter.noWifiMessage(this) + " DockPad starts by itself as soon as Wi-Fi connects.";
+                if (!Starter.wifiConnected(this)) Watchdog.whenWifiConnects(this);
+            }
             msg += " Tap to open DockPad's connection screen.";
             stopForeground(STOP_FOREGROUND_DETACH);
             android.app.PendingIntent fix = android.app.PendingIntent.getActivity(this, 3, MainActivity.connectIntent(this),

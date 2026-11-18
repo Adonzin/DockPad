@@ -69,6 +69,31 @@ public class PairingService extends Service {
 
     /** Android's developer settings, scrolled to Wireless debugging. */
     static Intent wirelessDebuggingIntent() {
+        return wirelessDebuggingIntent(null);
+    }
+
+    /**
+     * The Wireless debugging page itself where this Android lets apps open it (saves finding it in
+     * Developer options), else Developer options scrolled to it.
+     */
+    static Intent wirelessDebuggingIntent(Context c) {
+        if (c != null) {
+            Intent[] direct = {
+                    new Intent().setClassName("com.android.settings", "com.android.settings.Settings$WirelessDebuggingActivity"),
+                    new Intent("android.settings.WIRELESS_DEBUGGING_SETTINGS"),
+                    new Intent("com.android.settings.WIRELESS_DEBUGGING_SETTINGS"),
+            };
+            for (Intent d : direct) {
+                try {
+                    android.content.pm.ResolveInfo ri = c.getPackageManager().resolveActivity(d, 0);
+                    if (ri != null && ri.activityInfo != null && ri.activityInfo.exported) {
+                        return d.setClassName(ri.activityInfo.packageName, ri.activityInfo.name)
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+        }
         Intent i = new Intent(android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS);
         i.putExtra(":settings:fragment_args_key", "toggle_adb_wireless"); // highlights Wireless debugging
         Bundle args = new Bundle();
@@ -79,7 +104,7 @@ public class PairingService extends Service {
 
     /** A notification button that opens Wireless debugging. */
     static Notification.Action openWirelessDebuggingAction(Context c) {
-        PendingIntent open = PendingIntent.getActivity(c, 4, wirelessDebuggingIntent(),
+        PendingIntent open = PendingIntent.getActivity(c, 4, wirelessDebuggingIntent(c),
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         return new Notification.Action.Builder(Icon.createWithResource(c, R.drawable.ic_notification),
                 "Open Wireless debugging", open).build();

@@ -580,6 +580,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
             ui.post(() -> ConnectDialog.show(this, !prefs.paired()));
         }
         Watchdog.schedule(this);
+        bg.execute(() -> Starter.applyKeepPairing(this));
         refreshSetup();
         if (guide != null) guide.refresh();
         if (prefs.autoUpdateCheck() && System.currentTimeMillis() - prefs.lastUpdateCheck() > 6 * 3600_000L) {
@@ -788,18 +789,12 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         if (ready) return;
         boolean dev = Settings.Global.getInt(getContentResolver(), Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) == 1;
         boolean wifi = wifiConnected();
-        addSetupStep(dev, "Turn on Developer options",
-                "In Settings → About, tap \"Build number\" 7 times.",
-                dev ? null : "Open", () -> openSettings(Settings.ACTION_DEVICE_INFO_SETTINGS));
-        addSetupStep(wifi, "Connect to Wi-Fi", Starter.ethernetConnected(this)
-                        ? "You're on Ethernet. Wi-Fi is needed too, but only while DockPad starts (any network, no "
-                        + "internet needed)."
-                        : "Wireless debugging, which DockPad starts through, only works over Wi-Fi.",
-                wifi ? null : "Open", () -> openSettings(Settings.ACTION_WIFI_SETTINGS));
-        addSetupStep(false, "Pair DockPad (one time only)",
-                "Tap Pair. In Wireless debugging, turn it on and tap \"Pair device with pairing code\". "
-                        + "Then type the 6-digit code into DockPad's notification (pull down from the top).",
-                "Pair", this::beginPairing);
+        // one path: the guide, opened at the step that's next
+        int n = !dev ? 1 : !wifi ? 2 : 3;
+        String what = !dev ? "Turn on Developer options" : !wifi ? "Connect to Wi-Fi" : "Pair and turn on DockPad";
+        addSetupStep(false, "Setup: step " + n + " of 6 · " + what,
+                "The setup guide walks you through it, and each step ticks itself when it's done.",
+                "Continue", () -> guide.resume());
         if (new java.io.File(getFilesDir(), "adb_private.key").exists()) {
             addSetupStep(false, "Paired before?",
                     "If DockPad was paired on this device already, try connecting without pairing again.",
@@ -866,11 +861,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
     private void beginPairingNow() {
         PairingService.start(this);
         Toast.makeText(this, "Open Wireless debugging → Pair device with pairing code", Toast.LENGTH_LONG).show();
-        Intent i = new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS);
-        i.putExtra(":settings:fragment_args_key", "toggle_adb_wireless"); // highlights Wireless debugging
-        Bundle args = new Bundle();
-        args.putString(":settings:fragment_args_key", "toggle_adb_wireless");
-        i.putExtra(":settings:show_fragment_args", args);
+        Intent i = PairingService.wirelessDebuggingIntent(this);
         try {
             startActivity(i);
         } catch (ActivityNotFoundException e) {
@@ -991,8 +982,11 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
             return;
         }
         if (!running) {
+            if (starting) return; // "Turning on…" stays
             bridgeTitle.setText("DockPad is off");
-            bridgeSubtitle.setText("Turn on to use external controllers as your built-in controls.");
+            String why = prefs.bridgeWanted() ? Starter.lastProblem(this) : "";
+            bridgeSubtitle.setText(why.isEmpty() ? "Turn on to use external controllers as your built-in controls."
+                    : why + " Tap Turn on to try again and see how to fix it.");
             return;
         }
         JSONArray ctrls = o == null ? null : o.optJSONArray("controllers");
@@ -1303,6 +1297,15 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         addSwitch(appSettings, "Start automatically after a restart",
                 "After pairing, DockPad turns itself back on when the device restarts (needs Wi-Fi).",
                 prefs.autoStart(), prefs::autoStart);
+        addSwitch(appSettings, "Keep DockPad's pairing from expiring",
+                "Android forgets a pairing that isn't used for 7 days, and then DockPad has to be paired again. This "
+                        + "turns on Android's \"Disable adb authorization timeout\" (a Developer option) so it doesn't "
+                        + "expire. Computers you've allowed to debug this device also stay allowed until you revoke them "
+                        + "(Developer options → Revoke debugging authorizations).",
+                prefs.keepPairing(), v -> {
+                    prefs.keepPairing(v);
+                    bg.execute(() -> Starter.applyKeepPairing(this));
+                });
         addSwitch(appSettings, "Turn off Wireless debugging once started",
                 "DockPad only needs Wireless debugging for a moment while starting. Turning it off afterwards is safer.",
                 prefs.turnOffWirelessDebugging(), prefs::turnOffWirelessDebugging);

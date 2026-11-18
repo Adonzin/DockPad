@@ -192,7 +192,58 @@ public final class Starter {
                 .append(", Wireless debugging ").append(wirelessDebuggingOn(c) ? "on" : "off")
                 .append(", may switch it ").append(canControlWirelessDebugging(c) ? "yes" : "no").append('\n');
         sb.append(steps);
-        c.getSharedPreferences("dockpad", Context.MODE_PRIVATE).edit().putString("lastStart", sb.toString()).apply();
+        c.getSharedPreferences("dockpad", Context.MODE_PRIVATE).edit()
+                .putString("lastStart", sb.toString())
+                .putString("lastProblem", r.ok ? "" : r.problem.name())
+                .putLong("lastProblemAt", t0)
+                .apply();
+    }
+
+    // ---- keeping the pairing from expiring
+
+    public static final String ADB_ALLOWED_TIME = "adb_allowed_connection_time";
+    private static final long ANDROID_DEFAULT_ALLOWED_TIME = 7L * 24 * 60 * 60 * 1000;
+
+    public static boolean keepPairing(Context c) {
+        return c.getSharedPreferences("dockpad", Context.MODE_PRIVATE).getBoolean("keepPairing", true);
+    }
+
+    /**
+     * Applies the "keep pairing" choice right away when DockPad may change secure settings (after the
+     * first start); otherwise it's applied at the next start.
+     */
+    public static void applyKeepPairing(Context c) {
+        if (!canControlWirelessDebugging(c)) return;
+        try {
+            long now = Settings.Global.getLong(c.getContentResolver(), ADB_ALLOWED_TIME, ANDROID_DEFAULT_ALLOWED_TIME);
+            if (keepPairing(c)) {
+                if (now != 0) Settings.Global.putLong(c.getContentResolver(), ADB_ALLOWED_TIME, 0);
+            } else if (now == 0) {
+                Settings.Global.putLong(c.getContentResolver(), ADB_ALLOWED_TIME, ANDROID_DEFAULT_ALLOWED_TIME);
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    /** Why the last start failed, in a few words with its time, or "" if it worked. */
+    public static String lastProblem(Context c) {
+        android.content.SharedPreferences p = c.getSharedPreferences("dockpad", Context.MODE_PRIVATE);
+        String name = p.getString("lastProblem", "");
+        if (name.isEmpty()) return "";
+        String what;
+        switch (name) {
+            case "DEVELOPER_OPTIONS": what = "Developer options are off"; break;
+            case "NO_WIFI": what = "no Wi-Fi. It starts by itself once Wi-Fi connects"; break;
+            case "WIRELESS_DEBUGGING_OFF": what = "Wireless debugging is off"; break;
+            case "NETWORK_NOT_ALLOWED": what = "Android hasn't allowed this Wi-Fi network yet"; break;
+            case "PAIRING": what = "the pairing expired. Pair again"; break;
+            case "CONNECT": what = "couldn't reach Wireless debugging"; break;
+            case "SERVICE": what = "the service didn't start"; break;
+            default: what = "something went wrong"; break;
+        }
+        String when = new java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+                .format(new java.util.Date(p.getLong("lastProblemAt", 0)));
+        return "Last try (" + when + "): " + what + ".";
     }
 
     public static String lastStart(Context c) {
@@ -304,6 +355,9 @@ public final class Starter {
             // Keep Android's debugging service running even when Wi-Fi (and so Wireless debugging)
             // drops during sleep: if it stops, it takes DockPad's service down with it.
             note(say, "adb_enabled", run(m, "settings put global adb_enabled 1"));
+            if (keepPairing(c)) { // Android forgets unused pairings after 7 days: not this one
+                note(say, "keep pairing", run(m, "settings put global " + ADB_ALLOWED_TIME + " 0"));
+            }
             // Lets DockPad switch wireless debugging on by itself after a restart.
             note(say, "grant", run(m, "pm grant " + pkg + " android.permission.WRITE_SECURE_SETTINGS"));
             String apk = c.getApplicationInfo().sourceDir;

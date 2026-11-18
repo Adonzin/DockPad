@@ -413,9 +413,10 @@ final class ConnectDialog {
         actions.removeAllViews();
         working("Waiting for the pairing code…");
         numbered(1, "Open Wireless debugging below. It opens next to DockPad, so this screen stays visible.");
-        numbered(2, "Turn Wireless debugging on (allow it on this network if asked), then tap \"Pair device with "
-                + "pairing code\".");
-        numbered(3, "Type the 6-digit code here. DockPad finds the rest by itself.");
+        numbered(2, "Turn Wireless debugging on. If Android asks \"Allow wireless debugging on this network?\", tick "
+                + "\"Always allow on this network\" and tap Allow.");
+        numbered(3, "Tap \"Pair device with pairing code\" (not \"Pair device with QR code\": that one is for computers).");
+        numbered(4, "Type the 6-digit code here. DockPad finds the rest by itself.");
         if (!Starter.wifiConnected(a)) small(Starter.noWifiMessage(a));
 
         MaterialButton side = action("Open Wireless debugging side by side", () -> openWirelessDebugging(true));
@@ -572,7 +573,7 @@ final class ConnectDialog {
     }
 
     private void openWirelessDebugging(boolean sideBySide) {
-        Intent i = PairingService.wirelessDebuggingIntent();
+        Intent i = PairingService.wirelessDebuggingIntent(a);
         if (sideBySide) {
             i.addFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
             triedSideBySide = true;

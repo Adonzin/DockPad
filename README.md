@@ -131,17 +131,20 @@ To use a theme you made: press **Save theme file**, copy the `.dockpadtheme` fil
 ## Install
 
 1. On your handheld, download **DockPad.apk** from [the latest release](../../releases/latest) and install it.
-2. Open DockPad. A short guide walks you through setup (with the touch screen or a controller), and checks off each step as it's done:
+2. Open DockPad. A short guide walks you through setup (with the touch screen or a controller). Each step ticks itself when it's done and moves on by itself:
    1. Turn on Developer options.
    2. Connect to Wi-Fi.
-   3. Tap **Pair**. DockPad's pairing screen opens, with Wireless debugging side by side.
-   4. In Wireless debugging, choose "Pair device with pairing code".
-   5. Type the code into DockPad. It connects and turns on by itself.
+   3. Pair and turn on: tap **Pair**, and DockPad's pairing screen opens with Wireless debugging next to it (DockPad opens the Wireless debugging page directly where Android allows it). Turn Wireless debugging on; if Android asks "Allow wireless debugging on this network?", tick **Always allow on this network**. Tap **Pair device with pairing code** (not the QR code one), and type the code into DockPad. It connects and turns on by itself.
 
-   You only do this once. No PC and no other apps needed.
-   6. Connect a controller and choose your quick-menu button.
-3. From then on it starts by itself. To update later, go to **Settings → Updates**. The guide can be opened again from **Settings → First-run guide**.
+   You only pair once. No PC and no other apps needed.
+   4. Connect a controller.
+   5. Choose your quick-menu button and try it.
+3. From then on it starts by itself. To update later, go to **Settings → Updates**. The guide can be opened again from **Settings → First-run guide**, and until setup is done the Home tab has a **Continue** button that opens it at the next step.
 
+**Keeping it connected:**
+- **Pairing doesn't expire.** Android forgets a pairing that isn't used for 7 days. DockPad turns on Android's "Disable adb authorization timeout" so its pairing stays (**Settings → Keep DockPad's pairing from expiring**, on by default; turning it off restores Android's 7 days).
+- **No Wi-Fi when the handheld starts?** DockPad starts the moment Wi-Fi connects.
+- **Off?** The Home tab says why the last try failed, and **Turn on** opens the connection screen with the fix.
 
 ### Connection screen
 

@@ -30,7 +30,7 @@ import org.json.JSONObject;
  */
 final class FirstRunGuide {
     static final String EDITOR_URL = "adonzin.github.io/DockPad/tools/theme-editor.html";
-    private static final int STEPS = 9;
+    private static final int STEPS = 8;
 
     private final MainActivity a;
     private Dialog dialog;
@@ -115,6 +115,7 @@ final class FirstRunGuide {
         });
         dialog.show();
         step = 0;
+        firstCheck = true;
         render();
     }
 
@@ -127,7 +128,33 @@ final class FirstRunGuide {
     private void go(int to) {
         if (to < 0 || to >= STEPS || to == step) return;
         step = to;
+        firstCheck = true;
         render();
+    }
+
+    // A step that gets done while you're on it moves on by itself (one already done when you got there doesn't).
+    private boolean firstCheck = true, doneOnArrival;
+
+    private void autoAdvance(boolean done) {
+        if (firstCheck) {
+            firstCheck = false;
+            doneOnArrival = done;
+            return;
+        }
+        if (!done || doneOnArrival || step < 1 || step > 5) return;
+        doneOnArrival = true;
+        int from = step;
+        check(true, "Done! Moving on…");
+        next.postDelayed(() -> {
+            if (isShowing() && step == from) go(from + 1);
+        }, 1400);
+    }
+
+    /** Opens the guide at the first step that isn't done yet. */
+    void resume() {
+        show();
+        boolean dev = Settings.Global.getInt(a.getContentResolver(), Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) == 1;
+        go(!dev ? 1 : !a.wifiConnected() && !a.isReady() ? 2 : !a.isRunning() ? 3 : 4);
     }
 
     /** Called when DockPad's screen comes back and on each status update: re-checks this step. */
@@ -177,20 +204,17 @@ final class FirstRunGuide {
                 first = action("Open Wi-Fi settings", () -> a.openSettings(Settings.ACTION_WIFI_SETTINGS));
                 break;
             case 3:
-                title("Pair DockPad (one time)");
-                text("This lets DockPad start itself through Wireless debugging. You only do it once.");
+                title("Pair and turn on DockPad");
+                text("This lets DockPad start itself through Wireless debugging. You only pair once.");
                 numbered(1, "Press Pair. DockPad's pairing screen opens, with Wireless debugging next to it.");
-                numbered(2, "Turn on Wireless debugging, open it and choose \"Pair device with pairing code\".");
-                numbered(3, "Type the 6-digit code into DockPad. It connects and turns on by itself.");
+                numbered(2, "Turn on Wireless debugging. If Android asks \"Allow wireless debugging on this network?\", "
+                        + "tick \"Always allow on this network\" and tap Allow.");
+                numbered(3, "Tap \"Pair device with pairing code\" (not the QR code one).");
+                numbered(4, "Type the 6-digit code into DockPad. It connects and turns on by itself.");
                 status();
-                first = action("Pair", a::beginPairing);
-                if (a.hasPairingKey()) action("Paired before? Connect without pairing", a::connectWithoutPairing);
-                break;
-            case 4:
-                title("Turn DockPad on");
-                text("DockPad runs in the background while you play.");
-                status();
-                first = action("Turn on", a::turnOn);
+                if (a.isReady() && !a.isRunning()) first = action("Turn on", a::turnOn);
+                else first = action("Pair", a::beginPairing);
+                if (a.hasPairingKey() && !a.isRunning()) action("Paired before? Connect without pairing", a::connectWithoutPairing);
                 MaterialSwitch auto = new MaterialSwitch(a);
                 auto.setText("Start automatically after a restart");
                 auto.setChecked(a.prefs().autoStart());
@@ -199,14 +223,14 @@ final class FirstRunGuide {
                 auto.setPadding(dp(6), dp(10), dp(6), dp(10));
                 body.addView(auto);
                 break;
-            case 5:
+            case 4:
                 title("Connect a controller");
                 text("Connect a controller over Bluetooth or USB, then press any button on it: its row below shows "
                         + "the button. With more than one controller, each one presses A to join as the next player.");
                 status();
                 first = action("Pair a new controller", () -> PairDialog.show(a));
                 break;
-            case 6:
+            case 5:
                 title("Your quick-menu button");
                 text("A button combo opens the quick menu over any game. Choose one you won't press while "
                         + "playing, like Select + Start held together.");
@@ -214,7 +238,7 @@ final class FirstRunGuide {
                 first = action(quickMenuCombo() == null ? "Choose the combo" : "Change the combo", a::editQuickMenuCombo);
                 text("Then try it: press the combo on your controller. When you close the menu you'll be back here.");
                 break;
-            case 7:
+            case 6:
                 title("Make it yours (optional)");
                 text("Change how the quick menu looks with a theme, or get one someone else made.");
                 first = action("Choose a theme", a::chooseTheme);
@@ -242,14 +266,17 @@ final class FirstRunGuide {
         status.removeAllViews();
         JSONObject o = a.lastStatus();
         boolean running = a.isRunning();
+        boolean done = false, pressed = false;
         switch (step) {
             case 1: {
                 boolean on = Settings.Global.getInt(a.getContentResolver(), Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) == 1;
                 check(on, on ? "Developer options are on" : "Developer options aren't on yet");
+                done = on;
                 break;
             }
             case 2: {
                 boolean wifi = a.wifiConnected();
+                done = wifi;
                 check(wifi, wifi ? "Connected to Wi-Fi"
                         : com.adonzin.dockpad.adb.Starter.ethernetConnected(a) ? "Ethernet only: join Wi-Fi as well while setting up"
                         : "Not connected to Wi-Fi");
@@ -257,11 +284,10 @@ final class FirstRunGuide {
             }
             case 3:
                 check(a.isReady(), a.isReady() ? "DockPad is paired" : "Waiting for pairing…");
+                check(running, running ? "DockPad is on" : "DockPad is off");
+                done = running;
                 break;
-            case 4:
-                check(running, running ? "DockPad is on" : a.isReady() ? "DockPad is off" : "Pair DockPad first (previous step)");
-                break;
-            case 5: {
+            case 4: {
                 int n = 0;
                 JSONArray ctrls = o == null ? null : o.optJSONArray("controllers");
                 if (ctrls != null) for (int i = 0; i < ctrls.length(); i++) {
@@ -270,18 +296,22 @@ final class FirstRunGuide {
                     n++;
                     int p = c.optInt("player");
                     String last = c.optString("lastButton");
+                    if (!last.isEmpty()) pressed = true;
                     check(true, a.prefs().controllerName(c.optString("name"))
                             + (p > 0 ? " · Player " + p : " · press A to join")
                             + (last.isEmpty() ? "" : " · pressed " + last));
                 }
                 if (!running) check(false, "Turn DockPad on first (previous step)");
                 else if (n == 0) check(false, "No controller connected yet");
+                done = pressed;
                 break;
             }
-            case 6: {
+            case 5: {
                 String combo = quickMenuCombo();
                 check(combo != null, combo == null ? "No combo chosen yet" : "Quick menu: " + combo);
-                if (QuickMenuActivity.lastOpened > stepStarted) check(true, "The quick menu opened. It works!");
+                boolean opened = QuickMenuActivity.lastOpened > stepStarted;
+                if (opened) check(true, "The quick menu opened. It works!");
+                done = opened;
                 break;
             }
             default: {
@@ -298,6 +328,7 @@ final class FirstRunGuide {
                 check(combo != null, combo != null ? "Quick menu: " + combo : "No quick-menu combo yet (Quick menu tab)");
             }
         }
+        autoAdvance(done);
     }
 
     private String quickMenuCombo() {
