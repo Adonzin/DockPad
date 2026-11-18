@@ -179,7 +179,7 @@ final class KeyboardOverlay {
         }
         open = true;
         showNotification();
-        ShizukuLink.connect(() -> new Thread(this::pollLoop, "DockPad-keyboard").start());
+        new Thread(this::pollLoop, "DockPad-keyboard").start();
     }
 
     private void buildPage() {

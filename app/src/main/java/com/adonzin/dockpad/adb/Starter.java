@@ -14,7 +14,7 @@ import io.github.muntashirakon.adb.AdbPairingRequiredException;
 import io.github.muntashirakon.adb.AdbStream;
 
 /**
- * Starts DockPad's background service through the built-in ADB connection (no Shizuku).
+ * Starts DockPad's background service through the built-in ADB connection.
  * Call from a background thread.
  */
 public final class Starter {

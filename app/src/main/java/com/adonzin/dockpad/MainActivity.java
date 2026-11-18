@@ -42,10 +42,8 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import rikka.shizuku.Shizuku;
 
 public class MainActivity extends AppCompatActivity implements ShortcutEditor.Host, ControllerDialog.Host {
-    static final String SHIZUKU_PACKAGE = "moe.shizuku.privileged.api";
     private static final int REQ = 42;
 
     private final Handler ui = new Handler(Looper.getMainLooper());
@@ -68,51 +66,10 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
     private MaterialButton bridgeButton;
 
     private volatile IBridge bridge;
-    private boolean bound, startWhenConnected;
     private boolean lastRunning;
     private JSONObject lastStatus;
     private FirstRunGuide guide;
     private String lastControllersJson = "";
-
-    private final Shizuku.UserServiceArgs serviceArgs = new Shizuku.UserServiceArgs(
-            new ComponentName(BuildConfig.APPLICATION_ID, BridgeService.class.getName()))
-            .daemon(true)
-            .processNameSuffix("bridge")
-            .debuggable(BuildConfig.DEBUG)
-            .version(BuildConfig.VERSION_CODE);
-
-    private final ServiceConnection connection = new ServiceConnection() {
-        @Override
-        public void onServiceConnected(ComponentName name, IBinder binder) {
-            if (binder == null || !binder.pingBinder() || usingOwnService) return;
-            IBridge b = IBridge.Stub.asInterface(binder);
-            bridge = b;
-            boolean start = startWhenConnected || prefs.bridgeWanted();
-            startWhenConnected = false;
-            pushSettings();
-            if (start) bg.execute(() -> {
-                try {
-                    if (!b.isRunning()) b.start(true);
-                } catch (Exception ignored) {
-                }
-            });
-        }
-
-        @Override
-        public void onServiceDisconnected(ComponentName name) {
-            bridge = null;
-            bound = false;
-        }
-    };
-
-    private final Shizuku.OnBinderReceivedListener binderReceived = () -> ui.post(this::refreshSetup);
-    private final Shizuku.OnBinderDeadListener binderDead = () -> ui.post(() -> {
-        bridge = null;
-        bound = false;
-        refreshSetup();
-    });
-    private final Shizuku.OnRequestPermissionResultListener permResult =
-            (code, result) -> ui.post(this::refreshSetup);
 
     private final Runnable poll = new Runnable() {
         @Override
@@ -228,9 +185,6 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         renderControllers(null);
         renderBridge(false, null);
 
-        Shizuku.addBinderReceivedListenerSticky(binderReceived);
-        Shizuku.addBinderDeadListener(binderDead);
-        Shizuku.addRequestPermissionResultListener(permResult);
 
         guide = new FirstRunGuide(this);
         if (!prefs.guideSeen()) {
@@ -656,15 +610,6 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
 
     @Override
     protected void onDestroy() {
-        Shizuku.removeBinderReceivedListener(binderReceived);
-        Shizuku.removeBinderDeadListener(binderDead);
-        Shizuku.removeRequestPermissionResultListener(permResult);
-        if (bound) {
-            try {
-                Shizuku.unbindUserService(serviceArgs, connection, false); // the bridge keeps running
-            } catch (Throwable ignored) {
-            }
-        }
         bg.shutdown();
         super.onDestroy();
     }
@@ -789,41 +734,15 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
     }
 
     // ------------------------------------------------------------------ backends
-    // 1) DockPad's own service, started over Wireless debugging (no other apps needed)
-    // 2) Shizuku, for people who already use it
+    // DockPad's own service, started over Wireless debugging (no other apps needed)
 
     private volatile boolean usingOwnService;
     private boolean autoStartTried;
     private boolean starting;
     private static final int REQ_NOTIFY = 7, REQ_NOTIFY_QUIET = 8;
 
-    boolean shizukuInstalled() {
-        try {
-            getPackageManager().getPackageInfo(SHIZUKU_PACKAGE, 0);
-            return true;
-        } catch (PackageManager.NameNotFoundException e) {
-            return false;
-        }
-    }
-
-    private boolean shizukuRunning() {
-        try {
-            return Shizuku.pingBinder() && !Shizuku.isPreV11();
-        } catch (Throwable t) {
-            return false;
-        }
-    }
-
-    private boolean shizukuAllowed() {
-        try {
-            return shizukuRunning() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED;
-        } catch (Throwable t) {
-            return false;
-        }
-    }
-
     private boolean ready() {
-        return usingOwnService || prefs.paired() || shizukuAllowed();
+        return usingOwnService || prefs.paired();
     }
 
     private void refreshSetup() {
@@ -838,13 +757,6 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
             if (!usingOwnService) {
                 usingOwnService = true;
                 bridge = Starter.bridge(this);
-                if (bound) { // don't run two bridges at once
-                    try {
-                        Shizuku.unbindUserService(serviceArgs, connection, true);
-                    } catch (Throwable ignored) {
-                    }
-                    bound = false;
-                }
                 pushSettings(true);
             }
         } else {
@@ -858,8 +770,6 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
                     autoStartTried = true;
                     startOwnService(false);
                 }
-            } else if (shizukuAllowed()) {
-                bindBridge();
             }
         }
         renderSetup();
@@ -894,13 +804,6 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
             addSetupStep(false, "Paired before?",
                     "If DockPad was paired on this device already, try connecting without pairing again.",
                     "Connect", this::connectWithoutPairing);
-        }
-        if (shizukuInstalled()) { // only for people who already use it
-            TextView alt = new TextView(this);
-            alt.setText("You can also start DockPad through Shizuku: open Shizuku and allow DockPad.");
-            alt.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall);
-            alt.setPadding(0, dp(8), 0, 0);
-            setupSteps.addView(alt);
         }
     }
 
@@ -975,16 +878,6 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         }
     }
 
-    private void bindBridge() {
-        if (bound || usingOwnService) return;
-        try {
-            Shizuku.bindUserService(serviceArgs, connection);
-            bound = true;
-        } catch (Throwable t) {
-            Toast.makeText(this, "Couldn't start DockPad's service: " + t.getMessage(), Toast.LENGTH_LONG).show();
-        }
-    }
-
     private void startOwnService(boolean userAsked) {
         starting = true;
         bridgeTitle.setText("Turning on…");
@@ -1022,18 +915,6 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         } else if (prefs.paired()) {
             startOwnService(true);
             return;
-        } else if (shizukuAllowed()) {
-            if (b != null) {
-                bg.execute(() -> {
-                    try {
-                        b.start(true);
-                    } catch (Exception ignored) {
-                    }
-                });
-            } else {
-                startWhenConnected = true;
-                bindBridge();
-            }
         } else {
             renderSetup();
             return;
@@ -1805,13 +1686,6 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
         }
         Starter.bridge(this).exit(); // DockPad's own service, if running
         ui.post(() -> {
-            if (bound) {
-                try {
-                    Shizuku.unbindUserService(serviceArgs, connection, true);
-                } catch (Throwable ignored) {
-                }
-            }
-            bound = false;
             bridge = null;
             usingOwnService = false;
         });
@@ -1830,7 +1704,7 @@ public class MainActivity extends AppCompatActivity implements ShortcutEditor.Ho
             } catch (InterruptedException ignored) {
             }
             prefs.bridgeWanted(true);
-            ui.post(this::refreshSetup); // starts again (own service or Shizuku)
+            ui.post(this::refreshSetup); // starts again
         });
     }
 

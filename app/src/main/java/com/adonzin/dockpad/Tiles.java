@@ -19,7 +19,7 @@ final class Tiles {
     static final class State {
         boolean serviceUp, running, cursor;
         String problem = ""; // why the state couldn't be read, shown on the tile
-        IBridge bridge; // whichever is running: DockPad's own service or the Shizuku one
+        IBridge bridge;
     }
 
     /** Call off the main thread. */
@@ -27,8 +27,7 @@ final class Tiles {
         State st = new State();
         IBridge b;
         SocketBridge own = Starter.bridge(t);
-        if (own.version() >= 0) b = own;
-        else b = ShizukuLink.bridge();
+        b = own.version() >= 0 ? own : null;
         if (b == null) {
             st.problem = "Service not running";
             return st;
@@ -85,7 +84,7 @@ final class Tiles {
     public static class DockPadTile extends TileService {
         @Override
         public void onStartListening() {
-            ShizukuLink.connect(this::refresh);
+            refresh();
         }
 
         private void refresh() {
@@ -99,15 +98,12 @@ final class Tiles {
         @Override
         public void onClick() {
             Prefs prefs = new Prefs(this);
-            ShizukuLink.connect(() -> bg(() -> {
+            BridgeAccess.now(() -> bg(() -> {
                 State st = read(this);
                 try {
                     if (st.running) {
                         prefs.bridgeWanted(false);
                         st.bridge.stop();
-                    } else if (st.bridge != null && !(st.bridge instanceof SocketBridge)) {
-                        prefs.bridgeWanted(true); // Shizuku
-                        prefs.applyTo(st.bridge, true);
                     } else if (!prefs.paired()) {
                         ui(() -> openApp(this)); // not set up yet
                         return;
@@ -134,7 +130,7 @@ final class Tiles {
     public static class CursorTile extends TileService {
         @Override
         public void onStartListening() {
-            ShizukuLink.connect(this::refresh);
+            refresh();
         }
 
         private void refresh() {
@@ -150,7 +146,7 @@ final class Tiles {
 
         @Override
         public void onClick() {
-            ShizukuLink.connect(() -> bg(() -> {
+            BridgeAccess.now(() -> bg(() -> {
                 State st = read(this);
                 if (!st.running) {
                     ui(() -> openApp(this));

@@ -6,7 +6,7 @@ import android.util.Log;
 import com.adonzin.dockpad.IBridge;
 
 /**
- * Runs inside a separate process started by Shizuku with ADB ("shell") privileges.
+ * Runs in DockPad's background service process (started by ShellMain), with ADB ("shell") privileges.
  * It keeps running after the DockPad app is closed, until stopped or the device reboots.
  */
 public class BridgeService extends IBridge.Stub {
@@ -199,7 +199,7 @@ public class BridgeService extends IBridge.Stub {
         }
     }
 
-    /** Shizuku: install, then reopen the app (which restarts this service at the new version). */
+    /** Installs, then reopens the app (which restarts this service at the new version). */
     @Override
     public void installUpdate(String url, int version) {
         new Thread(() -> {

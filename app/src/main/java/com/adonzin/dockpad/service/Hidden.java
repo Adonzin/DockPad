@@ -10,7 +10,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
 /**
- * Access to non-public Android APIs. Only works inside the Shizuku service process,
+ * Access to non-public Android APIs. Only works inside DockPad's service process,
  * which runs with ADB ("shell") privileges.
  */
 final class Hidden {

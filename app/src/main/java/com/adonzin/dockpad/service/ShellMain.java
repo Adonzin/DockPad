@@ -16,7 +16,7 @@ import java.nio.charset.StandardCharsets;
 
 /**
  * Entry point when DockPad starts its own background service through its built-in ADB
- * connection (no Shizuku):
+ * connection:
  *   app_process /system/bin com.adonzin.dockpad.service.ShellMain <token> <version>
  * It runs with ADB ("shell") privileges and talks to the app over a local socket
  * protected by a secret token.

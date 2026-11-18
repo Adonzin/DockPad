@@ -185,7 +185,6 @@ final class FirstRunGuide {
                 status();
                 first = action("Pair", a::beginPairing);
                 if (a.hasPairingKey()) action("Paired before? Connect without pairing", a::connectWithoutPairing);
-                if (a.shizukuInstalled()) small("You can also start DockPad through Shizuku: open Shizuku and allow DockPad.");
                 break;
             case 4:
                 title("Turn DockPad on");

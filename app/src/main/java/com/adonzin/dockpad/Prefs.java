@@ -104,7 +104,7 @@ final class Prefs {
         layouts(all);
     }
 
-    /** DockPad has been paired with Wireless debugging (built-in mode, no Shizuku needed). */
+    /** DockPad has been paired with Wireless debugging. */
     boolean paired() { return p.getBoolean("paired", false); }
     void paired(boolean v) { p.edit().putBoolean("paired", v).apply(); }
 

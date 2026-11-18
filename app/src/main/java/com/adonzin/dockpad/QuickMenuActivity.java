@@ -1919,7 +1919,7 @@ public class QuickMenuActivity extends AppCompatActivity {
     private void refreshState() {
         refreshing = true;
         refreshStarted = android.os.SystemClock.uptimeMillis();
-        ShizukuLink.connect(() -> runInBackground(b -> {
+        BridgeAccess.now(() -> runInBackground(b -> {
             bridge = b;
             JSONObject o;
             try {

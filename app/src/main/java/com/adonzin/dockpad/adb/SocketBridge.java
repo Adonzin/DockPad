@@ -16,7 +16,7 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 
-/** Talks to DockPad's standalone background service (started without Shizuku). */
+/** Talks to DockPad's standalone background service. */
 public final class SocketBridge implements IBridge {
     private final String token;
 

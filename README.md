@@ -138,11 +138,10 @@ To use a theme you made: press **Save theme file**, copy the `.dockpadtheme` fil
    4. In Wireless debugging, choose "Pair device with pairing code".
    5. Type the code into DockPad. It connects and turns on by itself.
 
-   You only do this once. No PC and no Shizuku needed.
+   You only do this once. No PC and no other apps needed.
    6. Connect a controller and choose your quick-menu button.
 3. From then on it starts by itself. To update later, go to **Settings → Updates**. The guide can be opened again from **Settings → First-run guide**.
 
-Already use [Shizuku](https://shizuku.rikka.app/)? DockPad can use it instead of pairing.
 
 ### Connection screen
 
